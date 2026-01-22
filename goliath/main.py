@@ -710,17 +710,34 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
 
 
 def create_github_issue(title: str, body: str):
-    pat = os.getenv("GH_PAT", "")
-    repo = os.getenv("GITHUB_REPOSITORY", "")
-    if not pat or not repo:
+    # Actionsの標準トークン or あなたのPAT どっちでも動くようにする
+    token = (
+        os.getenv("GH_TOKEN", "").strip()
+        or os.getenv("GITHUB_TOKEN", "").strip()
+        or os.getenv("GH_PAT", "").strip()
+    )
+    repo = os.getenv("GITHUB_REPOSITORY", "").strip()
+
+    if not token or not repo:
+        print(f"[issue] skip (token or repo missing). token={bool(token)} repo='{repo}'")
         return
+
     url = f"https://api.github.com/repos/{repo}/issues"
-    headers = {"Authorization": f"token {pat}", "Accept": "application/vnd.github+json"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
     payload = {"title": title, "body": body}
+
     try:
-        requests.post(url, headers=headers, json=payload, timeout=20)
-    except Exception:
-        pass
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        print(f"[issue] status={r.status_code}")
+        if r.status_code not in (200, 201):
+            print(f"[issue] response={r.text[:500]}")
+    except Exception as e:
+        print(f"[issue] exception: {e}")
+
 
 
 def post_bluesky(text: str):
