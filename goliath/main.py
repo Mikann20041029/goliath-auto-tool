@@ -710,16 +710,11 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
 
 
 def create_github_issue(title: str, body: str):
-    # Actionsの標準トークン or あなたのPAT どっちでも動くようにする
-    token = (
-        os.getenv("GH_TOKEN", "").strip()
-        or os.getenv("GITHUB_TOKEN", "").strip()
-        or os.getenv("GH_PAT", "").strip()
-    )
-    repo = os.getenv("GITHUB_REPOSITORY", "").strip()
-
+    # Actions標準token → 環境変数 → PAT の順に使う
+    token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
+    repo = os.getenv("GITHUB_REPOSITORY", "")
     if not token or not repo:
-        print(f"[issue] skip (token or repo missing). token={bool(token)} repo='{repo}'")
+        print("[issue] skip (missing token or repo)")
         return
 
     url = f"https://api.github.com/repos/{repo}/issues"
@@ -727,8 +722,22 @@ def create_github_issue(title: str, body: str):
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "goliath-bot"
     }
     payload = {"title": title, "body": body}
+
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        # 成功は201
+        print(f"[issue] status={r.status_code}")
+        if r.status_code != 201:
+            print("[issue] response:", r.text[:800])
+        else:
+            j = r.json()
+            print("[issue] created:", j.get("html_url", "no_url"))
+    except Exception as e:
+        print("[issue] exception:", repr(e))
+
 
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=20)
