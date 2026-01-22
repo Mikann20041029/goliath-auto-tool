@@ -460,6 +460,9 @@ def pick_related(current_tags: List[str], all_entries: List[Dict[str, Any]], see
 
     # goliath内の過去ページ
     for e in all_entries:
+        if not isinstance(e, dict):
+    continue
+
         tags = e.get("tags", [])
         score = jaccard(current_tags, tags)
         if score <= 0:
