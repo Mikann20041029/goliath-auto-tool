@@ -1,5 +1,4 @@
-openai
-requests
-tweepy
-atproto
-Mastodon.py
+openai==2.15.0
+atproto==0.0.65
+Mastodon.py==2.1.4
+requests==2.32.5
