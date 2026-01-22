@@ -1,28 +1,49 @@
 name: Goliath Auto Tool System
 
 on:
-  workflow_dispatch: # 手動実行用
+  workflow_dispatch: # 手動でテスト実行用
+  schedule:
+    - cron: '0 0,8,16 * * *' # 1日3回自動実行
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
-          python-version: '3.9'
+          token: ${{ secrets.GH_PAT }} # あなたのPATで認証
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Install dependencies
         run: |
-          pip install openai requests  # 直接インストールを指定
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run Goliath System
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          MASTODON_API_BASE: ${{ secrets.MASTODON_API_BASE }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: python main.py
-      - name: Commit and Push
+
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "Goliath-Bot"
           git config --global user.email "bot@mikanntool.com"
           git add .
-          git commit -m "Auto-generate new tool" || exit 0
-          git push
+          git commit -m "Generated new tool and SEO article" || echo "No changes to commit"
+          git push origin main
