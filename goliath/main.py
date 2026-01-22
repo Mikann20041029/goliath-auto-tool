@@ -73,13 +73,17 @@ def read_json(path: str, default: Any) -> Any:
 
 
 def write_json(path: str, obj: Any):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
 def write_text(path: str, text: str):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
@@ -153,7 +157,6 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
     # HN points などメタ加点
     hn_points = int(meta.get("hn_points", 0) or 0)
     if hn_points > 0:
-        # ざっくり上限
         table["tool_request"] += min(10, hn_points // 30)
 
     total = sum(table.values())
@@ -212,8 +215,8 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
     seen = set()
     uniq = []
     for it in all_items:
-        u = it["url"]
-        if u in seen:
+        u = it.get("url", "")
+        if not u or u in seen:
             continue
         seen.add(u)
         uniq.append(it)
@@ -246,7 +249,6 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         c = BskyClient()
         c.login(h, p)
         for q in queries:
-            # atproto wrapper: search_posts
             res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
             posts = (res or {}).get("posts", [])
             for post in posts:
@@ -254,10 +256,8 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
                 txt = rec.get("text", "") or ""
                 uri = post.get("uri", "") or ""
                 did = post.get("author", {}).get("did", "") or ""
-                # 参照用URL（推定）
                 bsky_url = ""
                 if did and uri:
-                    # uri: at://did/app.bsky.feed.post/<rkey>
                     m = re.search(r"/app\.bsky\.feed\.post/([^/]+)$", uri)
                     if m:
                         rkey = m.group(1)
@@ -285,7 +285,6 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
     try:
         m = Mastodon(access_token=tok if tok else None, api_base_url=base)
 
-        # 1) tokenあれば検索
         queries = [
             "need a tool",
             "is there a tool",
@@ -295,6 +294,7 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
             "timezone",
             "template",
         ]
+
         if tok:
             for q in queries:
                 try:
@@ -309,13 +309,11 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
                 except Exception:
                     pass
 
-        # 2) fallback: public timeline
         if len(out) < limit:
             try:
                 statuses = m.timeline_public(limit=80)
                 for st in statuses:
                     txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
-                    # それっぽい文だけ拾う
                     if not any(k in txt.lower() for k in ["tool", "convert", "calculator", "compare", "timezone", "template"]):
                         continue
                     url = st.get("url", "") or ""
@@ -325,13 +323,13 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
             except Exception:
                 pass
 
-        # だぶり除去
         seen = set()
         uniq = []
         for it in out:
-            if it["url"] in seen:
+            u = it.get("url", "")
+            if not u or u in seen:
                 continue
-            seen.add(it["url"])
+            seen.add(u)
             uniq.append(it)
         return uniq[:limit]
     except Exception:
@@ -364,12 +362,12 @@ def collector_real() -> List[Dict[str, Any]]:
 def pick_best_theme(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     scored = []
     for it in items:
-        s, table = score_item(it["text"], it["url"], it.get("meta", {}) or {})
+        s, table = score_item(it.get("text", ""), it.get("url", ""), it.get("meta", {}) or {})
         scored.append((s, it, table))
     scored.sort(key=lambda x: x[0], reverse=True)
     best_score, best_item, best_table = scored[0]
     return {
-        "theme": best_item["text"],
+        "theme": best_item.get("text", ""),
         "best_item": best_item,
         "best_score": best_score,
         "best_table": best_table,
@@ -393,13 +391,13 @@ def cluster_20_around_theme(theme: str, items: List[Dict[str, Any]]) -> Dict[str
         xl = (x or "").lower()
         return sum(1 for k in keys if k in xl)
 
-    ranked = sorted(items, key=lambda it: sim(it["text"]), reverse=True)
+    ranked = sorted(items, key=lambda it: sim(it.get("text", "")), reverse=True)
     chosen = ranked[:20]
     return {
         "theme": theme,
-        "items": [{"text": it["text"], "url": it["url"], "source": it["source"]} for it in chosen],
-        "urls": [it["url"] for it in chosen],
-        "texts": [it["text"] for it in chosen],
+        "items": [{"text": it.get("text", ""), "url": it.get("url", ""), "source": it.get("source", "")} for it in chosen],
+        "urls": [it.get("url", "") for it in chosen],
+        "texts": [it.get("text", "") for it in chosen],
         "keys": keys,
     }
 
@@ -412,84 +410,131 @@ def load_seed_sites() -> List[Dict[str, Any]]:
     既存資産（hubや既存サイト）を「関連サイト候補」として入れておける。
     """
     if os.path.exists(SEED_SITES_PATH):
-        return read_json(SEED_SITES_PATH, [])
+        data = read_json(SEED_SITES_PATH, [])
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict)]
+        if isinstance(data, dict):
+            # dict -> values list
+            vals = []
+            for v in data.values():
+                if isinstance(v, dict):
+                    vals.append(v)
+            return vals
+        return []
     return []
 
 
 def jaccard(a: List[str], b: List[str]) -> float:
-    sa, sb = set(a), set(b)
+    sa, sb = set(a or []), set(b or [])
     if not sa or not sb:
         return 0.0
     return len(sa & sb) / len(sa | sb)
 
-def pick_related(tags, all_entries, seed_sites, k=8):
-    # --- normalize inputs (防御コード) ---
-    if isinstance(tags, str):
-        tags = [tags]
 
-    # seed_sites が dict でも list でも吸収して map を作る
-    seed_map = {}
+def _norm_tags(x: Any) -> List[str]:
+    if x is None:
+        return []
+    if isinstance(x, str):
+        x = [x]
+    if not isinstance(x, list):
+        return []
+    out = []
+    for t in x:
+        if isinstance(t, str) and t.strip():
+            out.append(t.strip().lower())
+    return out
+
+
+def _seed_map(seed_sites: Any) -> Dict[str, Dict[str, Any]]:
+    """
+    seed_sites が list/dict どっちでも {slug: dict} にする
+    """
+    m: Dict[str, Dict[str, Any]] = {}
     if isinstance(seed_sites, dict):
-        seed_map = seed_sites
+        for k, v in seed_sites.items():
+            if isinstance(v, dict):
+                slug = v.get("slug") or k
+                if isinstance(slug, str) and slug:
+                    m[slug] = v
     elif isinstance(seed_sites, list):
-        for s in seed_sites:
-            if isinstance(s, dict) and "slug" in s:
-                seed_map[s["slug"]] = s
+        for v in seed_sites:
+            if isinstance(v, dict):
+                slug = v.get("slug")
+                if isinstance(slug, str) and slug:
+                    m[slug] = v
+    return m
 
-    normalized = []
-    for e in all_entries:
-        if isinstance(e, dict):
-            normalized.append(e)
-            continue
-        if isinstance(e, str):
-            # 文字列なら seed_map から引けるなら辞書に戻す / 無理なら捨てる
-            if e in seed_map and isinstance(seed_map[e], dict):
-                normalized.append(seed_map[e])
+
+def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 8) -> List[Dict[str, str]]:
+    """
+    目的:
+      - DB内の過去ページ(all_entries) と seed_sites から「タグが近い」ものを最大k件返す
+    防御:
+      - all_entries が list[dict] 以外でも落とさない
+      - all_entries 内に str が混ざってても seed_map から復元できれば採用
+      - seed_sites が dict/list どっちでも処理
+    """
+    tags = _norm_tags(current_tags)
+    seed_map = _seed_map(seed_sites)
+
+    normalized_entries: List[Dict[str, Any]] = []
+    if isinstance(all_entries, list):
+        for e in all_entries:
+            if isinstance(e, dict):
+                normalized_entries.append(e)
+            elif isinstance(e, str):
+                if e in seed_map and isinstance(seed_map[e], dict):
+                    normalized_entries.append(seed_map[e])
             else:
-                # ここで捨てる（落ちるより100倍マシ）
                 continue
-        else:
-            continue
 
-    all_entries = normalized
-    # --- ここから下は既存ロジック ---
-    ...
+    normalized_seeds: List[Dict[str, Any]] = []
+    if isinstance(seed_sites, list):
+        normalized_seeds = [s for s in seed_sites if isinstance(s, dict)]
+    elif isinstance(seed_sites, dict):
+        for v in seed_sites.values():
+            if isinstance(v, dict):
+                normalized_seeds.append(v)
 
-def pick_related(current_tags: List[str], all_entries: List[Dict[str, Any]], seed_sites: List[Dict[str, Any]], k: int = 8) -> List[Dict[str, str]]:
     candidates: List[Tuple[float, Dict[str, str]]] = []
 
     # goliath内の過去ページ
-    # goliath/main.py （pick_related 内）
-for e in all_entries:
-    if not isinstance(e, dict):
-        continue
-
-    tags = e.get("tags", [])
-    score = jaccard(current_tags, tags)
-    if score <= 0:
-        continue
-
-    candidates.append((score, {"title": e.get("title", ""), "url": e.get("public_url", "")}))
-
-    # 既存の外部/既存サイト
-    for s in seed_sites:
-        tags = s.get("tags", [])
-        score = jaccard(current_tags, tags)
+    for e in normalized_entries:
+        etags = _norm_tags(e.get("tags", []))
+        score = jaccard(tags, etags)
         if score <= 0:
             continue
-        candidates.append((score, {"title": s["title"], "url": s["url"]}))
+        title = (e.get("title") or "").strip()
+        url = (e.get("public_url") or e.get("url") or "").strip()
+        if not url:
+            continue
+        candidates.append((score, {"title": title, "url": url}))
+
+    # 既存の外部/既存サイト
+    for s in normalized_seeds:
+        stags = _norm_tags(s.get("tags", []))
+        score = jaccard(tags, stags)
+        if score <= 0:
+            continue
+        title = (s.get("title") or "").strip()
+        url = (s.get("url") or s.get("public_url") or "").strip()
+        if not url:
+            continue
+        candidates.append((score, {"title": title, "url": url}))
 
     candidates.sort(key=lambda x: x[0], reverse=True)
 
     seen = set()
-    related = []
-    for _, item in candidates:
-        if item["url"] in seen:
+    related: List[Dict[str, str]] = []
+    for _score, item in candidates:
+        u = item.get("url", "")
+        if not u or u in seen:
             continue
-        seen.add(item["url"])
+        seen.add(u)
         related.append(item)
         if len(related) >= k:
             break
+
     return related
 
 
@@ -561,7 +606,7 @@ def openai_generate_html(client: OpenAI, prompt: str) -> str:
 
 
 def validate_html(html: str) -> Tuple[bool, str]:
-    low = html.lower()
+    low = (html or "").lower()
     if "<!doctype html" not in low:
         return False, "missing doctype"
     if "</html>" not in low:
@@ -596,7 +641,6 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
     if not diff_text.startswith("---"):
         return None
     lines = diff_text.splitlines()
-    # find hunks
     hunks = [i for i, l in enumerate(lines) if l.startswith("@@")]
     if not hunks:
         return None
@@ -673,9 +717,13 @@ def inject_related_json(html: str, related: List[Dict[str, str]]) -> str:
         f"window.__RELATED__ = {rel_json};",
         html
     )
-    # 置換できなかったら末尾scriptに追記（保険）
     if new == html:
-        new = re.sub(r"</body>", f"<script>window.__RELATED__ = {rel_json};</script>\n</body>", html, flags=re.IGNORECASE)
+        new = re.sub(
+            r"</body>",
+            f"<script>window.__RELATED__ = {rel_json};</script>\n</body>",
+            html,
+            flags=re.IGNORECASE
+        )
     return new
 
 
@@ -689,25 +737,22 @@ def get_repo_pages_base() -> str:
 
 
 def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]):
-    # db.json 先頭に追加
     all_entries.insert(0, entry)
     write_json(DB_PATH, all_entries)
 
-    # index.html を更新（新着一覧）
     rows = []
     for e in all_entries[:50]:
         rows.append(
             (
                 '<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 '
                 'hover:bg-slate-50 dark:hover:bg-slate-900 transition" '
-                f'href="{e["path"]}/">'
-                f'<div class="font-semibold">{e["title"]}</div>'
-                f'<div class="text-sm opacity-70">{e["created_at"]} • {", ".join(e.get("tags", []))}</div>'
+                f'href="{e.get("path","")}/">'
+                f'<div class="font-semibold">{e.get("title","")}</div>'
+                f'<div class="text-sm opacity-70">{e.get("created_at","")} • {", ".join(e.get("tags", []))}</div>'
                 "</a>"
             )
         )
 
-    # f-string を使わない（JSの { } が混ざると Python が死ぬため）
     html = """<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -753,7 +798,6 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     write_text(INDEX_PATH, html)
 
 
-
 def create_github_issue(title: str, body: str):
     pat = os.getenv("GH_PAT", "") or os.getenv("GITHUB_TOKEN", "")
     repo = os.getenv("GITHUB_REPOSITORY", "")
@@ -779,17 +823,6 @@ def create_github_issue(title: str, body: str):
             print("[issue] created:", data.get("html_url"))
     except Exception as e:
         print("[issue] exception:", repr(e))
-
-
-
-    try:
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
-        print(f"[issue] status={r.status_code}")
-        if r.status_code not in (200, 201):
-            print(f"[issue] response={r.text[:500]}")
-    except Exception as e:
-        print(f"[issue] exception: {e}")
-
 
 
 def post_bluesky(text: str):
@@ -822,12 +855,9 @@ def post_x(text: str):
     Xは無料枠/権限/認証が可変なので、資格情報が揃っているときだけ投げる（揃ってなければ黙ってスキップ）。
     ここは「壊れないこと優先」で最小実装（Bearerのみだと投稿できないことが多い）。
     """
-    # 何も揃ってないなら終了
     if not (os.getenv("X_API_KEY") and os.getenv("X_API_SECRET") and os.getenv("X_ACCESS_TOKEN") and os.getenv("X_ACCESS_TOKEN_SECRET")):
         return
 
-    # 署名実装まで含めると長くなり事故りやすいので、ここは安全に「下書きとしてIssueに出す」運用推奨。
-    # ただし「自動投稿」を絶対に止めない条件があるため、最低限の案内としてIssueへ出す（投稿自体はここでは実施しない）。
     create_github_issue(
         title="[Goliath] X auto-post skipped (needs OAuth1 signing impl)",
         body="X投稿はOAuth1署名が必要な構成が多く、簡易実装だと壊れやすいのでこの版ではスキップしています。\n"
@@ -855,16 +885,13 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
     ここで Bluesky と Mastodon を必ず試みる（鍵が無い場合は空になるが、試行は行う）。
     """
     keys = extract_keywords(theme)
-    # HN: keysで検索
     leads: List[Dict[str, Any]] = []
     for k in keys:
         leads.extend(hn_search(k, limit=20))
 
-    # Bluesky & Mastodon: collectorを再利用（検索クエリは内部で回る）
     leads.extend(collect_bluesky(LEADS_PER_SOURCE))
     leads.extend(collect_mastodon(LEADS_PER_SOURCE))
 
-    # だぶり除去
     seen = set()
     uniq = []
     for it in leads:
@@ -902,16 +929,12 @@ Return ONLY the reply text.
         messages=[{"role": "user", "content": prompt}],
     )
     txt = (res.choices[0].message.content or "").strip()
-    # 念のためURLを最後に強制
     if tool_url not in txt:
         txt = txt.rstrip() + "\n" + tool_url
     return txt
 
 
 def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
-    """
-    Issuesに「対象URL + 返信文」を100セット出す。
-    """
     lines = []
     lines.append("以下は「手動返信用」の候補です。\n")
     lines.append("形式:\n- 対象の悩みURL（X/Bluesky/Mastodon/HN）\n- AI返信文（末尾にツールURL入り）\n")
@@ -919,22 +942,17 @@ def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
 
     for i, it in enumerate(leads, 1):
         url = it.get("url", "")
-        txt = it.get("text", "") or ""
         src = it.get("source", "")
         lines.append(f"#{i} [{src}]")
         lines.append(url)
         lines.append("返信文:")
-        lines.append(it.get("reply", "").strip())
+        lines.append((it.get("reply", "") or "").strip())
         lines.append("\n----\n")
 
-    body = "\n".join(lines)
-    return body
+    return "\n".join(lines)
 
 
 def chunk_and_create_issues(title_prefix: str, body: str, max_chars: int = 60000):
-    """
-    Issue本文が長すぎると事故るので、必要なら分割する。
-    """
     if len(body) <= max_chars:
         create_github_issue(title_prefix, body)
         return
@@ -1037,12 +1055,12 @@ def main():
     # 6) Update DB + index
     entry = {
         "id": stable_id(created_at, slug),
-        "title": theme[:80],
+        "title": (theme or "")[:80],
         "created_at": created_at,
         "path": f"./pages/{folder}",
         "public_url": public_url,
         "tags": tags,
-        "source_urls": cluster.get("urls", [])[:20],
+        "source_urls": (cluster.get("urls", []) or [])[:20],
         "related": related,
         "best_source": best_item.get("source"),
         "best_url": best_item.get("url"),
@@ -1054,7 +1072,7 @@ def main():
 
     # 7) Auto-post (announce)
     if ENABLE_AUTO_POST:
-        post_text = f"New tool published: {theme[:90]}\n{public_url}"
+        post_text = f"New tool published: {(theme or '')[:90]}\n{public_url}"
         post_bluesky(post_text)
         post_mastodon(post_text)
         post_x(post_text)
@@ -1062,7 +1080,6 @@ def main():
     # 8) Lead collection for manual reply + draft replies (100)
     leads = collect_leads(theme)
 
-    # スコア付けして上位を優先（post_textに対して）
     scored = []
     for it in leads:
         s, _tbl = score_item(it.get("text", ""), it.get("url", ""), it.get("meta", {}) or {})
@@ -1070,7 +1087,6 @@ def main():
     scored.sort(key=lambda x: x[0], reverse=True)
     top = [it for _s, it in scored[:max(LEADS_TOTAL, 10)]]
 
-    # 返信文を生成（100）
     final = []
     for it in top[:LEADS_TOTAL]:
         txt = it.get("text", "") or ""
@@ -1079,7 +1095,6 @@ def main():
         it2["reply"] = reply
         final.append(it2)
 
-    # 9) Notify issue: new tool + reply candidates
     header = []
     header.append(f"Tool URL: {public_url}")
     header.append(f"Theme: {theme}")
@@ -1092,12 +1107,15 @@ def main():
 
     body = "\n".join(header) + build_leads_issue_body(final, public_url)
 
-    # 100セットは長くなりがちなので自動分割（必要な時だけ）
     chunk_and_create_issues(
         title_prefix=f"[Goliath] Reply candidates ({LEADS_TOTAL}) + new tool: {slug}",
         body=body,
         max_chars=60000
     )
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
