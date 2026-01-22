@@ -1,36 +1,28 @@
 name: Goliath Auto Tool System
 
 on:
-  schedule:
-    - cron: '0 0,8,16 * * *' # 1日3回実行
-  workflow_dispatch: # 手動実行用ボタン
+  workflow_dispatch: # 手動実行用
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GH_PAT }}
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
       - name: Install dependencies
         run: |
-          pip install openai tweepy atproto mastodon-api requests
+          pip install openai requests  # 直接インストールを指定
       - name: Run Goliath System
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
-          # 他のSecretsも同様に環境変数としてセット
         run: python main.py
       - name: Commit and Push
         run: |
           git config --global user.name "Goliath-Bot"
           git config --global user.email "bot@mikanntool.com"
           git add .
-          git commit -m "Auto-generate new tool and article" || exit 0
+          git commit -m "Auto-generate new tool" || exit 0
           git push
