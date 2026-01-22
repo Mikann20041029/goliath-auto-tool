@@ -1043,7 +1043,26 @@ def main():
         return
 
     # 4) Related sites (existing + seed) and inject JSON
-    all_entries = read_json(DB_PATH, [])
+        # 4) Related sites (existing + seed) and inject JSON
+    raw_db = read_json(DB_PATH, [])
+    # db.json が壊れて dict になってても落とさない（必ず list に正規化）
+    if isinstance(raw_db, list):
+        all_entries = raw_db
+    elif isinstance(raw_db, dict):
+        # よくある形: {"entries":[...]} を吸収
+        if isinstance(raw_db.get("entries"), list):
+            all_entries = raw_db["entries"]
+        else:
+            # dict の values から list を作る（dict要素だけ採用）
+            vals = [v for v in raw_db.values() if isinstance(v, dict)]
+            all_entries = vals
+    else:
+        all_entries = []
+
+    seed_sites = load_seed_sites()
+    related = pick_related(tags, all_entries, seed_sites, k=8)
+    html = inject_related_json(html, related)
+
     seed_sites = load_seed_sites()
     related = pick_related(tags, all_entries, seed_sites, k=8)
     html = inject_related_json(html, related)
