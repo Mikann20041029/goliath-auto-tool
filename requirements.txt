@@ -1,2 +1,5 @@
 openai
 requests
+tweepy
+atproto
+Mastodon.py
