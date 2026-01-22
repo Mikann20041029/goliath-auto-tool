@@ -1,5 +1,4 @@
 import os
-import json
 import random
 import re
 from openai import OpenAI
@@ -8,18 +7,19 @@ from openai import OpenAI
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def generate_perfect_site():
-    # トピックの選定
-    topics = ["BMI健康管理ツール", "複利資産運用シミュレーター", "毎日の消費カロリー計算機"]
-    topic = random.choice(topics)
+    # トピックを固定してまずは確実な成功を目指す
+    topic = "BMI健康管理と理想の体型シミュレーター"
     
     print(f"💎 サイト生成開始: {topic}")
 
     prompt = f"""
-    Create a complete, single-file professional HTML website for '{topic}'.
-    - Requirements: Use Tailwind CSS, modern UI, 2000+ characters Japanese SEO article.
-    - Features: Fully working JavaScript tool, multi-language buttons (JP, EN, FR, DE).
-    - Format: Return ONLY raw HTML code starting with <!DOCTYPE html>. 
-    - NO markdown tags (like ```html), NO JSON, ONLY HTML.
+    Create a complete, professional single-file HTML website for '{topic}'.
+    - Use Tailwind CSS for a high-end, modern, and clean UI.
+    - Include a massive, 2000+ character expert article in Japanese about health for Google AdSense.
+    - Features: A fully working JavaScript BMI calculator tool.
+    - Multi-language buttons (JP, EN, FR, DE).
+    - Format: Return ONLY raw HTML starting with <!DOCTYPE html>. 
+    - NO explanation text, NO markdown code blocks (```html). Just pure HTML.
     """
 
     try:
@@ -28,24 +28,23 @@ def generate_perfect_site():
             messages=[{"role": "user", "content": prompt}]
         )
         
-        raw_content = response.choices[0].message.content.strip()
+        content = response.choices[0].message.content.strip()
 
-        # 【超重要】AIがもしマークダウン(```html)を混ぜた場合の強制除去
-        clean_html = re.sub(r'^```html\s*|\s*```$', '', raw_content, flags=re.MULTILINE)
-        
-        # 万が一JSON形式で返ってきた場合の保険
-        if clean_html.startswith('{'):
-            try:
-                data = json.loads(clean_html)
-                clean_html = data.get('html', data.get('html_code', clean_html))
-            except:
-                pass
+        # 【最重要】AIがマークダウン記号を混ぜた場合、それを強制削除する
+        if content.startswith("```"):
+            content = re.sub(r'^```[a-z]*\n?', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'\n?```$', '', content)
 
-        # index.htmlとして保存
+        # 念のため、先頭が <!DOCTYPE で始まっていない場合のゴミを除去
+        if not content.startswith("<!DOCTYPE"):
+            start_index = content.find("<!DOCTYPE")
+            if start_index != -1:
+                content = content[start_index:]
+
         with open("index.html", "w", encoding="utf-8") as f:
-            f.write(clean_html)
+            f.write(content)
         
-        print(f"✅ 修正完了: {topic} のHTMLを正常に書き出しました。")
+        print(f"✅ index.html の書き出しに成功しました。")
     except Exception as e:
         print(f"❌ エラー発生: {e}")
         exit(1)
