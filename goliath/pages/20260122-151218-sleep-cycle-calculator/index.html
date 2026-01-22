@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>睡眠サイクル計算機</title>
+    <link rel="canonical" href="https://mikanntool.com/goliath/pages/20260122-151218-sleep-cycle-calculator/">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body { transition: background-color 0.5s; }
+        .dark-mode { background-color: #1a1a1a; color: white; }
+    </style>
+</head>
+<body class="dark-mode">
+    <header class="p-4 flex justify-between items-center">
+        <h1 class="text-2xl font-bold">睡眠サイクル計算機</h1>
+        <div>
+            <button id="toggleMode" class="px-3 py-1 bg-gray-200 rounded-md">ダーク/ライトモード</button>
+            <select id="languageSwitcher" class="ml-2 px-2 py-1 border rounded-md">
+                <option value="jp" selected>日本語</option>
+                <option value="en">英語</option>
+                <option value="de">ドイツ語</option>
+                <option value="fr">フランス語</option>
+            </select>
+        </div>
+    </header>
+    <main class="p-4">
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold">睡眠サイクルの計算方法</h2>
+            <p>適切な睡眠サイクルを選ぶことは、健康的な生活を送る上で非常に重要です。以下のシミュレーションを行うことで、あなたに合った睡眠時間を見つけましょう。</p>
+        </div>
+        
+        <div id="calculator" class="mb-6">
+            <h2 class="text-xl font-semibold">計算ツール</h2>
+            <label for="sleepHours" class="block">就寝時間 (24時間形式):</label>
+            <input type="time" id="sleepHours" class="border rounded-md p-2">
+            <button id="calculateBtn" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">計算する</button>
+            <div id="result" class="mt-4"></div>
+        </div>
+
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold">よくある質問 (FAQ)</h2>
+            <ul class="list-disc pl-5">
+                <li>睡眠サイクルとは何ですか？</li>
+                <li>何時間の睡眠が最適ですか？</li>
+                <li>昼寝は睡眠サイクルにどのように影響しますか？</li>
+                <li>睡眠を改善する方法はありますか？</li>
+                <li>子供の睡眠サイクルについて教えてください。</li>
+            </ul>
+        </div>
+
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold">次のステップ</h2>
+            <p>自身の睡眠サイクルに合った生活習慣を見直し、健康を向上させましょう。睡眠環境を整えることも重要です。</p>
+        </div>
+
+        <!-- ADS_SLOT_TOP -->
+
+        <div class="bg-gray-100 p-4 rounded-md mb-6">
+            <h2 class="font-bold">参考文献 / さらなる読み物</h2>
+            <ul class="list-disc pl-5">
+                <li>睡眠と健康</li>
+                <li>心理的健康と睡眠</li>
+                <li>睡眠障害の種類</li>
+                <li>睡眠の科学</li>
+                <li>子供の睡眠に関するガイド</li>
+                <li>昼寝の効果</li>
+                <li>ストレスと睡眠</li>
+                <li>睡眠衛生の原則</li>
+                <li>年齢と睡眠パターン</li>
+                <li>健康的な生活スタイル</li>
+            </ul>
+        </div>
+
+        <!-- ADS_SLOT_MID -->
+        
+    </main>
+
+    <footer class="p-4 text-center">
+        <p>© 2023 睡眠サイクル計算機 お問い合わせ: info@example.com</p>
+    </footer>
+
+    <script>
+        document.getElementById('toggleMode').addEventListener('click', function() {
+            document.body.classList.toggle('dark-mode');
+        });
+
+        document.getElementById('calculateBtn').addEventListener('click', function() {
+            const timeInput = document.getElementById('sleepHours').value;
+            const sleepTime = new Date(`1970-01-01T${timeInput}:00`);
+            const cycles = 5; // Average cycles
+            const cycleLength = 90; // minutes
+            const result = [];
+            for (let i = 0; i < cycles; i++) {
+                const wakeTime = new Date(sleepTime.getTime() + (cycleLength * (i + 1) * 60000));
+                result.push(`サイクル ${i + 1}: ${wakeTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+            }
+            document.getElementById('result').innerHTML = `<strong>起床時間の提案:</strong><br>${result.join('<br>')}`;
+        });
+
+        document.getElementById('languageSwitcher').addEventListener('change', function() {
+            const selectedLanguage = this.value;
+            // Additional logic for language switching would go here
+            console.log(`Language switched to: ${selectedLanguage}`);
+        });
+    </script>
+
+    <!-- ADS_SLOT_BOTTOM -->
+</body>
+</html>
