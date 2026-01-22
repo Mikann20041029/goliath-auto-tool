@@ -652,26 +652,31 @@ def get_repo_pages_base() -> str:
 
 
 def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]):
+    # db.json 先頭に追加
     all_entries.insert(0, entry)
     write_json(DB_PATH, all_entries)
 
+    # index.html を更新（新着一覧）
     rows = []
-    for e in all_entries[:80]:
-        rows.append(f"""
-<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
-   href="{e['path']}/">
-  <div class="font-semibold">{e['title']}</div>
-  <div class="text-sm opacity-70">{e['created_at']} • {", ".join(e.get("tags", []))}</div>
-</a>
-""".strip())
+    for e in all_entries[:50]:
+        rows.append(
+            (
+                '<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 '
+                'hover:bg-slate-50 dark:hover:bg-slate-900 transition" '
+                f'href="{e["path"]}/">'
+                f'<div class="font-semibold">{e["title"]}</div>'
+                f'<div class="text-sm opacity-70">{e["created_at"]} • {", ".join(e.get("tags", []))}</div>'
+                "</a>"
+            )
+        )
 
-    html = f"""<!DOCTYPE html>
+    # f-string を使わない（JSの { } が混ざると Python が死ぬため）
+    html = """<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Goliath Tools</title>
-  <meta name="description" content="Auto-generated tools + long-form guides" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50">
@@ -685,28 +690,31 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     </div>
 
     <div class="mt-6 grid gap-3">
-      {"".join(rows)}
+      __ROWS__
     </div>
 
     <div class="mt-10 text-xs opacity-60">
-      <span>Generated in {ROOT}/pages</span>
+      <a class="underline" href="./pages/">All pages</a>
     </div>
   </div>
 
-<script>
-  const root = document.documentElement;
-  const k="goliath_theme";
-  const saved = localStorage.getItem(k);
-  if(saved==="dark") root.classList.add("dark");
-  document.getElementById("themeBtn").onclick=()=>{
-    root.classList.toggle("dark");
-    localStorage.setItem(k, root.classList.contains("dark") ? "dark" : "light");
-  };
-</script>
+  <script>
+    const root = document.documentElement;
+    const k = "goliath_theme";
+    const saved = localStorage.getItem(k);
+    if (saved === "dark") root.classList.add("dark");
+
+    document.getElementById("themeBtn").onclick = () => {
+      root.classList.toggle("dark");
+      localStorage.setItem(k, root.classList.contains("dark") ? "dark" : "light");
+    };
+  </script>
 </body>
 </html>
 """
+    html = html.replace("__ROWS__", "\n".join(rows))
     write_text(INDEX_PATH, html)
+
 
 
 def create_github_issue(title: str, body: str):
