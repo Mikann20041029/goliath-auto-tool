@@ -1137,11 +1137,21 @@ def extract_keywords(theme: str) -> List[str]:
 def collect_leads(theme: str) -> List[Dict[str, Any]]:
     keys = extract_keywords(theme)
     leads: List[Dict[str, Any]] = []
-    for k in keys:
-        leads.extend(hn_search(k, limit=20))
 
-    leads.extend(collect_bluesky(LEADS_PER_SOURCE))
-    leads.extend(collect_mastodon(LEADS_PER_SOURCE))
+    b = collect_bluesky(LEADS_PER_SOURCE)
+    m = collect_mastodon(LEADS_PER_SOURCE)
+    leads.extend(b)
+    leads.extend(m)
+
+    if len(leads) < LEADS_TOTAL:
+        for k in keys:
+            leads.extend(hn_search(f"Ask HN {k}", limit=20, ask_only=True))
+
+    if len(b) == 0 or len(m) == 0:
+        report_source_counts(
+            {"Leads_Bluesky": len(b), "Leads_Mastodon": len(m), "Leads_total": len(leads)},
+            "Leads are SNS-first. If SNS is 0, check requirements/secrets."
+        )
 
     seen = set()
     uniq = []
