@@ -1343,46 +1343,21 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
 
 
 def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
-    prompt = f"""
-You write a short, natural, polite reply to an online post.
-Rules:
-- Tone: kind, non-spammy, helpful.
-- End with a gentle question.
-- Append the tool URL at the end on a new line.
-- Do NOT mention "AI", "automation", "bot".
-- Keep it under 280 characters if possible.
-Post:
-{post_text}
+   # --- SAFE prompt builder (NO f-string) ---
+prompt = (
+    "You write a short, natural, polite reply to an online post.\n"
+    "Rules:\n"
+    "- Tone: kind, non-spammy, helpful.\n"
+    "- End with a gentle question.\n"
+    "- Append the tool URL at the end on a new line.\n"
+    "- Do NOT mention \"AI\", \"automation\", \"bot\".\n"
+    "- Keep it under 280 characters if possible.\n\n"
+    "Post:\n"
+    + (post_text or "")
+    + "\n\nTool URL:\n"
+    + (tool_url or "")
+).strip()
 
-Tool URL:
-{tool_url}
-    # ===== record history =====
-    try:
-        hist = _load_tool_history()
-        theme_now = theme
-        tags_now = tags if isinstance(tags, list) else []
-        hist.append({
-            "ts": int(time.time()),
-            "theme": theme_now,
-            "tags": tags_now,
-            "fp": _fingerprint(theme_now, tags_now),
-            "tool_url": tool_url,
-        })
-        _save_tool_history(hist)
-    except Exception:
-        pass
-
-Return ONLY the reply text.
-""".strip()
-
-    res = client.chat.completions.create(
-        model=MODEL_REPLY,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    txt = (res.choices[0].message.content or "").strip()
-    if tool_url not in txt:
-        txt = txt.rstrip() + "\n" + tool_url
-    return txt
 
 
 def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
