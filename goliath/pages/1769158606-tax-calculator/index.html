@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja" class="bg-white text-gray-900">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MACRS減価償却計算ツール｜簡単な資産減価償却シミュレーター</title>
+  <meta name="description" content="MACRS（米国定額法）に基づく減価償却を直感的に計算できる無料ツール。会計や確定申告に役立ちます。日本語・英語・フランス語・ドイツ語に対応。">
+  <link rel="canonical" href="https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769158606-tax-calculator">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        fontFamily: {
+          sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+        }
+      }
+    }
+  </script>
+  <meta name="color-scheme" content="light dark">
+  <style>
+    .glass {
+      background: rgba(255,255,255,0.7);
+      box-shadow: 0 8px 40px rgba(23,37,84,0.08), 0 1.5px 6px -1.5px rgba(59,130,246,0.09);
+      backdrop-filter: blur(18px);
+      border-radius: 1.25rem;
+      border: 1px solid rgba(56,75,122,0.09);
+    }
+    html.dark .glass {
+      background: rgba(30,41,59,0.55);
+      border-color: rgba(71,85,105,0.22);
+      color: #e0e7ef;
+    }
+    html.dark {
+      background: #0a172a;
+      color: #e0e7ef;
+    }
+    html.dark body {background: #0a172a;}
+    html {font-family: 'Inter', 'Noto Sans JP', sans-serif;}
+    ::selection {background: #c7d2fe;}
+    html.dark ::selection {background: #1e293b;}
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-white dark:bg-slate-900 transition-colors duration-500">
+  <!-- NAVBAR -->
+  <nav class="w-full bg-white/90 dark:bg-slate-900/90 border-b border-blue-50 dark:border-slate-800 sticky top-0 z-30 py-3 px-4 flex justify-between items-center shadow-sm backdrop-blur">
+    <a href="../../index.html" class="text-indigo-700 dark:text-indigo-300 font-semibold hover:underline text-sm md:text-base" data-i18n="nav.hub">全ツールへ</a>
+    <div class="flex items-center gap-3">
+      <select id="langSelect" class="rounded-md bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 px-2 py-1 text-sm focus:outline-none">
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+      </select>
+      <button id="themeToggle" aria-label="Dark/Light mode toggle"
+        class="rounded-full w-9 h-9 flex items-center justify-center bg-gray-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-950 border border-indigo-50 dark:border-slate-700 transition-colors duration-300 outline-none">
+        <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-700 dark:text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M17.293 14.707A8 8 0 019.293 6.707 7.987 7.987 0 1021 12a8.03 8.03 0 01-3.707 2.707z" /></svg>
+      </button>
+    </div>
+  </nav>
+  <!-- HERO SECTION -->
+  <header class="mx-auto max-w-3xl text-center pt-12 pb-7 px-3">
+    <h1 class="text-3xl md:text-4xl font-bold text-indigo-800 dark:text-indigo-200 mb-4" data-i18n="hero.title">MACRS減価償却計算ツール</h1>
+    <p class="text-gray-700 dark:text-gray-200 text-lg" data-i18n="hero.subtitle">TurboTaxはオーバースペック。資産減価償却はシンプルに。</p>
+    <div class="mt-4 flex items-center justify-center gap-3">
+      <span class="inline-block bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-100 text-xs font-semibold rounded-full px-3 py-1" data-i18n="hero.label">無料・多言語対応</span>
+      <span class="inline-block bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 text-xs font-semibold rounded-full px-3 py-1" data-i18n="hero.macrs">米国MACRS対応</span>
+    </div>
+  </header>
+  <!-- TOOL CARD -->
+  <main class="flex-grow flex items-center justify-center pb-12">
+    <div class="glass shadow-xl px-7 py-8 max-w-xl w-full flex flex-col items-center">
+      <h2 class="text-xl font-bold mb-4 text-indigo-800 dark:text-indigo-200" data-i18n="tool.title">MACRS減価償却計算</h2>
+      <form id="macrsForm" class="w-full space-y-5">
+        <div>
+          <label for="assetCost" class="block text-sm font-medium mb-1" data-i18n="tool.assetCost">資産の取得価格（USD）</label>
+          <input id="assetCost" type="number" min="0" step="0.01" required inputmode="decimal"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-900 outline-none"
+            placeholder="5000">
+        </div>
+        <div>
+          <label for="serviceYear" class="block text-sm font-medium mb-1" data-i18n="tool.serviceYear">取得年</label>
+          <input id="serviceYear" type="number" min="1987" max="2100" required
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-900 outline-none"
+            placeholder="2023">
+        </div>
+        <div>
+          <label for="macrsClass" class="block text-sm font-medium mb-1" data-i18n="tool.macrsClass">償却クラス</label>
+          <select id="macrsClass" required class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-900 outline-none">
+            <option value="5">5年（車両/コンピュータ等）</option>
+            <option value="7">7年（家具等）</option>
+            <option value="15">15年（特定構築物）</option>
+            <option value="27.5">27.5年（住宅用賃貸不動産）</option>
+            <option value="39">39年（非住宅不動産）</option>
+          </select>
+        </div>
+        <div>
+          <label for="convention" class="block text-sm font-medium mb-1" data-i18n="tool.convention">起点コンベンション</label>
+          <select id="convention" required class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-900 outline-none">
+            <option value="half-year">Half-Year</option>
+            <option value="mid-quarter">Mid-Quarter</option>
+            <option value="mid-month">Mid-Month</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full py-2 mt-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 font-semibold text-white transition-colors" data-i18n="tool.calc">計算する</button>
+      </form>
+      <div id="macrsResult" class="w-full mt-6"></div>
+      <div class="w-full mt-6 text-right">
+        <a href="#faq" class="text-indigo-700 dark:text-indigo-300 text-xs hover:underline" data-i18n="tool.faqLink">よくある質問→</a>
+      </div>
+    </div>
+  </main>
+  <!-- ARTICLE & CONTENT SECTIONS -->
+  <div class="max-w-3xl mx-auto pt-10 pb-20 px-4 space-y-14 text-base leading-relaxed">
+    <section id="whatIsMacrs">
+      <h2 class="text-2xl font-bold text-indigo-800 dark:text-indigo-200 mb-3" data-i18n="article.intro.title">MACRS減価償却とは？</h2>
+      <p data-i18n="article.intro.body">MACRS（Modified Accelerated Cost Recovery System：修正加速償却制度）は、アメリカ合衆国で導入されている税務用の減価償却方式です。1986年税制改革法により導入され、企業や個人事業主が資産購入コストを複数年にわたり配分（減価償却）する際に利用します。MACRSは、資産毎の償却期間と定められた償却率によって年ごとに償却額を算出します。<br><br>
+        MACRSの大きな特徴は、「加速償却方式（Declining Balance）」または「定額法（Straight Line）」の両方に対応しつつ、基本的には早い段階でより多くの償却費を計上できる点にあります。起点コンベンション（Half-Year, Mid-Quarter, Mid-Month）も指定が必要です。実務では、TurboTax等の多機能ソフトが使われますが、シンプルに償却額だけ知りたい場合はこのツールで十分です。</p>
+    </section>
+    <section id="macrsChecklist">
+      <h2 class="text-2xl font-bold text-indigo-800 dark:text-indigo-200 mb-3" data-i18n="article.checklist.title">MACRS減価償却：チェックリスト</h2>
+      <ul class="list-decimal pl-7 space-y-1" style="line-height:1.8">
+        <li data-i18n="article.checklist.1">資産の取得価格が正確か確認</li>
+        <li data-i18n="article.checklist.2">サービス開始年（Placed in Service Year）を特定</li>
+        <li data-i18n="article.checklist.3">該当するMACRSクラス（5年,7年,15年,27.5年,39年など）を調査</li>
+        <li data-i18n="article.checklist.4">起点コンベンション（Half-Year, Mid-Quarter, Mid-Month）の選択</li>
+        <li data-i18n="article.checklist.5">必要であればセクション179またはボーナス償却の検討</li>
+        <li data-i18n="article.checklist.6">各年の償却額と帳簿残高を記録</li>
+        <li data-i18n="article.checklist.7">IRS提出書類に金額を正しく記載</li>
+      </ul>
+    </section>
+    <section id="macrsPitfall">
+      <h2 class="text-2xl font-bold text-indigo-800 dark:text-indigo-200 mb-3" data-i18n="article.pitfalls.title">よくある落とし穴</h2>
+      <ul class="list-disc space-y-2 pl-7 text-slate-700 dark:text-slate-200">
+        <li data-i18n="article.pitfalls.1"><b>償却クラスの誤認:</b> 資産の分類ミスに注意。間違うと申告エラーやペナルティ対象に。</li>
+        <li data-i18n="article.pitfalls.2"><b>開始年のずれ:</b> サービス開始年が間違っていると減価償却にズレが生じる。</li>
+        <li data-i18n="article.pitfalls.3"><b>半期/四半期/半月コンベンションの選択違い:</b> デフォルトはHalf-Yearだが、状況により異なる。</li>
+        <li data-i18n="article.pitfalls.4"><b>ボーナス償却・Section179との併用ミス:</b> 意図せず全額即時償却してしまうことも。</li>
+        <li data-i18n="article.pitfalls.5"><b>途中売却時の償却計算ミス:</b> 途中売却や用途変更の際の調整忘れ。</li>
+      </ul>
+    </section>
+    <section id="faq">
+      <h2 class="text-2xl font-bold text-indigo-800 dark:text-indigo-200 mb-3" data-i18n="article.faq.title">よくある質問（FAQ）</h2>
+      <div class="space-y-7">
+        <details class="group border-b py-2">
+          <summary class="font-semibold cursor-pointer outline-none group-open:text-indigo-700 dark:group-open:text-indigo-300" data-i18n="article.faq.q1">Q1: MACRSはどの資産に適用できますか？</summary>
+          <div class="mt-2 text-slate-800 dark:text-slate-100 text-sm ml-3" data-i18n="article.faq.a1">
+            米国で使用される減価償却資産のほぼ全て（車両、設備、家具、不動産など）が対象ですが、土地や一部の無形資産等は対象外です。
+          </div>
+        </details>
+        <details class="group border-b py-2">
+          <summary class="font-semibold cursor-pointer outline-none group-open:text-indigo-700 dark:group-open:text-indigo-300" data-i18n="article.faq.q2">Q2: 「起点コンベンション」とは何ですか？</summary>
+          <div class="mt-2 text-slate-800 dark:text-slate-100 text-sm ml-3" data-i18n="article.faq.a2">
+            Half-Year（半期）、Mid-Quarter（四半期中）、Mid-Month（半月中）で減価償却を開始する起点の扱い。IRSは多くの場合Half-Yearを推奨しますが、年内の取得割合によって異なる場合も多いです。
+          </div>
+        </details>
+        <details class="group border-b py-2">
+          <summary class="font-semibold cursor-pointer outline-none group-open:text-indigo-700 dark:group-open:text-indigo-300" data-i18n="article.faq.q3">Q3: Section 179とボーナス償却は同時利用できますか？</summary>
+          <div class="mt-2 text-slate-800 dark:text-slate-100 text-sm ml-3" data-i18n="article.faq.a3">
+            原則として可能ですが、適用制限や上限があります。Section179で即時償却、残額にボーナス償却→MACRSという順で計算します。
+          </div>
+        </details>
+        <details class="group border-b py-2">
+          <summary class="font-semibold cursor-pointer outline-none group-open:text-indigo-700 dark:group-open:text-indigo-300" data-i18n="article.faq.q4">Q4: ツールの計算結果は税務申告にそのまま使えますか？</summary>
+          <div class="mt-2 text-slate-800 dark:text-slate-100 text-sm ml-3" data-i18n="article.faq.a4">
+            本ツールは参考計算用途のため、必ず最新のIRS規定やForm 4562を確認し、最終確認は専門家と相談してください。
+          </div>
+        </details>
+        <details class="group border-b py-2">
+          <summary class="font-semibold cursor-pointer outline-none group-open:text-indigo-700 dark:group-open:text-indigo-300" data-i18n="article.faq.q5">Q5: 繰越減価償却や帳簿残高も計算されますか？</summary>
+          <div class="mt-2 text-slate-800 dark:text-slate-100 text-sm ml-3" data-i18n="article.faq.a5">
+            本ツールは各年の償却額と残高も出力しますが、部分売却や用途変更時等は別途調整が必要です。
+          </div>
+        </details>
+      </div>
+    </section>
+    <section id="summaryEN" class="pt-8">
+      <h3 class="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-1" data-i18n="article.enSummary.title">EN: MACRS Accelerated Depreciation Calculator Overview</h3>
+      <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="article.enSummary.body">
+        This tool calculates annual depreciation using the MACRS system (US tax law). It supports 5/7/15/27.5/39-year asset classes with appropriate conventions. For detailed IRS compliance and advanced features (such as Section 179), refer to official resources.
+      </p>
+    </section>
+    <section id="summaryFR" class="pt-6">
+      <h3 class="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-1" data-i18n="article.frSummary.title">FR : Calculateur MACRS – Aperçu</h3>
+      <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="article.frSummary.body">
+        Cet outil calcule l'amortissement annuel basé sur MACRS (système fiscal américain). Classes d'actifs 5/7/15/27.5/39 ans prises en charge. Voir les liens officiels pour les détails réglementaires et complexités avancées.
+      </p>
+    </section>
+    <section id="summaryDE" class="pt-6">
+      <h3 class="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-1" data-i18n="article.deSummary.title">DE: MACRS-Abschreibungsrechner Übersicht</h3>
+      <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="article.deSummary.body">
+        Dieses Tool berechnet die Jahresabschreibung nach MACRS (US-Steuervorschriften). Unterstützte Nutzungsdauern: 5/7/15/27,5/39 Jahre. Für Details und Ausnahmen konsultieren Sie bitte die offiziellen Ressourcen.
+      </p>
+    </section>
+    <section id="references" class="pt-10">
+      <h2 class="text-xl font-bold mb-2 text-indigo-800 dark:text-indigo-200" data-i18n="article.refs.title">参考文献 / 公式リソース</h2>
+      <ol class="list-decimal pl-7 space-y-1 text-blue-900 dark:text-blue-200 text-sm">
+        <li><a href="https://www.irs.gov/publications/p946" class="hover:underline" rel="noopener" target="_blank">IRS Publication 946: How To Depreciate Property</a></li>
+        <li><a href="https://www.irs.gov/forms-pubs/about-form-4562" class="hover:underline" rel="noopener" target="_blank">About Form 4562, Depreciation and Amortization</a></li>
+        <li><a href="https://www.investopedia.com/terms/m/macrs.asp" class="hover:underline" rel="noopener" target="_blank">Investopedia: MACRS Explained</a></li>
+        <li><a href="https://www.turbotax.intuit.com/tax-tools/tax-tips/Small-Business-Taxes/MACRS-Depreciation--Definition-and-Calculating-Depreciation/INF14414.html" class="hover:underline" rel="noopener" target="_blank">TurboTax: MACRS Depreciation</a></li>
+        <li><a href="https://www.hud.gov/sites/documents/4562MACRSRUL.PDF" class="hover:underline" rel="noopener" target="_blank">HUD: MACRS Rules</a></li>
+        <li><a href="https://www.accountingtools.com/articles/what-is-the-macrs-depreciation-system.html" class="hover:underline" rel="noopener" target="_blank">AccountingTools: MACRS Depreciation</a></li>
+        <li><a href="https://www.fasb.org/resources/ccurl/779/977/MACRS_Overview.pdf" class="hover:underline" rel="noopener" target="_blank">FASB: MACRS Overview (pdf)</a></li>
+        <li><a href="https://taxfoundation.org/data/all/faq/macrs-depreciation-explained/" class="hover:underline" rel="noopener" target="_blank">Tax Foundation: MACRS Explained</a></li>
+        <li><a href="https://www.salestaxinstitute.com/resources/modified-accelerated-cost-recovery-system-macrs" class="hover:underline" rel="noopener" target="_blank">Sales Tax Institute: MACRS Guide</a></li>
+        <li><a href="https://hbr.org/2018/07/how-to-account-for-depreciation" class="hover:underline" rel="noopener" target="_blank">HBR: How to Account for Depreciation</a></li>
+        <li><a href="https://www.ftb.ca.gov/forms/2022/2022-3892-publication.pdf" class="hover:underline" rel="noopener" target="_blank">CA FTB: MACRS for California Taxes</a></li>
+      </ol>
+    </section>
+    <!-- RELATED SITES rendered by JS -->
+    <section id="relatedSitesSection" class="pt-8">
+      <h2 class="text-xl font-bold mb-2 text-indigo-800 dark:text-indigo-200" data-i18n="related.title">関連サイト</h2>
+      <ul id="relatedSitesList" class="pl-7 space-y-1 list-disc"></ul>
+    </section>
+  </div>
+  <!-- FOOTER -->
+  <footer class="bg-white/90 dark:bg-slate-900/90 border-t border-blue-50 dark:border-slate-700 py-5 text-center text-gray-700 dark:text-gray-300 px-4 mt-auto">
+    <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm">
+      <a href="../../index.html" class="underline hover:text-indigo-700 dark:hover:text-indigo-300" data-i18n="footer.hub">All tools</a>
+      <a href="#privacy" class="hover:underline" data-i18n="footer.privacy">プライバシーポリシー</a>
+      <a href="#terms" class="hover:underline" data-i18n="footer.terms">利用規約</a>
+      <a href="#disclaimer" class="hover:underline" data-i18n="footer.disclaimer">免責事項</a>
+      <a href="#about" class="hover:underline" data-i18n="footer.about">運営者情報</a>
+      <a href="#contact" class="hover:underline" data-i18n="footer.contact">お問い合わせ</a>
+    </div>
+    <div class="text-xs text-slate-500 pt-3">&copy; 2024 Goliath Tools. Not affiliated with IRS. All rights reserved.</div>
+  </footer>
+  <!-- COMPLIANCE SECTIONS -->
+  <section id="privacy" class="max-w-2xl mx-auto px-4 py-10">
+    <h3 class="text-xl font-bold text-indigo-700 mb-2" data-i18n="compliance.privacy.title">プライバシーポリシー</h3>
+    <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="compliance.privacy.body">
+      当サイトはCookie等で利用者の設定（言語・カラーテーマ等）を保存しますが、いかなる個人情報も収集・外部送信しません。広告や第三者スクリプトは一切使用しておらず、ローカルストレージのみ利用します。
+    </p>
+  </section>
+  <section id="terms" class="max-w-2xl mx-auto px-4 py-10">
+    <h3 class="text-xl font-bold text-indigo-700 mb-2" data-i18n="compliance.terms.title">利用規約</h3>
+    <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="compliance.terms.body">
+      ユーザーは本ツールを自己責任で利用し、いかなる損害責任や法的責任も運営側は負いません。本ツールから得られるいかなるデータも参考用とし、税務申告等の正規判断は必ず最新の公的情報や専門家の意見を参照してください。
+    </p>
+  </section>
+  <section id="disclaimer" class="max-w-2xl mx-auto px-4 py-10">
+    <h3 class="text-xl font-bold text-indigo-700 mb-2" data-i18n="compliance.disclaimer.title">免責事項</h3>
+    <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="compliance.disclaimer.body">
+      本ツールの計算結果に基づく意思決定等について、運営はいかなる保障も行いません。税法・会計基準の改正や個別状況には適合しない場合がありえます。
+    </p>
+  </section>
+  <section id="about" class="max-w-2xl mx-auto px-4 py-10">
+    <h3 class="text-xl font-bold text-indigo-700 mb-2" data-i18n="compliance.about.title">運営者情報</h3>
+    <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="compliance.about.body">
+      本サイトはGoliath Toolsプロジェクト（管理責任者:mikann20041029）が運営しています。依存ライブラリや公式ガイド等については各種出典表記をご参照ください。
+    </p>
+  </section>
+  <section id="contact" class="max-w-2xl mx-auto px-4 py-10">
+    <h3 class="text-xl font-bold text-indigo-700 mb-2" data-i18n="compliance.contact.title">お問い合わせ</h3>
+    <p class="text-sm text-gray-700 dark:text-gray-300" data-i18n="compliance.contact.body">
+      ご意見・ご質問はGitHubのIssueまたは <a href="mailto:mikann20041029+goliath@gmail.com" class="underline text-indigo-700 dark:text-indigo-300">mikann20041029+goliath@gmail.com</a> までご連絡ください。
+    </p>
+  </section>
+  <!-- Data Dictionaries & Related Sites -->
+  <script>
+    // --- i18n dictionary ---
+    window.__I18N__ = {
+      ja: {
+        "nav.hub": "全ツールへ",
+        "hero.title": "MACRS減価償却計算ツール",
+        "hero.subtitle": "TurboTaxはオーバースペック。資産減価償却はシンプルに。",
+        "hero.label": "無料・多言語対応",
+        "hero.macrs": "米国MACRS対応",
+        "tool.title": "MACRS減価償却計算",
+        "tool.assetCost": "資産の取得価格（USD）",
+        "tool.serviceYear": "取得年",
+        "tool.macrsClass": "償却クラス",
+        "tool.convention": "起点コンベンション",
+        "tool.calc": "計算する",
+        "tool.faqLink": "よくある質問→",
+        "article.intro.title": "MACRS減価償却とは？",
+        "article.intro.body": "MACRS（Modified Accelerated Cost Recovery System：修正加速償却制度）は、アメリカ合衆国で導入されている税務用の減価償却方式です。1986年税制改革法により導入され、企業や個人事業主が資産購入コストを複数年にわたり配分（減価償却）する際に利用します。MACRSは、資産毎の償却期間と定められた償却率によって年ごとに償却額を算出します。<br><br>MACRSの大きな特徴は、「加速償却方式（Declining Balance）」または「定額法（Straight Line）」の両方に対応しつつ、基本的には早い段階でより多くの償却費を計上できる点にあります。起点コンベンション（Half-Year, Mid-Quarter, Mid-Month）も指定が必要です。実務では、TurboTax等の多機能ソフトが使われますが、シンプルに償却額だけ知りたい場合はこのツールで十分です。",
+        "article.checklist.title": "MACRS減価償却：チェックリスト",
+        "article.checklist.1": "資産の取得価格が正確か確認",
+        "article.checklist.2": "サービス開始年（Placed in Service Year）を特定",
+        "article.checklist.3": "該当するMACRSクラス（5年,7年,15年,27.5年,39年など）を調査",
+        "article.checklist.4": "起点コンベンション（Half-Year, Mid-Quarter, Mid-Month）の選択",
+        "article.checklist.5": "必要であればセクション179またはボーナス償却の検討",
+        "article.checklist.6": "各年の償却額と帳簿残高を記録",
+        "article.checklist.7": "IRS提出書類に金額を正しく記載",
+        "article.pitfalls.title": "よくある落とし穴",
+        "article.pitfalls.1": "<b>償却クラスの誤認:</b> 資産の分類ミスに注意。間違うと申告エラーやペナルティ対象に。",
+        "article.pitfalls.2": "<b>開始年のずれ:</b> サービス開始年が間違っていると減価償却にズレが生じる。",
+        "article.pitfalls.3": "<b>半期/四半期/半月コンベンションの選択違い:</b> デフォルトはHalf-Yearだが、状況により異なる。",
+        "article.pitfalls.4": "<b>ボーナス償却・Section179との併用ミス:</b> 意図せず全額即時償却してしまうことも。",
+        "article.pitfalls.5": "<b>途中売却時の償却計算ミス:</b> 途中売却や用途変更の際の調整忘れ。",
+        "article.faq.title": "よくある質問（FAQ）",
+        "article.faq.q1": "Q1: MACRSはどの資産に適用できますか？",
+        "article.faq.a1": "米国で使用される減価償却資産のほぼ全て（車両、設備、家具、不動産など）が対象ですが、土地や一部の無形資産等は対象外です。",
+        "article.faq.q2": "Q2: 「起点コンベンション」とは何ですか？",
+        "article.faq.a2": "Half-Year（半期）、Mid-Quarter（四半期中）、Mid-Month（半月中）で減価償却を開始する起点の扱い。IRSは多くの場合Half-Yearを推奨しますが、年内の取得割合によって異なる場合も多いです。",
+        "article.faq.q3": "Q3: Section 179とボーナス償却は同時利用できますか？",
+        "article.faq.a3": "原則として可能ですが、適用制限や上限があります。Section179で即時償却、残額にボーナス償却→MACRSという順で計算します。",
+        "article.faq.q4": "Q4: ツールの計算結果は税務申告にそのまま使えますか？",
+        "article.faq.a4": "本ツールは参考計算用途のため、必ず最新のIRS規定やForm 4562を確認し、最終確認は専門家と相談してください。",
+        "article.faq.q5": "Q5: 繰越減価償却や帳簿残高も計算されますか？",
+        "article.faq.a5": "本ツールは各年の償却額と残高も出力しますが、部分売却や用途変更時等は別途調整が必要です。",
+        "article.enSummary.title": "EN: MACRS Accelerated Depreciation Calculator Overview",
+        "article.enSummary.body": "This tool calculates annual depreciation using the MACRS system (US tax law). It supports 5/7/15/27.5/39-year asset classes with appropriate conventions. For detailed IRS compliance and advanced features (such as Section 179), refer to official resources.",
+        "article.frSummary.title": "FR : Calculateur MACRS – Aperçu",
+        "article.frSummary.body": "Cet outil calcule l'amortissement annuel basé sur MACRS (système fiscal américain). Classes d'actifs 5/7/15/27.5/39 ans prises en charge. Voir les liens officiels pour les détails réglementaires et complexités avancées.",
+        "article.deSummary.title": "DE: MACRS-Abschreibungsrechner Übersicht",
+        "article.deSummary.body": "Dieses Tool berechnet die Jahresabschreibung nach MACRS (US-Steuervorschriften). Unterstützte Nutzungsdauern: 5/7/15/27,5/39 Jahre. Für Details und Ausnahmen konsultieren Sie bitte die offiziellen Ressourcen.",
+        "article.refs.title": "参考文献 / 公式リソース",
+        "related.title": "関連サイト",
+        "footer.hub": "All tools",
+        "footer.privacy": "プライバシーポリシー",
+        "footer.terms": "利用規約",
+        "footer.disclaimer": "免責事項",
+        "footer.about": "運営者情報",
+        "footer.contact": "お問い合わせ",
+        "compliance.privacy.title": "プライバシーポリシー",
+        "compliance.privacy.body": "当サイトはCookie等で利用者の設定（言語・カラーテーマ等）を保存しますが、いかなる個人情報も収集・外部送信しません。広告や第三者スクリプトは一切使用しておらず、ローカルストレージのみ利用します。",
+        "compliance.terms.title": "利用規約",
+        "compliance.terms.body": "ユーザーは本ツールを自己責任で利用し、いかなる損害責任や法的責任も運営側は負いません。本ツールから得られるいかなるデータも参考用とし、税務申告等の正規判断は必ず最新の公的情報や専門家の意見を参照してください。",
+        "compliance.disclaimer.title": "免責事項",
+        "compliance.disclaimer.body": "本ツールの計算結果に基づく意思決定等について、運営はいかなる保障も行いません。税法・会計基準の改正や個別状況には適合しない場合がありえます。",
+        "compliance.about.title": "運営者情報",
+        "compliance.about.body": "本サイトはGoliath Toolsプロジェクト（管理責任者:mikann20041029）が運営しています。依存ライブラリや公式ガイド等については各種出典表記をご参照ください。",
+        "compliance.contact.title": "お問い合わせ",
+        "compliance.contact.body": "ご意見・ご質問はGitHubのIssueまたは <a href=\"mailto:mikann20041029+goliath@gmail.com\" class=\"underline text-indigo-700 dark:text-indigo-300\">mikann20041029+goliath@gmail.com</a> までご連絡ください。"
+      },
+      en: {
+        "nav.hub": "All tools",
+        "hero.title": "MACRS Depreciation Calculator",
+        "hero.subtitle": "TurboTax is overkill. Simple asset depreciation, made easy.",
+        "hero.label": "Free & Multilingual",
+        "hero.macrs": "US MACRS Supported",
+        "tool.title": "MACRS Depreciation Calculation",
+        "tool.assetCost": "Asset Cost (USD)",
+        "tool.serviceYear": "Placed in Service Year",
+        "tool.macrsClass": "Depreciation Class",
+        "tool.convention": "Convention",
+        "tool.calc": "Calculate",
+        "tool.faqLink": "See FAQ→",
+        "article.intro.title": "What is MACRS Depreciation?",
+        "article.intro.body": "MACRS (Modified Accelerated Cost Recovery System) is the depreciation system used for US tax reporting, introduced in the 1986 tax reforms. It assigns asset classes and recovery periods, letting businesses recover costs over years via accelerated (declining balance) or straight-line methods. MACRS allows larger depreciation in initial years. For accurate tax reporting, asset class and convention selection (Half-Year, Mid-Quarter, Mid-Month) is necessary. This tool provides MACRS-based depreciation without the complexity of software like TurboTax.",
+        "article.checklist.title": "MACRS Depreciation: Checklist",
+        "article.checklist.1": "Confirm the asset's correct purchase cost.",
+        "article.checklist.2": "Determine placed-in-service year.",
+        "article.checklist.3": "Identify the right MACRS recovery class (5,7,15,27.5,39 yrs, etc).",
+        "article.checklist.4": "Select the appropriate convention (Half-Year, Mid-Quarter, Mid-Month).",
+        "article.checklist.5": "Consider Section 179 or bonus depreciation if relevant.",
+        "article.checklist.6": "Track annual depreciation and book value.",
+        "article.checklist.7": "Report figures accurately in IRS forms.",
+        "article.pitfalls.title": "Common Pitfalls",
+        "article.pitfalls.1": "<b>Asset class errors:</b> Wrong classification leads to tax issues or penalties.",
+        "article.pitfalls.2": "<b>Year mismatch:</b> Incorrect service start year shifts depreciation schedule.",
+        "article.pitfalls.3": "<b>Wrong convention:</b> Most cases default to Half-Year, but exceptions exist.",
+        "article.pitfalls.4": "<b>Section 179/Bonus mistakes:</b> Accidental full expensing if misapplied.",
+        "article.pitfalls.5": "<b>Disposition miscalculations:</b> Sale or use change requires special adjustments.",
+        "article.faq.title": "FAQ",
+        "article.faq.q1": "Q1: What assets qualify for MACRS?",
+        "article.faq.a1": "Most tangible assets used in the US (equipment, vehicles, furniture, buildings) qualify. Land and some intangibles are excluded.",
+        "article.faq.q2": "Q2: What is the 'Convention'?",
+        "article.faq.a2": "Convention (Half-Year, Mid-Quarter, Mid-Month) determines the depreciation start date for new property. Most use Half-Year unless circumstances dictate otherwise.",
+        "article.faq.q3": "Q3: Can Section 179 & bonus depreciation be combined?",
+        "article.faq.a3": "Generally yes, within limits. Apply Section 179 first, then bonus, then MACRS.",
+        "article.faq.q4": "Q4: Are tool calculations valid for tax forms?",
+        "article.faq.a4": "This tool is for reference only. Confirm all figures with current IRS forms (e.g. Form 4562) or your tax advisor.",
+        "article.faq.q5": "Q5: Does the tool show book value/carryforward?",
+        "article.faq.a5": "It estimates annual depreciation and book value; mid-year dispositions need manual adjustment.",
+        "article.enSummary.title": "EN: MACRS Accelerated Depreciation Calculator Overview",
+        "article.enSummary.body": "This tool calculates annual depreciation using the MACRS system (US tax law). It supports 5/7/15/27.5/39-year asset classes with appropriate conventions. For detailed IRS compliance and advanced features (such as Section 179), refer to official resources.",
+        "article.frSummary.title": "FR : Calculateur MACRS – Aperçu",
+        "article.frSummary.body": "Cet outil calcule l'amortissement annuel basé sur MACRS (système fiscal américain). Classes d'actifs 5/7/15/27.5/39 ans prises en charge. Voir les liens officiels pour les détails réglementaires et complexités avancées.",
+        "article.deSummary.title": "DE: MACRS-Abschreibungsrechner Übersicht",
+        "article.deSummary.body": "Dieses Tool berechnet die Jahresabschreibung nach MACRS (US-Steuervorschriften). Unterstützte Nutzungsdauern: 5/7/15/27,5/39 Jahre. Für Details und Ausnahmen konsultieren Sie bitte die offiziellen Ressourcen.",
+        "article.refs.title": "References / Official Resources",
+        "related.title": "Related Sites",
+        "footer.hub": "All tools",
+        "footer.privacy": "Privacy Policy",
+        "footer.terms": "Terms of Service",
+        "footer.disclaimer": "Disclaimer",
+        "footer.about": "About",
+        "footer.contact": "Contact",
+        "compliance.privacy.title": "Privacy Policy",
+        "compliance.privacy.body": "This site only saves settings (language/dark mode) in your browser local storage. No personal data is collected, and no third-party scripts/ads are used.",
+        "compliance.terms.title": "Terms of Service",
+        "compliance.terms.body": "Users use this tool at their own discretion. Authors hold no legal responsibility for loss or misuse. Output is for reference—confirm with official forms or a tax professional.",
+        "compliance.disclaimer.title": "Disclaimer",
+        "compliance.disclaimer.body": "No warranty or guarantee is expressed or implied for outcomes using this tool. Always check laws and specific situations for correctness.",
+        "compliance.about.title": "About / Operator Info",
+        "compliance.about.body": "This site is operated by the Goliath Tools project (mikann20041029). Libraries and resources used are credited in the references.",
+        "compliance.contact.title": "Contact",
+        "compliance.contact.body": "Questions and suggestions: GitHub Issues or <a href=\"mailto:mikann20041029+goliath@gmail.com\" class=\"underline text-indigo-700 dark:text-indigo-300\">mikann20041029+goliath@gmail.com</a>"
+      },
+      fr: {
+        "nav.hub": "Tous les outils",
+        "hero.title": "Calculateur d'amortissement MACRS",
+        "hero.subtitle": "TurboTax est trop complexe. Amortissement simple, sans prise de tête.",
+        "hero.label": "Gratuit & Multilingue",
+        "hero.macrs": "MACRS US pris en charge",
+        "tool.title": "Calcul d'amortissement MACRS",
+        "tool.assetCost": "Coût de l'actif (USD)",
+        "tool.serviceYear": "Année de mise en service",
+        "tool.macrsClass": "Classe d'amortissement",
+        "tool.convention": "Convention",
+        "tool.calc": "Calculer",
+        "tool.faqLink": "FAQ →",
+        "article.intro.title": "Qu'est-ce que l'amortissement MACRS ?",
+        "article.intro.body": "Le MACRS (Modified Accelerated Cost Recovery System) est le système d'amortissement fiscal des États-Unis, introduit en 1986. Il permet d'amortir les coûts selon des classes spécifiques sur plusieurs années (dégressif/linéaire). Le MACRS « accélère » l'amortissement : plus important les premières années. Le choix de classe et de convention (Half-Year, Mid-Quarter, Mid-Month) est essentiel. Cet outil offre un calcul rapide du MACRS sans logiciel complexe.",
+        "article.checklist.title": "MACRS : Liste de vérification",
+        "article.checklist.1": "Vérifiez le coût d'achat de l'actif.",
+        "article.checklist.2": "Déterminez l'année de mise en service.",
+        "article.checklist.3": "Sélectionnez la classe MACRS adéquate (5,7,15,27.5,39 ans, etc.)",
+        "article.checklist.4": "Choisissez la convention appropriée (Half-Year, etc.)",
+        "article.checklist.5": "Songez à la section 179 ou à l'amortissement boni si pertinent.",
+        "article.checklist.6": "Enregistrez les amortissements annuels et la valeur comptable.",
+        "article.checklist.7": "Saisissez correctement les montants dans les formulaires IRS.",
+        "article.pitfalls.title": "Pièges courants",
+        "article.pitfalls.1": "<b>Erreur de classification :</b> Erreur peut entraîner des sanctions.",
+        "article.pitfalls.2": "<b>Mauvaise année :</b> Année incorrecte fausse le calendrier d'amortissement.",
+        "article.pitfalls.3": "<b>Convention incorrecte :</b> La plupart utilisent Half-Year, mais attention aux exceptions.",
+        "article.pitfalls.4": "<b>Erreur section 179/boni :</b> Risque de tout amortir en une fois.",
+        "article.pitfalls.5": "<b>Erreur lors de la cession :</b> Pour une vente anticipée, ajustez manuellement.",
+        "article.faq.title": "Questions fréquentes (FAQ)",
+        "article.faq.q1": "Q1 : Quels actifs sont éligibles MACRS ?",
+        "article.faq.a1": "La plupart des actifs corporels utilisés aux États-Unis (équipements, immeubles, voitures). Exclusions : terrain, certains actifs incorporels.",
+        "article.faq.q2": "Q2 : Qu'est-ce que la « Convention » ?",
+        "article.faq.a2": "La convention (Half-Year/Mid-Quarter/Mid-Month) fixe la date de début d'amortissement. Généralement Half-Year sauf exceptions.",
+        "article.faq.q3": "Q3 : Section 179 et amortissement boni combinés ?",
+        "article.faq.a3": "Oui, dans les limites. Appliquez section 179 d'abord, puis boni, puis MACRS standard.",
+        "article.faq.q4": "Q4 : Les résultats sont-ils valables pour la déclaration fiscale ?",
+        "article.faq.a4": "Ce calculateur est indicatif. Vérifiez toujours avec l'IRS ou un expert fiscal.",
+        "article.faq.q5": "Q5 : Affiche-t-on valeur comptable & reports ?",
+        "article.faq.a5": "Oui, propose l'amortissement & valeur annuelle. Pour cession en cours d'année : ajustez manuellement.",
+        "article.enSummary.title": "EN: MACRS Accelerated Depreciation Calculator Overview",
+        "article.enSummary.body": "This tool calculates annual depreciation using the MACRS system (US tax law). It supports 5/7/15/27.5/39-year asset classes with appropriate conventions. For detailed IRS compliance and advanced features (such as Section 179), refer to official resources.",
+        "article.frSummary.title": "FR : Calculateur MACRS – Aperçu",
+        "article.frSummary.body": "Cet outil calcule l'amortissement annuel basé sur MACRS (système fiscal américain). Classes d'actifs 5/7/15/27.5/39 ans prises en charge. Voir les liens officiels pour les détails réglementaires et complexités avancées.",
+        "article.deSummary.title": "DE: MACRS-Abschreibungsrechner Übersicht",
+        "article.deSummary.body": "Dieses Tool berechnet die Jahresabschreibung nach MACRS (US-Steuervorschriften). Unterstützte Nutzungsdauern: 5/7/15/27,5/39 Jahre. Für Details und Ausnahmen konsultieren Sie bitte die offiziellen Ressourcen.",
+        "article.refs.title": "Références / Ressources Officielles",
+        "related.title": "Sites connexes",
+        "footer.hub": "Tous les outils",
+        "footer.privacy": "Politique de confidentialité",
+        "footer.terms": "Conditions d'utilisation",
+        "footer.disclaimer": "Avertissement",
+        "footer.about": "À propos",
+        "footer.contact": "Contact",
+        "compliance.privacy.title": "Politique de confidentialité",
+        "compliance.privacy.body": "Ce site ne sauvegarde que vos réglages locaux (langue/thème) dans votre navigateur. Aucune collecte de données privée ni usage de scripts/ads tiers.",
+        "compliance.terms.title": "Conditions d'utilisation",
+        "compliance.terms.body": "Utilisez cet outil à vos risques. Les auteurs déclinent toute responsabilité. Données fournies à titre indicatif. Vérifiez avec un expert fiscal.",
+        "compliance.disclaimer.title": "Avertissement",
+        "compliance.disclaimer.body": "Aucune garantie sur l'exactitude des résultats. Vérifiez toujours selon la législation en vigueur et votre situation.",
+        "compliance.about.title": "À propos",
+        "compliance.about.body": "Ce site appartient au projet Goliath Tools (mikann20041029). Librairies et ressources créditées dans les références.",
+        "compliance.contact.title": "Contact",
+        "compliance.contact.body": "Pour toute question : issues GitHub ou <a href=\"mailto:mikann20041029+goliath@gmail.com\" class=\"underline text-indigo-700 dark:text-indigo-300\">mikann20041029+goliath@gmail.com</a>"
+      },
+      de: {
+        "nav.hub": "Alle Tools",
+        "hero.title": "MACRS-Abschreibungsrechner",
+        "hero.subtitle": "TurboTax ist zu komplex. Abschreibung einfach gemacht.",
+        "hero.label": "Kostenlos & Mehrsprachig",
+        "hero.macrs": "US MACRS-Unterstützung",
+        "tool.title": "MACRS-Abschreibungsberechnung",
+        "tool.assetCost": "Anschaffungskosten (USD)",
+        "tool.serviceYear": "Inbetriebnahmejahr",
+        "tool.macrsClass": "Abschreibungsklasse",
+        "tool.convention": "Konvention",
+        "tool.calc": "Berechnen",
+        "tool.faqLink": "FAQ →",
+        "article.intro.title": "Was ist MACRS-Abschreibung?",
+        "article.intro.body": "MACRS (Modified Accelerated Cost Recovery System) ist das US-Steuersystem für Abschreibungen (seit 1986). Es teilt Vermögenswerte in Nutzungsdauern ein: Jährlich schneller oder linear abschreibbar, größere AMRs in frühen Jahren. Die Wahl von Klasse und Konvention (Half-Year etc.) ist wichtig. Das Tool liefert die Werte schnell und unkompliziert – anders als komplexe Software.",
+        "article.checklist.title": "MACRS: Prüfliste",
+        "article.checklist.1": "Anschaffungskosten korrekt erfassen.",
+        "article.checklist.2": "Inbetriebnahmejahr bestimmen.",
+        "article.checklist.3": "Abschreibungsklasse (z.B. 5,7,15,27,5,39 J.) herausfinden.",
+        "article.checklist.4": "Passende Konvention wählen (Half-Year etc.).",
+        "article.checklist.5": "Section 179/Bonus-Abschreibung prüfen.",
+        "article.checklist.6": "Jährliche Abschreibung & Restwert dokumentieren.",
+        "article.checklist.7": "Werte korrekt auf IRS-Formulare übertragen.",
+        "article.pitfalls.title": "Typische Fehler",
+        "article.pitfalls.1": "<b>Falsche Klasse:</b> Falsche Zuordnung führt zu Problemen oder Strafen.",
+        "article.pitfalls.2": "<b>Falsches Jahr:</b> Abschreibungszeitplan verschiebt sich.",
+        "article.pitfalls.3": "<b>Falsche Konvention:</b> Standard ist Half-Year, es gibt aber Ausnahmen.",
+        "article.pitfalls.4": "<b>Fehler Section 179/Bonus:</b> Unbeabsichtigte Sofortabschreibung.",
+        "article.pitfalls.5": "<b>Fehler bei Verkauf/Wechsel:</b> Manuelle Anpassung nötig.",
+        "article.faq.title": "FAQ",
+        "article.faq.q1": "F1: Für welche Vermögenswerte gilt MACRS?",
+        "article.faq.a1": "Nahezu alle anlagenbezogenen Wirtschaftsgüter in den USA (Ausrüstung, Gebäude, Fahrzeuge), außer Grundstücke und bestimmte immaterielle Güter.",
+        "article.faq.q2": "F2: Was heißt 'Konvention'?",
+        "article.faq.a2": "Die Konvention (Half-Year/Mid-Quarter/Mid-Month) legt den Beginn der Abschreibung fest. Meist Half-Year.",
+        "article.faq.q3": "F3: Section 179 und Bonus kombinierbar?",
+        "article.faq.a3": "Normalerweise ja, innerhalb der Grenzen. Zuerst Section 179, dann Bonus, dann MACRS.",
+        "article.faq.q4": "F4: Sind Tool-Berechnungen steuerlich verwendbar?",
+        "article.faq.a4": "Nur als Orientierung – überprüfen Sie die Werte mit offiziellen Formularen/Steuerberater.",
+        "article.faq.q5": "F5: Werden Restwerte/Carries angezeigt?",
+        "article.faq.a5": "Das Tool zeigt sie, aber bei außerplanmäßiger Aufgabe ist manuelle Korrektur nötig.",
+        "article.enSummary.title": "EN: MACRS Accelerated Depreciation Calculator Overview",
+        "article.enSummary.body": "This tool calculates annual depreciation using the MACRS system (US tax law). It supports 5/7/15/27.5/39-year asset classes with appropriate conventions. For detailed IRS compliance and advanced features (such as Section 179), refer to official resources.",
+        "article.frSummary.title": "FR : Calculateur MACRS – Aperçu",
+        "article.frSummary.body": "Cet outil calcule l'amortissement annuel basé sur MACRS (système fiscal américain). Classes d'actifs 5/7/15/27.5/39 ans prises en charge. Voir les liens officiels pour les détails réglementaires et complexités avancées.",
+        "article.deSummary.title": "DE: MACRS-Abschreibungsrechner Übersicht",
+        "article.deSummary.body": "Dieses Tool berechnet die Jahresabschreibung nach MACRS (US-Steuervorschriften). Unterstützte Nutzungsdauern: 5/7/15/27,5/39 Jahre. Für Details und Ausnahmen konsultieren Sie bitte die offiziellen Ressourcen.",
+        "article.refs.title": "Quellen / Offizielle Ressourcen",
+        "related.title": "Verwandte Seiten",
+        "footer.hub": "Alle Tools",
+        "footer.privacy": "Datenschutz",
+        "footer.terms": "Nutzungsbedingungen",
+        "footer.disclaimer": "Haftungsausschluss",
+        "footer.about": "Über",
+        "footer.contact": "Kontakt",
+        "compliance.privacy.title": "Datenschutz",
+        "compliance.privacy.body": "Diese Seite speichert Einstellungen (Sprache/Dunkelmodus) lokal im Browser. Es werden keine personenbezogenen Daten erhoben oder von Dritten verarbeitet.",
+        "compliance.terms.title": "Nutzungsbedingungen",
+        "compliance.terms.body": "Die Nutzung erfolgt auf eigene Gefahr. Für Schäden übernimmt der Betreiber keine Haftung. Ergebnisse sind nur Richtwerte. Bei Steuerfragen wenden Sie sich an Fachleute.",
+        "compliance.disclaimer.title": "Haftungsausschluss",
+        "compliance.disclaimer.body": "Keine Gewähr für die Richtigkeit der Werte. Prüfen Sie sachgemäß nach Ihren gesetzlichen Vorgaben.",
+        "compliance.about.title": "Über / Betreiberinfo",
+        "compliance.about.body": "Diese Seite wird vom Goliath Tools Projekt (mikann20041029) betrieben. Quellen/Libraries siehe Referenzen.",
+        "compliance.contact.title": "Kontakt",
+        "compliance.contact.body": "Fragen: GitHub Issues oder <a href=\"mailto:mikann20041029+goliath@gmail.com\" class=\"underline text-indigo-700 dark:text-indigo-300\">mikann20041029+goliath@gmail.com</a>"
+      }
+    };
+    // --- Related Sites Sample JSON ---
+    window.__RELATED__ = [{"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769155768-tax-calculator/"}, {"title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769115945-show-hn-pta-tax-calculator-calculate-pakistan-mobile-import-/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769141611-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769138429-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769116184-show-hn-gogen-a-simple-template-based-file-generator-written/"}];
+  </script>
+  <!-- I18N & Theme/Related Section/Tool Initializer -->
+  <script>
+    // --- i18n UI initializer ---
+    function renderI18n(lang, save) {
+      if(!window.__I18N__ || !window.__I18N__[lang]) lang = 'ja';
+      document.documentElement.lang = lang;
+      document.getElementById('langSelect').value = lang;
+      Array.from(document.querySelectorAll('[data-i18n]')).forEach(function(node){
+        let key = node.dataset.i18n, dict = window.__I18N__[lang], html = dict && dict[key];
+        if(typeof html !== "undefined") node.innerHTML = html;
+      });
+      if(save) try{ localStorage.setItem('goliath_lang', lang); }catch(e){}
+    }
+    document.getElementById('langSelect').addEventListener('change', function() {
+      renderI18n(this.value, true);
+    });
+    // On load, set lang from localStorage, default ja
+    (function(){
+      var lang=localStorage.getItem('goliath_lang')||'ja';
+      renderI18n(lang,false);
+    })();
+    // --- Theme(Dark/Light) toggle ---
+    (function(){
+      var q=document.documentElement, THEME_KEY='goliath_theme';
+      function setTheme(tgt, save){
+        if(tgt=='dark'){q.classList.add('dark');q.classList.remove('bg-white','text-gray-900');}
+        else{q.classList.remove('dark');q.classList.add('bg-white','text-gray-900');}
+        if(save) try{localStorage.setItem(THEME_KEY,tgt);}catch(e){}
+        // update icon
+        var ic=document.getElementById('themeIcon');
+        ic.innerHTML = tgt=='dark' ?
+          '<path stroke="currentColor" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/>' :
+          '<circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" fill="none"/><path stroke="currentColor" stroke-width="2" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M16.95 16.95l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M16.95 7.05l1.42-1.42"/>';
+      }
+      // Initial/auto
+      var pref = (function(){
+        var t=localStorage.getItem(THEME_KEY);
+        if(t) return t;
+        if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+        return 'light';
+      })();
+      setTheme(pref,false);
+      document.getElementById('themeToggle').onclick = function(){
+        setTheme(document.documentElement.classList.contains('dark')?'light':'dark',true);
+      };
+    })();
+    // --- Related Sites render ---
+    (function(){
+      var data = window.__RELATED__ || [];
+      var sec = document.getElementById('relatedSitesSection');
+      var ul = document.getElementById('relatedSitesList');
+      if(!data || !data.length){ sec.style.display='none'; return;}
+      for(let i=0; i<data.length; ++i){
+        let li=document.createElement('li');
+        li.innerHTML = '<a class="hover:underline text-indigo-700 dark:text-indigo-300" rel="noopener" target="_blank" href="'+data[i].url+'">'+data[i].title+'</a>';
+        ul.appendChild(li);
+      }
+    })();
+    // --- MACRS Table Data (simplified for 5/7/15/27.5/39, Half-Year, no bonus/179) ---
+    const MACRS_TABLE = {
+      // Only select most frequent rates, Half-Year Convention
+      // {years: [rate,...]}, for assetClasses
+      "5":  [0.20, 0.32, 0.192, 0.1152, 0.1152, 0.0576],
+      "7":  [0.1429, 0.2449, 0.1749, 0.1249, 0.0893, 0.0892, 0.0893, 0.0446],
+      "15": [0.05,0.095,0.0855,0.077,0.0693,0.0623,0.059,0.059,0.0591,0.059,0.0591,0.059,0.0591,0.059,0.0591,0.0295],
+      "27.5": "sl27.5", // straight line, Mid-Month
+      "39": "sl39"      // straight line, Mid-Month
+    };
+    // For straight line, convention
+    function macrsStraightLine(years, svcYear, assetCost){
+      // Mid-Month for real property; first/last year rate: ((12.5)/12, (11.5)/12 etc)
+      let results=[], amount, annual=assetCost/years, rem=assetCost;
+      for(let i=1;i<=Math.ceil(years);++i){
+        if(i===1){ amount=annual*11.5/12; } // roughly half-month, IRS specifics ignored here for simplicity
+        else if(i===years){ amount=rem; } // last year, whatever is left
+        else{ amount=Math.round(annual*100)/100;}
+        amount = Math.round(amount*100)/100;
+        rem -= amount; if(rem<0) rem=0;
+        results.push({year:+svcYear+i-1, amount:amount, book:Math.max(rem,0)});
+      }
+      return results;
+    }
+    // --- MACRS Tool Handler ---
+    document.getElementById('macrsForm').onsubmit=function(e){
+      e.preventDefault();
+      const cost = parseFloat(document.getElementById('assetCost').value);
+      const svcYear = parseInt(document.getElementById('serviceYear').value,10);
+      const assetClass = document.getElementById('macrsClass').value;
+      const conv = document.getElementById('convention').value;
+      let rs=[];
+      if(!cost || cost<=0 || !svcYear||svcYear<1987||svcYear>2100) return;
+      let table=MACRS_TABLE[assetClass];
+      if(typeof table==="string" && (assetClass==="27.5"||assetClass==="39")){
+        let years=Number(assetClass);
+        rs = macrsStraightLine(years, svcYear, cost);
+      }else{
+        let book=cost, y, amt;
+        for(let i=0;i<table.length;++i){
+          y=svcYear+i;
+          amt = Math.round(cost*table[i]*100)/100;
+          if(i===table.length-1){ amt = Math.round(book*100)/100;} // whatever is left
+          rs.push({year: y, amount: amt, book: Math.max(book-amt,0)});
+          book -= amt;
+        }
+      }
+      // Render Table
+      let html = `<div class="overflow-x-auto mt-2">
+        <table class="w-full text-xs md:text-sm border border-slate-200 dark:border-slate-700 rounded mb-2">
+        <thead><tr class="bg-indigo-50 dark:bg-slate-800"><th class="py-1 px-2">Year</th><th class="py-1 px-2">Depreciation</th><th class="py-1 px-2">Book Value</th></tr></thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">`;
+      for(let i=0;i<rs.length;++i){
+        html+=`<tr><td class="py-1 px-2">${rs[i].year}</td><td class="py-1 px-2">$${rs[i].amount.toLocaleString(undefined,{minimumFractionDigits:2})}</td><td class="py-1 px-2">$${rs[i].book.toLocaleString(undefined,{minimumFractionDigits:2})}</td></tr>`;
+      }
+      html+=`</tbody></table></div>`;
+      document.getElementById('macrsResult').innerHTML=html;
+    };
+  </script>
+</body>
+</html>
