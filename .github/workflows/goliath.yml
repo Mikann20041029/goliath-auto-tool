@@ -57,6 +57,15 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+          LEADS_TOTAL: "40"
+          LEADS_PER_SOURCE: "20"
+          LEADS_DAYS: "730"
+
+          # Xを安全運用（3回/日なら月≈90回）
+          X_MAX_REQUESTS_PER_RUN: "1"
+          X_RESULTS_PER_REQUEST: "10"
+          X_FULL_ARCHIVE: "0"
+
         run: python goliath/main.py
 
       - name: Commit and push changes
