@@ -375,21 +375,27 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
     return uniq
 
 
-def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
-    def bsky_uri_to_url(uri: str) -> str:
+def bsky_uri_to_url(uri: str, did: str = "") -> str:
     # at://did:plc:xxxx/app.bsky.feed.post/3k... -> https://bsky.app/profile/did:plc:xxxx/post/3k...
     try:
-        if not uri.startswith("at://"):
-            return ""
-        parts = uri[5:].split("/")
-        did = parts[0]
-        rkey = parts[-1]
-        return f"https://bsky.app/profile/{did}/post/{rkey}"
+        if uri.startswith("at://"):
+            parts = uri[5:].split("/")
+            _did = parts[0]
+            rkey = parts[-1]
+            return f"https://bsky.app/profile/{_did}/post/{rkey}"
+        # fallback: did + uri pattern
+        if did and uri:
+            m = re.search(r"/app\.bsky\.feed\.post/([^/]+)$", uri)
+            if m:
+                return f"https://bsky.app/profile/{did}/post/{m.group(1)}"
+        return ""
     except Exception:
         return ""
 
+
+def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
     """
-    Bluesky: atprotoで検索
+    Bluesky: atprotoで検索 + timeline fallback
     必要: BSKY_HANDLE / BSKY_PASSWORD
     """
     h = os.getenv("BSKY_HANDLE", "")
@@ -401,35 +407,87 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         "need a tool",
         "is there a tool",
         "how can I convert",
+        "converter",
         "calculator",
         "compare plans",
         "timezone",
         "template",
+        "error",
+        "bug",
+        "issue",
+        "failed",
     ]
+
+    # timelineで拾うときに「悩みっぽい投稿」だけ残すための軽いキーワード
+    keywords = [
+        "help","need help","anyone know","how do i","how to","stuck","blocked",
+        "error","bug","issue","problem","failed","broken","crash","exception","traceback",
+        "api","oauth","convert","converter","calculator","template","compare","timezone"
+    ]
+
     out: List[Dict[str, Any]] = []
+
     try:
         c = BskyClient()
         c.login(h, p)
+
+        # 1) search
         for q in queries:
             res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
-            posts = (res or {}).get("posts", [])
+            posts = (res or {}).get("posts", []) or []
             for post in posts:
                 rec = post.get("record", {}) or {}
-                txt = rec.get("text", "") or ""
-                uri = post.get("uri", "") or ""
-                did = post.get("author", {}).get("did", "") or ""
-                bsky_url = ""
-                if did and uri:
-                    m = re.search(r"/app\.bsky\.feed\.post/([^/]+)$", uri)
-                    if m:
-                        rkey = m.group(1)
-                        bsky_url = f"https://bsky.app/profile/{did}/post/{rkey}"
-                out.append({"source": "Bluesky", "text": txt[:300], "url": bsky_url or uri, "meta": {}})
+                txt = (rec.get("text", "") or "")
+                uri = (post.get("uri", "") or "")
+                did = (post.get("author", {}) or {}).get("did", "") or ""
+                url = bsky_uri_to_url(uri, did) or uri
+
+                if not url:
+                    continue
+
+                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
                 if len(out) >= limit:
-                    return out
-        return out[:limit]
+                    return out[:limit]
+
+        # 2) timeline fallback（searchが薄い時だけ）
+        if len(out) < limit:
+            try:
+                tl = c.app.bsky.feed.get_timeline({"limit": 200})
+                feed = (tl or {}).get("feed", []) or []
+                for item in feed:
+                    post = (item or {}).get("post", {}) or {}
+                    record = (post or {}).get("record", {}) or {}
+                    txt = (record.get("text", "") or "")
+                    t = txt.lower()
+                    if not any(k in t for k in keywords):
+                        continue
+
+                    uri = (post.get("uri", "") or "")
+                    did = (post.get("author", {}) or {}).get("did", "") or ""
+                    url = bsky_uri_to_url(uri, did) or uri
+                    if not url:
+                        continue
+
+                    out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
+                    if len(out) >= limit:
+                        break
+            except Exception:
+                pass
+
+        # 3) dedupe（同じURLを消す）
+        seen = set()
+        uniq = []
+        for it in out:
+            u = it.get("url", "")
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            uniq.append(it)
+        return uniq[:limit]
+
     except Exception:
         return out[:limit]
+
         
 def collect_reddit(limit: int) -> List[Dict[str, Any]]:
     cid = os.getenv("REDDIT_CLIENT_ID", "")
