@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-white text-gray-900">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="meta.title"></title>
+  <meta name="description" data-i18n="meta.description" content="">
+  <link rel="canonical" href="https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769195313-tax-calculator-3">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['Inter', 'Noto Sans JP', 'ui-sans-serif', 'system-ui'],
+        },
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#3b82f6', // blue-500
+              dark: '#6366f1', // indigo-500
+            },
+          },
+          backgroundImage: {
+            'glass': 'linear-gradient(135deg, rgba(255,255,255,0.85) 65%, rgba(59,130,246,0.08) 100%)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      font-family: 'Inter', 'Noto Sans JP', ui-sans-serif, system-ui, sans-serif;
+    }
+    .glass {
+      background: linear-gradient(
+        135deg,
+        rgba(255,255,255,0.85) 65%,
+        rgba(59,130,246,0.08) 100%
+      );
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 32px 0 rgba(30, 64, 175, 0.10);
+      border: 1px solid rgba(71,85,105,0.09);
+    }
+    .dark .glass {
+      background: linear-gradient(
+        125deg, 
+        rgba(30,41,59,0.75) 70%,
+        rgba(99,102,241,0.11) 100%
+      );
+      border: 1px solid rgba(71,85,105,0.27);
+    }
+    html.dark { background-color: #111827; color: #f3f4f6; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-white dark:bg-gray-900 transition-colors duration-300">
+  <!-- Navigation -->
+  <nav class="w-full flex items-center justify-between px-4 md:px-12 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 bg-opacity-70 z-30">
+    <div class="flex items-center space-x-3">
+      <svg class="h-7 w-7 text-primary dark:text-primary-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" stroke-width="2" /><path stroke-linecap="round" stroke-linejoin="round" d="M11 14h10M11 18h10" /></svg>
+      <span class="font-bold text-xl tracking-tight" data-i18n="nav.brand"></span>
+    </div>
+    <div class="flex items-center gap-4">
+      <a href="../../index.html" class="text-gray-700 dark:text-gray-200 hover:text-primary dark:hover:text-primary-dark font-medium px-3 py-1 rounded transition" data-i18n="nav.back_to_hub"></a>
+      <select id="langSelect" class="ml-2 bg-transparent border border-gray-300 dark:border-gray-700 text-sm rounded-md py-1 px-2 focus:outline-primary dark:bg-gray-800 dark:text-gray-200" aria-label="Change language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+      </select>
+      <!-- Theme toggle -->
+      <button id="themeToggle" type="button" class="ml-3 p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition" aria-label="Toggle dark mode">
+        <svg id="themeIcon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="w-full bg-white dark:bg-gray-900 py-12">
+    <div class="max-w-3xl mx-auto px-5 text-center">
+      <h1 class="text-4xl md:text-5xl font-extrabold mb-3 text-gray-900 dark:text-gray-50" data-i18n="hero.title"></h1>
+      <p class="text-lg md:text-xl text-gray-700 dark:text-gray-300 mt-2 mb-5" data-i18n="hero.subtitle"></p>
+    </div>
+  </section>
+
+  <!-- Centered Tool Card -->
+  <main class="flex flex-col items-center px-4 py-8 flex-1">
+    <section class="w-full max-w-xl mx-auto glass p-8 md:pt-10 md:pb-12 md:px-12 mb-12 shadow group transition">
+      <h2 class="text-2xl font-bold mb-4 text-primary dark:text-primary-dark text-center" data-i18n="tool.card.title"></h2>
+      <form id="taxForm" autocomplete="off" class="space-y-6">
+        <div>
+          <label for="deviceType" class="block text-sm font-medium mb-1" data-i18n="tool.form.device_type"></label>
+          <select id="deviceType" name="deviceType" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded px-3 py-2 mt-1 focus:ring-primary focus:border-primary dark:text-gray-100" data-i18n-aria="tool.form.device_type">
+            <option value="phone" data-i18n="tool.form.device_type_phone"></option>
+            <option value="tablet" data-i18n="tool.form.device_type_tablet"></option>
+          </select>
+        </div>
+        <div>
+          <label for="devicePrice" class="block text-sm font-medium mb-1" data-i18n="tool.form.device_price"></label>
+          <input id="devicePrice" name="devicePrice" type="number" inputmode="decimal" step="0.01" min="1" max="10000" required class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded px-3 py-2 mt-1 focus:ring-primary focus:border-primary dark:text-gray-100" data-i18n-placeholder="tool.form.device_price_placeholder" />
+        </div>
+        <div>
+          <label for="citizenType" class="block text-sm font-medium mb-1" data-i18n="tool.form.citizen_type"></label>
+          <select id="citizenType" name="citizenType" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded px-3 py-2 mt-1 focus:ring-primary focus:border-primary dark:text-gray-100" data-i18n-aria="tool.form.citizen_type">
+            <option value="resident" data-i18n="tool.form.citizen_type_resident"></option>
+            <option value="nonresident" data-i18n="tool.form.citizen_type_nonresident"></option>
+          </select>
+        </div>
+        <div>
+          <label for="importMethod" class="block text-sm font-medium mb-1" data-i18n="tool.form.import_method"></label>
+          <select id="importMethod" name="importMethod" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded px-3 py-2 mt-1 focus:ring-primary focus:border-primary dark:text-gray-100" data-i18n-aria="tool.form.import_method">
+            <option value="personal_baggage" data-i18n="tool.form.import_method_personal_baggage"></option>
+            <option value="courier" data-i18n="tool.form.import_method_courier"></option>
+          </select>
+        </div>
+        <div class="mt-6">
+          <button type="submit" class="w-full bg-primary dark:bg-primary-dark text-white py-2 rounded-md font-semibold text-lg hover:bg-blue-600 dark:hover:bg-indigo-600 transition" data-i18n="tool.form.button"></button>
+        </div>
+      </form>
+      <div id="taxResult" class="mt-7 p-5 bg-primary/10 dark:bg-primary-dark/15 rounded-lg text-center text-lg font-semibold text-primary dark:text-primary-dark hidden"></div>
+      <div id="taxBreakdown" class="mt-5 text-sm text-gray-700 dark:text-gray-300 hidden"></div>
+      <div class="mt-4 text-xs text-gray-500 dark:text-gray-400" data-i18n="tool.tip"></div>
+    </section>
+
+    <!-- Article Section -->
+    <article class="w-full max-w-4xl glass p-8 md:pt-10 md:pb-12 md:px-12 mb-10 shadow transition" id="article">
+      <h2 class="text-3xl font-bold text-primary dark:text-primary-dark mb-7" data-i18n="article.title"></h2>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.intro.heading"></h3>
+        <p class="mb-3" data-i18n="article.intro.para1"></p>
+        <p class="mb-3" data-i18n="article.intro.para2"></p>
+        <p class="mb-3" data-i18n="article.intro.para3"></p>
+      </section>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.tax_regime.heading"></h3>
+        <p class="mb-3" data-i18n="article.tax_regime.para1"></p>
+        <ul class="list-disc pl-7 space-y-1 mb-2">
+          <li data-i18n="article.tax_regime.bullet1"></li>
+          <li data-i18n="article.tax_regime.bullet2"></li>
+          <li data-i18n="article.tax_regime.bullet3"></li>
+        </ul>
+        <p class="mb-3" data-i18n="article.tax_regime.para2"></p>
+      </section>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.calculating.heading"></h3>
+        <ol class="list-decimal pl-7 space-y-1 mb-2">
+          <li data-i18n="article.calculating.step1"></li>
+          <li data-i18n="article.calculating.step2"></li>
+          <li data-i18n="article.calculating.step3"></li>
+          <li data-i18n="article.calculating.step4"></li>
+        </ol>
+        <p class="mb-3" data-i18n="article.calculating.para1"></p>
+      </section>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.pitfalls.heading"></h3>
+        <ul class="list-disc pl-7 space-y-1 mb-2">
+          <li data-i18n="article.pitfalls.bullet1"></li>
+          <li data-i18n="article.pitfalls.bullet2"></li>
+          <li data-i18n="article.pitfalls.bullet3"></li>
+          <li data-i18n="article.pitfalls.bullet4"></li>
+        </ul>
+        <p class="mb-3" data-i18n="article.pitfalls.para1"></p>
+      </section>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.checklist.heading"></h3>
+        <ul class="list-check list-inside space-y-2 mb-2">
+          <li data-i18n="article.checklist.item1"></li>
+          <li data-i18n="article.checklist.item2"></li>
+          <li data-i18n="article.checklist.item3"></li>
+          <li data-i18n="article.checklist.item4"></li>
+          <li data-i18n="article.checklist.item5"></li>
+        </ul>
+      </section>
+      <section class="mb-8" id="faq">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.faq.heading"></h3>
+        <div class="mb-4">
+          <details class="mb-2">
+            <summary class="font-semibold cursor-pointer" data-i18n="article.faq.q1"></summary>
+            <div class="pl-5 mt-1" data-i18n="article.faq.a1"></div>
+          </details>
+          <details class="mb-2">
+            <summary class="font-semibold cursor-pointer" data-i18n="article.faq.q2"></summary>
+            <div class="pl-5 mt-1" data-i18n="article.faq.a2"></div>
+          </details>
+          <details class="mb-2">
+            <summary class="font-semibold cursor-pointer" data-i18n="article.faq.q3"></summary>
+            <div class="pl-5 mt-1" data-i18n="article.faq.a3"></div>
+          </details>
+          <details class="mb-2">
+            <summary class="font-semibold cursor-pointer" data-i18n="article.faq.q4"></summary>
+            <div class="pl-5 mt-1" data-i18n="article.faq.a4"></div>
+          </details>
+          <details>
+            <summary class="font-semibold cursor-pointer" data-i18n="article.faq.q5"></summary>
+            <div class="pl-5 mt-1" data-i18n="article.faq.a5"></div>
+          </details>
+        </div>
+      </section>
+      <section class="mb-8">
+        <h3 class="text-2xl font-semibold mb-2" data-i18n="article.references.heading"></h3>
+        <ul class="list-disc pl-7 space-y-2" id="referenceList">
+          <li><a href="https://www.fbr.gov.pk/" class="text-primary hover:underline" target="_blank" rel="noopener">FBR – Federal Board of Revenue</a></li>
+          <li><a href="https://dirbs.pta.gov.pk/" class="text-primary hover:underline" target="_blank" rel="noopener">PTA DIRBS Portal</a></li>
+          <li><a href="https://www.customs.gov.pk/" class="text-primary hover:underline" target="_blank" rel="noopener">Pakistan Customs</a></li>
+          <li><a href="https://www.pta.gov.pk/en/consumer-support/registration-of-mobile-device-dirbs-2" class="text-primary hover:underline" target="_blank" rel="noopener">PTA: How to Register a Device</a></li>
+          <li><a href="https://pakobserver.net/pta-mobile-registration-tax-list-2023/" class="text-primary hover:underline" target="_blank" rel="noopener">Pak Observer: PTA Tax List</a></li>
+          <li><a href="https://propakistani.pk/how-to-register-your-mobile-phone-with-pta/" class="text-primary hover:underline" target="_blank" rel="noopener">Propakistani: Device Registration</a></li>
+          <li><a href="https://dutycalculator.pk/pta-mobile-registration-tax/" class="text-primary hover:underline" target="_blank" rel="noopener">DutyCalculator: PTA Mobile Tax</a></li>
+          <li><a href="https://www.sbp.org.pk/" class="text-primary hover:underline" target="_blank" rel="noopener">State Bank of Pakistan</a></li>
+          <li><a href="https://tribune.com.pk/story/2470592/pta-tax-on-phones-effective-from-2023" class="text-primary hover:underline" target="_blank" rel="noopener">The Express Tribune: PTA Tax News</a></li>
+          <li><a href="https://techjuice.pk/pta-tax-database/" class="text-primary hover:underline" target="_blank" rel="noopener">TechJuice: PTA Tax Database</a></li>
+          <li><a href="https://www.immi.gov.pk/" class="text-primary hover:underline" target="_blank" rel="noopener">Immigration Pakistan</a></li>
+        </ul>
+      </section>
+    </article>
+
+    <!-- Related Sites -->
+    <section id="relatedSitesSection" class="w-full max-w-2xl mb-12">
+      <h2 class="text-xl font-bold mb-2 text-primary dark:text-primary-dark" data-i18n="related.title"></h2>
+      <ul id="relatedSitesList" class="list-disc pl-8 space-y-1 text-blue-600 dark:text-indigo-400"></ul>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full py-8 mt-auto border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between px-5 gap-4">
+      <nav class="flex gap-6 text-sm font-medium text-gray-700 dark:text-gray-300 flex-wrap items-center">
+        <a href="../../index.html" data-i18n="nav.back_to_hub"></a>
+        <a href="#privacy" data-i18n="footer.privacy"></a>
+        <a href="#terms" data-i18n="footer.terms"></a>
+        <a href="#disclaimer" data-i18n="footer.disclaimer"></a>
+        <a href="#about" data-i18n="footer.about"></a>
+        <a href="#contact" data-i18n="footer.contact"></a>
+      </nav>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-400" data-i18n="footer.copyright"></span>
+      </div>
+    </div>
+    <!-- Inline sections for policy & info -->
+    <div class="max-w-3xl mx-auto px-5 mt-8 space-y-12">
+      <section id="privacy">
+        <h3 class="text-lg font-semibold mb-2" data-i18n="footer.privacy"></h3>
+        <p class="mb-2" data-i18n="privacy.para1"></p>
+        <p class="mb-2" data-i18n="privacy.para2"></p>
+      </section>
+      <section id="terms">
+        <h3 class="text-lg font-semibold mb-2" data-i18n="footer.terms"></h3>
+        <p class="mb-2" data-i18n="terms.para1"></p>
+        <p class="mb-2" data-i18n="terms.para2"></p>
+      </section>
+      <section id="disclaimer">
+        <h3 class="text-lg font-semibold mb-2" data-i18n="footer.disclaimer"></h3>
+        <p class="mb-2" data-i18n="disclaimer.para1"></p>
+        <p class="mb-2" data-i18n="disclaimer.para2"></p>
+      </section>
+      <section id="about">
+        <h3 class="text-lg font-semibold mb-2" data-i18n="footer.about"></h3>
+        <p class="mb-2" data-i18n="about.para1"></p>
+      </section>
+      <section id="contact">
+        <h3 class="text-lg font-semibold mb-2" data-i18n="footer.contact"></h3>
+        <p class="mb-1" data-i18n="contact.para1"></p>
+        <p><span data-i18n="contact.email"></span> <a href="mailto:support@mikann20041029.github.io" class="text-primary hover:underline">support@mikann20041029.github.io</a></p>
+      </section>
+    </div>
+  </footer>
+  <script>
+  // --- i18n dictionary ---
+  window.__I18N__ = {
+    en: {
+      "meta.title":    "PTA Pakistan Mobile Import Tax Calculator - Instant Estimate (2024)",
+      "meta.description": "Instantly calculate Pakistan PTA mobile import tax for smartphones/tablets. Step-by-step guide, tax breakdown, FAQ, and official resources.",
+      "nav.brand":     "PTA Tax Calculator",
+      "nav.back_to_hub":"All Tools",
+      "hero.title":    "Pakistan Mobile Import Tax Calculator (PTA DIRBS)",
+      "hero.subtitle":"Instantly calculate expected tax & duties for importing smartphones and tablets to Pakistan. Transparent breakdown, latest rules, and official resources.",
+      "tool.card.title":"PTA Tax Estimator",
+      "tool.form.device_type":"Device Type",
+      "tool.form.device_type_phone":"Smartphone",
+      "tool.form.device_type_tablet":"Tablet",
+      "tool.form.device_price":"Declared Price (USD)",
+      "tool.form.device_price_placeholder":"e.g. 350",
+      "tool.form.citizen_type":"Importer Type",
+      "tool.form.citizen_type_resident":"Resident (Pakistani citizen/PR)",
+      "tool.form.citizen_type_nonresident":"Non-Resident (Overseas/Kashmir/dual)",
+      "tool.form.import_method":"Import Method",
+      "tool.form.import_method_personal_baggage":"Personal Baggage (carried with you)",
+      "tool.form.import_method_courier":"Courier / Postal",
+      "tool.form.button":"Calculate Tax",
+      "tool.tip":"Exact rates vary. This tool provides an indicative estimate; confirm with official sources.",
+      "tool.result.title":"Estimated Total Tax & Duties",
+      "tool.result.breakdown":"Breakdown:",
+      "tool.result.device_price":"Declared price",
+      "tool.result.pta_tax":"PTA Tax",
+      "tool.result.customs_duty":"Customs Duty",
+      "tool.result.sales_tax":"Sales Tax (on device value)",
+      "tool.result.it_tax":"Income Tax / WHT",
+      "tool.result.total":"Total (all included)",
+      "tool.result.usd":"USD",
+      "tool.result.pkr":"PKR",
+      "tool.result.warn":"All calculations are approximate and dated. Always check latest FBR/PTA rules.",
+      "article.title":"Comprehensive Guide: Calculating PTA Mobile Import Tax in Pakistan (2024)",
+      "article.intro.heading":"Introduction",
+      "article.intro.para1":"Importing a mobile phone or tablet into Pakistan can often seem confusing due to the country's complex set of duties and taxes, administered mainly by the Pakistan Telecommunication Authority (PTA) and the Federal Board of Revenue (FBR). With the implementation of the Device Identification Registration and Blocking System (DIRBS), proper registration and tax payment have become mandatory for nearly all imported devices.",
+      "article.intro.para2":"In this article, we will guide you through the types of taxes levied, the calculation process, specifics for residents and non-residents, and offer practical tips to reduce delays and avoid potential penalties.",
+      "article.intro.para3":"Whether you are returning to Pakistan with a phone you bought abroad, receiving a device as a gift, or importing a premium smartphone by courier, this guide will help you estimate your total tax liability and complete your registration smoothly.",
+      "article.tax_regime.heading":"Overview of the PTA/FBR Tax Regime",
+      "article.tax_regime.para1":"The government of Pakistan imposes multiple taxes on the import of mobile devices, aimed at increasing revenue and controlling grey market activity. Taxes can vary dramatically based on your citizenship status, device type, declared price, and import method.",
+      "article.tax_regime.bullet1":"PTA Registration Fee: Mandatory for all imported devices.",
+      "article.tax_regime.bullet2":"Customs Duty: Based on HS code; varies for phones/tablets.",
+      "article.tax_regime.bullet3":"Sales Tax, Income Tax (WHT): Calculated on value or as fixed slab, depending on category and device cost.",
+      "article.tax_regime.para2":"Failure to register your device or under-declare its value can lead to heavy penalties, device blocking, or even legal proceedings.",
+      "article.calculating.heading":"How to Calculate Your PTA Tax Step-by-Step",
+      "article.calculating.step1":"Determine the official (declared) value of your device in USD.",
+      "article.calculating.step2":"Identify your importer type: Resident or Non-Resident Pakistani. Different slabs may apply.",
+      "article.calculating.step3":"Select your import method: Personal baggage (yourself), or via courier/postal.",
+      "article.calculating.step4":"Use the current PTA/FBR tax slab rates to estimate Customs Duty, Sales Tax, and Income Tax components.",
+      "article.calculating.para1":"PTA and FBR update rates regularly. Residents typically pay higher overall due to reduced relief, while non-residents (esp. overseas Pakistanis, students) often qualify for exemptions or reduced WHT. Always check latest government notifications for precise rules.",
+      "article.pitfalls.heading":"Common Pitfalls and Mistakes",
+      "article.pitfalls.bullet1":"Using a fake or guessed declared value – risks heavy fines.",
+      "article.pitfalls.bullet2":"Assuming one device per year is always tax-free – conditions apply.",
+      "article.pitfalls.bullet3":"Not registering with the DIRBS portal within stipulated days.",
+      "article.pitfalls.bullet4":"Using unofficial 'agents' for fast clearance – potential for scams.",
+      "article.pitfalls.para1":"Many importers underestimate total costs or misinterpret exemptions. Always keep all receipts and use only official interfaces.",
+      "article.checklist.heading":"Importer’s Checklist",
+      "article.checklist.item1":"Verify the IMEI status on DIRBS before entry.",
+      "article.checklist.item2":"Declare the actual purchase value – keep the receipt.",
+      "article.checklist.item3":"Use the PTA portal for tax calculation and registration.",
+      "article.checklist.item4":"Understand tax slabs for your device and importer type.",
+      "article.checklist.item5":"Complete device registration before the 60-day deadline.",
+      "article.faq.heading":"Frequently Asked Questions (FAQ)",
+      "article.faq.q1":"Who must pay PTA tax on imported phones/tablets?",
+      "article.faq.a1":"Any person bringing a mobile device into Pakistan from abroad, or receiving via courier/post, must pay all applicable PTA/FBR taxes and register their device. Some relief/exemptions apply for non-resident Pakistanis and foreign visitors.",
+      "article.faq.q2":"How is the taxable value of my device determined?",
+      "article.faq.a2":"Generally, the declared price (purchase receipt) is used. Customs may revise the value if prices are misrepresented or no receipt is provided.",
+      "article.faq.q3":"Can I import multiple phones in one trip?",
+      "article.faq.a3":"Regulations permit one phone per year duty-free (under baggage rule) for travelers. Additional devices may be taxed at higher rates. Rules change, so check FBR/PTA circulars.",
+      "article.faq.q4":"Do non-residents (overseas, students) get exemptions?",
+      "article.faq.a4":"Non-resident Pakistanis can sometimes benefit from reduced or waived WHT (income tax) if visiting, but all other taxes usually apply. Always keep proof of status.",
+      "article.faq.q5":"What happens if I don't register and pay within the deadline?",
+      "article.faq.a5":"Unregistered devices may be blocked from all mobile networks in Pakistan. Delayed tax payment could also result in penalties or seizure.",
+      "article.references.heading":"References & Official Resources",
+      "related.title":"Related Sites",
+      "footer.privacy":"Privacy Policy",
+      "footer.terms":"Terms of Service",
+      "footer.disclaimer":"Disclaimer",
+      "footer.about":"About/Operator",
+      "footer.contact":"Contact",
+      "footer.copyright":"© 2024 mikann20041029.github.io. All rights reserved.",
+      "privacy.para1":"We do not collect personal data or analytics. This tool runs entirely in your browser.",
+      "privacy.para2":"No cookies are used, except for your language/theme preference. No ads or tracking.",
+      "terms.para1":"This calculator is for informational purposes only. Use at your own risk.",
+      "terms.para2":"Calculation methods are based on publicly available government notices. Results may differ from official assessments.",
+      "disclaimer.para1":"This site is not affiliated with the PTA, FBR, or any Pakistani government body.",
+      "disclaimer.para2":"Always confirm your tax obligations via official channels and circulars.",
+      "about.para1":"This site is provided as a public utility. Operator: mikann20041029.github.io",
+      "contact.para1":"For inquiries, corrections, or takedown requests, please contact:",
+      "contact.email":"Email:",
+    },
+    ja: {
+      "meta.title": "PTAパキスタン携帯輸入税計算機 – インスタント試算（2024年）",
+      "meta.description":"パキスタンPTA携帯電話輸入税をスマホやタブレットで即時試算。手順ガイド、税構成、FAQ、公的リソース付き。",
+      "nav.brand":     "PTA税計算機",
+      "nav.back_to_hub":"全ツール",
+      "hero.title":    "パキスタン携帯輸入税自動計算ツール（PTA DIRBS対応）",
+      "hero.subtitle":"パキスタンへのスマートフォン・タブレット輸入時の税・関税を即時計算。最新ルール・公的リンク・明細表示。",
+      "tool.card.title":"PTA税自動見積もり",
+      "tool.form.device_type":"デバイス種別",
+      "tool.form.device_type_phone":"スマートフォン",
+      "tool.form.device_type_tablet":"タブレット",
+      "tool.form.device_price":"申告価格（米ドル）",
+      "tool.form.device_price_placeholder":"例：350",
+      "tool.form.citizen_type":"輸入者区分",
+      "tool.form.citizen_type_resident":"居住者（パキスタン市民/永住者）",
+      "tool.form.citizen_type_nonresident":"非居住者（海外在住・カシミール/二重国籍）",
+      "tool.form.import_method":"輸入方法",
+      "tool.form.import_method_personal_baggage":"手荷物持ち込み",
+      "tool.form.import_method_courier":"国際宅配便・郵送",
+      "tool.form.button":"税額を計算",
+      "tool.tip":"本ツールは参考試算であり、正確な税率や金額は必ず公式サイト等でご確認ください。",
+      "tool.result.title":"推定合計税額・関税込",
+      "tool.result.breakdown":"内訳：",
+      "tool.result.device_price":"申告価格",
+      "tool.result.pta_tax":"PTA登録料",
+      "tool.result.customs_duty":"関税",
+      "tool.result.sales_tax":"売上税（端末価値）",
+      "tool.result.it_tax":"所得税/WHT",
+      "tool.result.total":"合計（全て込み）",
+      "tool.result.usd":"米ドル",
+      "tool.result.pkr":"パキスタンルピー",
+      "tool.result.warn":"計算結果は参考値です。必ずPTAならびにFBRの最新情報をご確認ください。",
+      "article.title":"完全ガイド：パキスタンでのPTA携帯輸入税計算（2024年版）",
+      "article.intro.heading":"はじめに",
+      "article.intro.para1":"パキスタンに携帯電話やタブレットを輸入する際、PTA（パキスタン電気通信庁）とFBR（連邦歳入庁）が施行する複雑な税体系により困惑しがちです。DIRBS（端末識別登録・ブロックシステム）導入後は、ほぼ全ての輸入端末が登録・納税義務の対象となりました。",
+      "article.intro.para2":"本記事では、課税対象の税種、具体的な計算方法、居住者・非居住者ごとの注意点、およびスムーズな登録・納税のための実用的なヒントを詳述します。",
+      "article.intro.para3":"海外から端末を持ち帰る場合も、ギフトとして受領する場合も、プレミアム機種を宅配利用で輸入する場合も、本ガイドで総税負担を概算し、スムーズな手続きを実現できます。",
+      "article.tax_regime.heading":"PTA/FBR税体系の概要",
+      "article.tax_regime.para1":"パキスタン政府は、財政収入増加とグレー市場規制のため携帯端末輸入に複数の税を課しています。税額は輸入者区分・端末種・申告価格・輸入方法によって大きく異なります。",
+      "article.tax_regime.bullet1":"PTA登録料：全輸入端末に必須。",
+      "article.tax_regime.bullet2":"関税：HSコードに基づき携帯・タブレットで異なる。",
+      "article.tax_regime.bullet3":"売上税・所得税（WHT）：機種価格やカテゴリで定額・割合課税。",
+      "article.tax_regime.para2":"不適正な価格申告や未登録時には高額な罰金・端末の通信遮断・法的措置が科される場合があります。",
+      "article.calculating.heading":"PTA税額計算ステップバイステップ",
+      "article.calculating.step1":"端末の正式な購入価格（米ドル）を確認。",
+      "article.calculating.step2":"自分の輸入者属性（居住者/非居住者）を選択。",
+      "article.calculating.step3":"輸入方法（手荷物または宅配/郵送）を決定。",
+      "article.calculating.step4":"PTA/FBRの最新課税表で関税・売上税・所得税項目をそれぞれ計算。",
+      "article.calculating.para1":"PTAとFBRは税率を随時改定します。居住者は原則として免税枠が少なめ、非居住者（留学生・海外在住等）は減免/免税枠が広めになります。必ず正式発表や通知をご確認ください。",
+      "article.pitfalls.heading":"よくあるミス・注意点",
+      "article.pitfalls.bullet1":"架空・推定価格の申告 ⇒ 重加算税リスク有。",
+      "article.pitfalls.bullet2":"「年1台までは無税」と思い込み ⇒ 条件付きで例外あり。",
+      "article.pitfalls.bullet3":"DIRBSポータルへの登録遅延（規定期間超え）。",
+      "article.pitfalls.bullet4":"「仲介業者」による手続きの依頼 ⇒ 詐欺被害リスク大。",
+      "article.pitfalls.para1":"輸入者の多くが課税額を過小評価したり、免税枠を誤解しています。必ず領収書等を保存し、正規サイトのみ利用を徹底しましょう。",
+      "article.checklist.heading":"輸入前チェックリスト",
+      "article.checklist.item1":"渡航前にDIRBSでIMEI状況確認。",
+      "article.checklist.item2":"購入金額を正確に申告（領収書必携）。",
+      "article.checklist.item3":"PTA公式ポータルで税額シミュレーション・登録。",
+      "article.checklist.item4":"端末・輸入者分類ごとの税額表を理解。",
+      "article.checklist.item5":"入国から60日以内に登録手続きを完了。",
+      "article.faq.heading":"よくある質問（FAQ）",
+      "article.faq.q1":"携帯・タブレット輸入時に必ずPTA税が発生しますか？",
+      "article.faq.a1":"パキスタンに海外から携帯等を持ち込む／送付される場合、原則としてPTA/FBR所定の税支払および登録が義務付けられています（例外/減免枠あり）。非居住者や短期滞在者には例外措置がある場合があります。",
+      "article.faq.q2":"税額計算時の端末評価額は？",
+      "article.faq.a2":"通常は購入時の正式領収書額が適用されます。領収書が不明または不正な場合、税関職員が独自に評価する場合もあります。",
+      "article.faq.q3":"一度に複数台の端末を輸入可能ですか？",
+      "article.faq.a3":"旅行者は年1台まで手荷物枠で免税の場合有り。二台目からは追加課税対象。毎年規則が変更されるため、FBR/PTAの最新通知で確認必須です。",
+      "article.faq.q4":"非居住者（留学生・海外在住等）は免税されますか？",
+      "article.faq.a4":"非居住者は所得税（WHT）の減免・免除措置が適用される場合がありますが、多くの場合PTA登録料や関税は必要です。身分証明が必要。",
+      "article.faq.q5":"制限期間内に登録・納税しないとどうなりますか？",
+      "article.faq.a5":"期限内に登録等が行われない端末は、パキスタン国内の通信回線がブロックされるケースがあります。遅延時には罰金や差押えのリスクも。",
+      "article.references.heading":"参考資料・公式リンク集",
+      "related.title":"関連サイト",
+      "footer.privacy":"プライバシーポリシー",
+      "footer.terms":"利用規約",
+      "footer.disclaimer":"免責事項",
+      "footer.about":"サイト運営者について",
+      "footer.contact":"お問い合わせ",
+      "footer.copyright":"© 2024 mikann20041029.github.io. 全著作権所有。",
+      "privacy.para1":"当サイトでは個人情報やアクセス解析等は収集していません。全ての処理はブラウザ内で完結します。",
+      "privacy.para2":"クッキーは語言・テーマ設定保存のみに使用し、広告や第三者トラッキングは一切ありません。",
+      "terms.para1":"本計算機は参考情報提供のみを目的としています。利用は自己責任でお願いします。",
+      "terms.para2":"計算方法は公表された政府資料等に基づいており、公式判定とは異なる場合があります。",
+      "disclaimer.para1":"当サイトはPTAやFBR、パキスタン政府いずれの機関とも関係ありません。",
+      "disclaimer.para2":"税額規定等は必ず公式発表・通達で確認してください。",
+      "about.para1":"本サイトは公共ユーティリティとしてmikann20041029.github.ioが運営しています。",
+      "contact.para1":"質問・修正依頼等はこちらへご連絡ください：",
+      "contact.email":"メール：",
+    },
+    // French (machine-level, as concise as possible for full i18n mapping)
+    fr: {
+      "meta.title":"Calculateur de taxe à l'importation mobile PTA Pakistan – Simulation instantanée (2024)",
+      "meta.description":"Estimez la taxe d'import mobile PTA pour smartphones/tablettes vers le Pakistan. Guide, détails, FAQ, ressources officielles.",
+      "nav.brand":"Calculateur PTA",
+      "nav.back_to_hub":"Tous les outils",
+      "hero.title":"Calculateur de la taxe d'importation mobile (PTA DIRBS) – Pakistan",
+      "hero.subtitle":"Calculez la taxe et les droits d'importation pour smartphones/tablettes vers le Pakistan, avec détails et liens officiels.",
+      "tool.card.title":"Estimateur de taxe PTA",
+      "tool.form.device_type":"Type d'appareil",
+      "tool.form.device_type_phone":"Smartphone",
+      "tool.form.device_type_tablet":"Tablette",
+      "tool.form.device_price":"Prix déclaré (USD)",
+      "tool.form.device_price_placeholder":"ex : 350",
+      "tool.form.citizen_type":"Profil importateur",
+      "tool.form.citizen_type_resident":"Résident (citoyen pakistanais)",
+      "tool.form.citizen_type_nonresident":"Non-résident (étranger/diaspora)",
+      "tool.form.import_method":"Mode d'import",
+      "tool.form.import_method_personal_baggage":"Bagage personnel",
+      "tool.form.import_method_courier":"Transporteur / Poste",
+      "tool.form.button":"Calculer la taxe",
+      "tool.tip":"Les taux sont indicatifs. Veuillez vérifier auprès des autorités.",
+      "tool.result.title":"Estimation totale taxes/droits",
+      "tool.result.breakdown":"Détail :",
+      "tool.result.device_price":"Prix déclaré",
+      "tool.result.pta_tax":"Frais PTA",
+      "tool.result.customs_duty":"Droit de douane",
+      "tool.result.sales_tax":"Taxe sur le chiffre",
+      "tool.result.it_tax":"Impôt/Revenu WHT",
+      "tool.result.total":"Total",
+      "tool.result.usd":"USD",
+      "tool.result.pkr":"PKR",
+      "tool.result.warn":"Calculs indicatifs. Vérifiez toujours les règles actuelles.",
+      "article.title":"Guide complet : Calcul de la taxe d'importation mobile PTA au Pakistan (2024)",
+      "article.intro.heading":"Introduction",
+      "article.intro.para1":"L'importation de smartphones/tablettes au Pakistan implique de multiples taxes imposées par la PTA et le FBR. Depuis DIRBS, l'enregistrement est obligatoire.",
+      "article.intro.para2":"Ce guide détaille chaque taxe, la procédure, la différence pour résidents / non-résidents, et les meilleures pratiques.",
+      "article.intro.para3":"Que vous soyez voyageur, recevez un cadeau ou importiez via transporteur, vous pourrez estimer vos charges fiscales.",
+      "article.tax_regime.heading":"Vue d'ensemble du régime fiscal PTA/FBR",
+      "article.tax_regime.para1":"Plusieurs taxes sont appliquées, selon votre statut, le type et la valeur de l'appareil, et la méthode d'import.",
+      "article.tax_regime.bullet1":"Frais d'enregistrement PTA (obligatoire)",
+      "article.tax_regime.bullet2":"Droit de douane selon HS code",
+      "article.tax_regime.bullet3":"TVA, impôt sur le revenu selon barème",
+      "article.tax_regime.para2":"Erreur ou non-déclaration peuvent entraîner amendes, blocage du mobile, ou poursuites.",
+      "article.calculating.heading":"Comment calculer votre taxe PTA étape par étape",
+      "article.calculating.step1":"Déclarer la valeur officielle (en USD).",
+      "article.calculating.step2":"Indiquez votre profil (résident ou non rés.).",
+      "article.calculating.step3":"Sélectionner la méthode d'importation.",
+      "article.calculating.step4":"Appliquer les taux actuels PTA/FBR.",
+      "article.calculating.para1":"Les taux changent régulièrement. Les résidents paient souvent plus. Toujours vérifier les dernières notifications officielles.",
+      "article.pitfalls.heading":"Pièges courants et erreurs",
+      "article.pitfalls.bullet1":"Prix sous-évalué = risque d'amende.",
+      "article.pitfalls.bullet2":"Croire à une exonération automatique = erreurs.",
+      "article.pitfalls.bullet3":"Non-enregistrement DIRBS à temps.",
+      "article.pitfalls.bullet4":"Recours à des intermédiaires non officiels.",
+      "article.pitfalls.para1":"Sous-évaluer ou mal comprendre les exonérations est courant. Conservez vos justificatifs.",
+      "article.checklist.heading":"Checklist de l'importateur",
+      "article.checklist.item1":"Vérifier l'IMEI sur DIRBS.",
+      "article.checklist.item2":"Conserver la facture.",
+      "article.checklist.item3":"Utiliser le portail PTA.",
+      "article.checklist.item4":"Comprendre le barème applicable.",
+      "article.checklist.item5":"Enregistrer dans les délais.",
+      "article.faq.heading":"Questions fréquentes",
+      "article.faq.q1":"Qui doit payer la taxe PTA ?",
+      "article.faq.a1":"Toute personne important un mobile (bagage ou colis postal) doit payer la taxe et enregistrer l'appareil.",
+      "article.faq.q2":"Comment la valeur taxable est-elle déterminée ?",
+      "article.faq.a2":"Selon le prix d'achat. En cas de doute, la douane réévalue.",
+      "article.faq.q3":"Puis-je importer plusieurs téléphones ?",
+      "article.faq.a3":"Un seul téléphone peut être exonéré par an (règle bagage). Plusieurs = taux supérieur.",
+      "article.faq.q4":"Y a-t-il des exonérations pour non-résidents ?",
+      "article.faq.a4":"Certains bénéficient d'une réduction WHT. Conservez les preuves de votre statut.",
+      "article.faq.q5":"Que se passe-t-il sans enregistrement ni paiement ?",
+      "article.faq.a5":"Blocage réseau et pénalités en cas de retard.",
+      "article.references.heading":"Références & sources officielles",
+      "related.title":"Sites connexes",
+      "footer.privacy":"Politique de confidentialité",
+      "footer.terms":"Conditions d'utilisation",
+      "footer.disclaimer":"Avertissement",
+      "footer.about":"À propos / Opérateur",
+      "footer.contact":"Contact",
+      "footer.copyright":"© 2024 mikann20041029.github.io. Tous droits réservés.",
+      "privacy.para1":"Aucune donnée personnelle ou analytique n'est collectée. Tout calcul se fait dans votre navigateur.",
+      "privacy.para2":"Aucun cookie utilisé, sauf pour la langue/thème. Pas de pub.",
+      "terms.para1":"Cet outil est fourni à titre indicatif. Usage à vos risques.",
+      "terms.para2":"Les méthodes de calcul se basent sur les publications officielles.",
+      "disclaimer.para1":"Ce site n'est pas affilié à la PTA ou au FBR.",
+      "disclaimer.para2":"Vérifiez toujours via les canaux officiels.",
+      "about.para1":"Outil public fourni par mikann20041029.github.io.",
+      "contact.para1":"Pour toute demande ou correction :",
+      "contact.email":"Email :",
+    },
+    de: {
+      "meta.title":"PTA Handy Importsteuer Rechner Pakistan – Sofortige Schätzung (2024)",
+      "meta.description":"Berechnen Sie die pakistanische PTA-Importsteuer für Smartphones/Tablets sofort. Schritt-für-Schritt Anleitung, Steueraufschlüsselung, FAQ & Ressourcen.",
+      "nav.brand":"PTA Steuerrechner",
+      "nav.back_to_hub":"Alle Tools",
+      "hero.title":"Pakistan Import-Steuerrechner für Mobilgeräte (PTA DIRBS)",
+      "hero.subtitle":"Berechnen Sie schnell die Importsteuer für Smartphone/Tablet nach Pakistan. Transparente Aufschlüsselung & aktuelle Regeln.",
+      "tool.card.title":"PTA Steuer-Schätzer",
+      "tool.form.device_type":"Gerätetyp",
+      "tool.form.device_type_phone":"Smartphone",
+      "tool.form.device_type_tablet":"Tablet",
+      "tool.form.device_price":"Deklarierter Preis (USD)",
+      "tool.form.device_price_placeholder":"z.B. 350",
+      "tool.form.citizen_type":"Importeurstyp",
+      "tool.form.citizen_type_resident":"Einheimischer (Pakistanischer Bürger)",
+      "tool.form.citizen_type_nonresident":"Nicht-Einheimischer (Ausland/Kaschmir/Dual)",
+      "tool.form.import_method":"Import-Methode",
+      "tool.form.import_method_personal_baggage":"Persönliches Gepäck",
+      "tool.form.import_method_courier":"Kurier / Post",
+      "tool.form.button":"Steuer berechnen",
+      "tool.tip":"Die tatsächlichen Sätze können abweichen. Diese Tools bieten eine grobe Schätzung; prüfen Sie immer offizielle Quellen.",
+      "tool.result.title":"Geschätzte Gesamtsteuer & Abgaben",
+      "tool.result.breakdown":"Aufschlüsselung:",
+      "tool.result.device_price":"Deklarierter Preis",
+      "tool.result.pta_tax":"PTA Gebühr",
+      "tool.result.customs_duty":"Zollgebühr",
+      "tool.result.sales_tax":"Umsatzsteuer",
+      "tool.result.it_tax":"Einkommensteuer / WHT",
+      "tool.result.total":"Gesamtsumme",
+      "tool.result.usd":"USD",
+      "tool.result.pkr":"PKR",
+      "tool.result.warn":"Alle Werte sind Schätzungen. Prüfen Sie aktuelle FBR/PTA-Vorgaben.",
+      "article.title":"Leitfaden: PTA Mobile Importsteuer in Pakistan berechnen (2024)",
+      "article.intro.heading":"Einleitung",
+      "article.intro.para1":"Das Importieren eines Mobilgeräts nach Pakistan ist komplex: PTA und FBR legen viele Steuern fest. Seit DIRBS sind Registrierung und Zahlung Pflicht.",
+      "article.intro.para2":"Dieser Guide erklärt alle Steuerarten, den Rechenweg, Unterschiede für Einheimische und Ausländer und gibt praktische Tipps.",
+      "article.intro.para3":"Ob Heimkehr, Geschenk oder Premium-Gerät per Versand: Hier erfahren Sie, wie Sie Ihre Steuerlast verlässlich schätzen.",
+      "article.tax_regime.heading":"Überblick der PTA/FBR-Steuern",
+      "article.tax_regime.para1":"Je nach Importeurstyp, Gerät, Preis und Einfuhrweg variieren die Steuern deutlich.",
+      "article.tax_regime.bullet1":"Pflicht: PTA Registrierungsgebühr",
+      "article.tax_regime.bullet2":"Zollabgabe nach HS Code",
+      "article.tax_regime.bullet3":"Umsatz-/Einkommensteuer: fest oder prozentual",
+      "article.tax_regime.para2":"Falschangaben oder Nichtanmeldung werden streng bestraft (Bußen, Netzsperre, Gerichtsverfahren).",
+      "article.calculating.heading":"So berechnen Sie die PTA-Steuer Schritt für Schritt",
+      "article.calculating.step1":"Gerätewert (USD) bestimmen.",
+      "article.calculating.step2":"Importeurstyp wählen (Einheimisch/Nicht-Einheimisch).",
+      "article.calculating.step3":"Import-Methode angeben.",
+      "article.calculating.step4":"PTA/FBR-Tarif anwenden.",
+      "article.calculating.para1":"Tarife ändern sich regelmäßig. Prüfen Sie stets die aktuellen Vorgaben.",
+      "article.pitfalls.heading":"Häufige Fehler und Fallstricke",
+      "article.pitfalls.bullet1":"Falsche Wertangabe führt zu Bußen.",
+      "article.pitfalls.bullet2":"Falsche Annahme von Steuerfreiheit.",
+      "article.pitfalls.bullet3":"Nicht rechtzeitige DIRBS-Anmeldung.",
+      "article.pitfalls.bullet4":"Inoffizielle Agenten nutzen = Betrugsgefahr.",
+      "article.pitfalls.para1":"Viele unterschätzen die Kosten oder vergleichen nicht, was steuerfrei ist. Belege aufbewahren!",
+      "article.checklist.heading":"Checkliste für Importeure",
+      "article.checklist.item1":"IMEI vorab bei DIRBS checken.",
+      "article.checklist.item2":"Kaufpreis belegen.",
+      "article.checklist.item3":"PTA-Portal nutzen.",
+      "article.checklist.item4":"Steuerklassen verstehen.",
+      "article.checklist.item5":"Anmeldung vor Frist erledigen.",
+      "article.faq.heading":"Häufig gestellte Fragen (FAQ)",
+      "article.faq.q1":"Wer muss die PTA-Steuer zahlen?",
+      "article.faq.a1":"Jeder Importeur (privat, per Versand) muss die Steuer entrichten und registrieren.",
+      "article.faq.q2":"Wie wird der Steuerwert festgelegt?",
+      "article.faq.a2":"i.d.R. gilt der Kaufbeleg. Im Zweifel schätzt der Zoll.",
+      "article.faq.q3":"Kann ich mehrere Handys importieren?",
+      "article.faq.a3":"Ein Gerät/Jahr im Gepäck steuerfrei möglich, mehr werden höher besteuert.",
+      "article.faq.q4":"Gelten Ausnahmen für Auslands-Pakistaner?",
+      "article.faq.a4":"Teilweise Reduktion/Senkung, vollwertiger Nachweis nötig.",
+      "article.faq.q5":"Was passiert bei Fristversäumnis?",
+      "article.faq.a5":"Gerät wird gesperrt, Strafen möglich.",
+      "article.references.heading":"Quellen & Offizielle Infos",
+      "related.title":"Verwandte Seiten",
+      "footer.privacy":"Datenschutzerklärung",
+      "footer.terms":"Nutzungsbedingungen",
+      "footer.disclaimer":"Haftungsausschluss",
+      "footer.about":"Über/Betreiber",
+      "footer.contact":"Kontakt",
+      "footer.copyright":"© 2024 mikann20041029.github.io. Alle Rechte vorbehalten.",
+      "privacy.para1":"Es werden keine personenbezogenen Daten oder Analytics erhoben. Alles erfolgt lokal im Browser.",
+      "privacy.para2":"Nur Sprach-/Theme-Einstellungen werden gespeichert. Keine Werbung.",
+      "terms.para1":"Dieses Tool dient nur zu Informationszwecken. Nutzung auf eigenes Risiko.",
+      "terms.para2":"Berechnungsmethoden basieren auf öffentlich bekannten Dokumenten.",
+      "disclaimer.para1":"Diese Seite steht in keiner Verbindung zur PTA/FBR.",
+      "disclaimer.para2":"Bitte offizielle Stellen konsultieren.",
+      "about.para1":"Public Utility von mikann20041029.github.io.",
+      "contact.para1":"Fragen, Korrekturen bitte an:",
+      "contact.email":"E-Mail:",
+    }
+  };
+  // --- related sites ---
+  window.__RELATED__ = [{"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769189699-tax-calculator-2/"}, {"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769158606-tax-calculator/"}, {"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769155768-tax-calculator/"}, {"title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769115945-show-hn-pta-tax-calculator-calculate-pakistan-mobile-import-/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769181471-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769141611-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769138429-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769116184-show-hn-gogen-a-simple-template-based-file-generator-written/"}];
+
+  // --- i18n/app JS ---
+  (function(){
+    // Theme (dark/light) logic
+    var html = document.documentElement;
+    var themeBtn = document.getElementById('themeToggle');
+    var themeIcon = document.getElementById('themeIcon');
+    function setTheme(mode) {
+      if(mode === "dark") {
+        html.classList.add('dark');
+        localStorage.setItem("goliath_theme","dark");
+        themeIcon.innerHTML = '<path d="M17.657 16.657A8 8 0 1 1 12 4v0a8.001 8.001 0 0 0 5.657 12.657z" />';
+      } else {
+        html.classList.remove('dark');
+        localStorage.setItem("goliath_theme","light");
+        themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2m11-11h-2M3 12H1m15.364-8.364l-1.414 1.414M6.05 17.95l-1.414 1.415m12.728 0l-1.414-1.415M6.05 6.05L4.636 4.636"/>'
+      }
+    }
+    // Initial theme
+    var saved_theme = localStorage.getItem("goliath_theme");
+    if(saved_theme === "dark" || (!saved_theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setTheme("dark");
+    } else {
+      setTheme("light");
+    }
+    if(themeBtn) themeBtn.onclick = function(){ setTheme(html.classList.contains('dark') ? "light" : "dark"); };
+
+    // i18n
+    var langSelect = document.getElementById("langSelect");
+    function getSavedLang() {
+      var l = localStorage.getItem("goliath_lang");
+      if (["en","ja","fr","de"].indexOf(l) !== -1) return l;
+      return "en";
+    }
+    function setLang(lang) {
+      document.documentElement.lang = lang;
+      if (langSelect) langSelect.value = lang;
+      localStorage.setItem("goliath_lang", lang);
+    }
+    function renderI18N(lang) {
+      var dict = window.__I18N__ && window.__I18N__[lang] ? window.__I18N__[lang] : window.__I18N__.en;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function(el){
+        var k = el.getAttribute("data-i18n");
+        if(dict[k]) el.innerHTML = dict[k];
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function(el){
+        var k = el.getAttribute("data-i18n-placeholder");
+        if(dict[k]) el.setAttribute("placeholder", dict[k]);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-title]'), function(el){
+        var k = el.getAttribute("data-i18n-title");
+        if(dict[k]) el.setAttribute("title", dict[k]);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-aria]'), function(el){
+        var k = el.getAttribute("data-i18n-aria");
+        if(dict[k]) el.setAttribute("aria-label", dict[k]);
+      });
+      // <title>
+      var titleEl = document.querySelector("title[data-i18n]");
+      if(titleEl && dict[titleEl.getAttribute("data-i18n")]) titleEl.textContent = dict[titleEl.getAttribute("data-i18n")];
+      // <meta name="description">
+      var descMeta = document.querySelector('meta[name="description"][data-i18n]');
+      if(descMeta && dict[descMeta.getAttribute("data-i18n")]) descMeta.setAttribute("content", dict[descMeta.getAttribute("data-i18n")]);
+    }
+    function i18nChange(e) {
+      var lang = this.value || 'en';
+      setLang(lang);
+      renderI18N(lang);
+    }
+    // Two-way for <option data-i18n> (selects)
+    function updateOptionI18N(lang){
+      Array.prototype.forEach.call(document.querySelectorAll('select option[data-i18n]'), function(opt){
+        var k = opt.getAttribute('data-i18n');
+        var dict = window.__I18N__[lang] || window.__I18N__.en;
+        if (dict[k]) opt.textContent = dict[k];
+      });
+    }
+    if (langSelect) langSelect.addEventListener('change', function(e){
+      i18nChange.call(this, e);
+      updateOptionI18N(this.value);
+    });
+    // On DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', function(){
+      var lang = getSavedLang();
+      setLang(lang);
+      renderI18N(lang);
+      updateOptionI18N(lang);
+      // Related sites
+      var rels = window.__RELATED__;
+      var sec = document.getElementById('relatedSitesSection');
+      var ul = document.getElementById('relatedSitesList');
+      if(rels && rels.length>0 && ul) {
+        ul.innerHTML = '';
+        rels.forEach(function(r){
+          var li = document.createElement('li');
+          var a = document.createElement('a');
+          a.textContent = r.title;
+          a.href = r.url;
+          a.target='_blank';
+          a.className="hover:underline";
+          li.appendChild(a);
+          ul.appendChild(li);
+        });
+        sec.style.display = '';
+      } else if (sec) {
+        sec.style.display = 'none';
+      }
+    });
+
+    // TAX CALC LOGIC (Updated slabs approx as per 2024, for demo)
+    var exchangeRate = 278; // USD to PKR (may update per FX)
+    function getTaxSlabs(deviceType, citizen, importMethod, usd) {
+      // Approximate slabs (2024)
+      // Only for demo/education, not official
+      // For phones:
+      // PTA Registration: varies (fixed per slab)
+      // Customs: 0% for < $30, 11% above
+      // Sales: usually ~17% or slabbed
+      // IT (income/withholding): higher for resident
+      if(deviceType==="tablet") {
+        // Tablets usually slightly lower fees
+        if (usd<=30)
+          return {pta:10,  customs:0,   sales:0,    it:0};
+        else if (usd<=100)
+          return {pta:40,  customs:3,   sales:4,    it:2};
+        else if (usd<=200)
+          return {pta:90,  customs:8,   sales:13,   it:6};
+        else if (usd<=350)
+          return {pta:200, customs:20,  sales:23,   it:10};
+        else
+          return {pta:250, customs:35,  sales:31,   it:15};
+      }
+      // Smartphones
+      if (usd<=30)
+        return {pta:18,   customs:0,    sales:0,    it:0};
+      else if (usd<=100)
+        return {pta:53,   customs:3,    sales:7,    it:4};
+      else if (usd<=200)
+        return {pta:95,   customs:12,   sales:21,   it:7};
+      else if (usd<=350)
+        return {pta:210,  customs:25,   sales:34,   it:12};
+      else if (usd>350 && usd<=500)
+        return {pta:370,  customs:44,   sales:57,   it:19};
+      else
+        return {pta:740,  customs:87,   sales:115,  it:38};
+    }
+    // WHT reduction for non-residents
+    function adjustSlabForCitizen(slab, citizen) {
+      if(citizen === "nonresident") {
+        var copy = Object.assign({},slab);
+        copy.it = Math.round(copy.it * 0.5);
+        return copy;
+      }
+      return slab;
+    }
+
+    var taxForm = document.getElementById('taxForm');
+    var taxResult = document.getElementById('taxResult');
+    var taxBreakdown = document.getElementById('taxBreakdown');
+    if(taxForm){
+      taxForm.addEventListener('submit',function(ev){
+        ev.preventDefault();
+        var lang = getSavedLang();
+        var t = window.__I18N__[lang] || window.__I18N__.en;
+        var usd = parseFloat(taxForm.devicePrice.value);
+        if (isNaN(usd)||usd<1) {
+          taxResult.classList.remove('hidden');
+          taxResult.textContent = t['tool.form.device_price_placeholder'];
+          taxBreakdown.classList.add('hidden');
+          return;
+        }
+        var deviceType = taxForm.deviceType.value;
+        var citizen = taxForm.citizenType.value;
+        var importMethod = taxForm.importMethod.value;
+        var slab = getTaxSlabs(deviceType, citizen, importMethod, usd);
+        if(!slab){
+          taxResult.classList.remove('hidden');
+          taxResult.textContent = t['tool.result.warn'];
+          taxBreakdown.classList.add('hidden');
+          return;
+        }
+        slab = adjustSlabForCitizen(slab, citizen);
+        var totalTaxUSD = slab.pta + slab.customs + slab.sales + slab.it;
+        var totalUSD = usd + totalTaxUSD;
+        var totalPKR = Math.round(totalUSD * exchangeRate);
+
+        taxResult.classList.remove('hidden');
+        taxResult.innerHTML = '<span class="block mb-2">'+t['tool.result.title']+'</span><span class="text-2xl font-bold">'+totalPKR.toLocaleString()+' '+t['tool.result.pkr']+'</span> <span class="ml-2 text-base font-medium text-gray-500">('+totalUSD.toFixed(2)+' '+t['tool.result.usd']+')</span>';
+        taxBreakdown.classList.remove('hidden');
+        taxBreakdown.innerHTML = `
+          <div><span class="font-semibold">${t['tool.result.device_price']}</span>: ${usd.toFixed(2)} ${t['tool.result.usd']} / ${(usd*exchangeRate).toLocaleString()} ${t['tool.result.pkr']}</div>
+          <div><span class="font-semibold">${t['tool.result.pta_tax']}</span>: ${slab.pta} ${t['tool.result.usd']}</div>
+          <div><span class="font-semibold">${t['tool.result.customs_duty']}</span>: ${slab.customs} ${t['tool.result.usd']}</div>
+          <div><span class="font-semibold">${t['tool.result.sales_tax']}</span>: ${slab.sales} ${t['tool.result.usd']}</div>
+          <div><span class="font-semibold">${t['tool.result.it_tax']}</span>: ${slab.it} ${t['tool.result.usd']}</div>
+          <div class="font-semibold mt-3">${t['tool.result.total']}</div>
+          <div>${(usd+totalTaxUSD).toFixed(2)} ${t['tool.result.usd']} / ${totalPKR.toLocaleString()} ${t['tool.result.pkr']}</div>
+          <div class="mt-2 text-xs text-gray-500">${t['tool.result.warn']}</div>
+        `;
+      });
+    }
+
+  })();
+  </script>
+</body>
+</html>
