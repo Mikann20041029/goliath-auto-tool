@@ -9,6 +9,46 @@ from typing import List, Dict, Any, Tuple, Optional
 
 import requests
 from openai import OpenAI
+import os, json, time, re, hashlib
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+STATE_DIR = Path("goliath/state")
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+TOOL_HISTORY_PATH = STATE_DIR / "tool_history.json"
+
+def _load_tool_history() -> List[Dict[str, Any]]:
+    if TOOL_HISTORY_PATH.exists():
+        try:
+            return json.loads(TOOL_HISTORY_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+def _save_tool_history(hist: List[Dict[str, Any]]) -> None:
+    # 最新200件だけ保持
+    hist = hist[-200:]
+    TOOL_HISTORY_PATH.write_text(json.dumps(hist, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _norm(s: str) -> str:
+    s = (s or "").lower().strip()
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _fingerprint(theme: str, tags: List[str]) -> str:
+    base = _norm(theme) + "|" + "|".join(sorted(_norm(t) for t in (tags or [])))
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()
+
+def _too_similar(a: str, b: str) -> bool:
+    # ゆるい類似判定（単語Jaccard）
+    A = set(_norm(a).split())
+    B = set(_norm(b).split())
+    if not A or not B:
+        return False
+    j = len(A & B) / max(1, len(A | B))
+    return j >= 0.80
 
 # Optional SNS libs (missing secretsなら黙ってスキップ)
 try:
