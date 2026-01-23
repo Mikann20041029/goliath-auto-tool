@@ -202,7 +202,7 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
 # =========================
 # Collector (Real)
 # =========================
-def hn_search(query: str, limit: int = 30) -> List[Dict[str, Any]]:
+def hn_search(query: str, limit: int = 30, ask_only: bool = False) -> List[Dict[str, Any]]:
     """
     HN (Algolia) から検索。
     """
@@ -219,6 +219,9 @@ def hn_search(query: str, limit: int = 30) -> List[Dict[str, Any]]:
         out = []
         for h in data.get("hits", [])[:limit]:
             title = h.get("title") or ""
+            if ask_only:
+                if not (title.startswith("Ask HN:") or title.startswith("Tell HN:")):
+                    continue
             story_url = h.get("url") or ""
             hn_url = f"https://news.ycombinator.com/item?id={h.get('objectID')}"
             points = h.get("points") or 0
@@ -231,6 +234,7 @@ def hn_search(query: str, limit: int = 30) -> List[Dict[str, Any]]:
         return out
     except Exception:
         return []
+
 
 
 def collect_hn(limit: int) -> List[Dict[str, Any]]:
