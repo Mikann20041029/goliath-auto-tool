@@ -30,6 +30,8 @@ PAGES_DIR = f"{ROOT}/pages"
 DB_PATH = f"{ROOT}/db.json"
 INDEX_PATH = f"{ROOT}/index.html"
 SEED_SITES_PATH = f"{ROOT}/sites.seed.json"
+SITEMAP_PATH = "sitemap.xml"
+ROBOTS_PATH = "robots.txt"
 
 # ---- Model choices (final decision) ----
 # ツール生成: 品質優先（エラー率を落とす）
@@ -55,7 +57,7 @@ def now_utc_iso() -> str:
 
 
 def slugify(s: str, max_len: int = 60) -> str:
-    s = s.lower().strip()
+    s = (s or "").lower().strip()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
     return s[:max_len] or "tool"
@@ -92,6 +94,7 @@ def extract_html_only(raw: str) -> str:
     """
     余計な挨拶/markdown/``` を排除して <!DOCTYPE html>..</html> のみ切り出す
     """
+    raw = raw or ""
     m = re.search(r"(<!DOCTYPE\s+html.*?</html\s*>)", raw, flags=re.IGNORECASE | re.DOTALL)
     if m:
         return m.group(1).strip()
@@ -103,6 +106,47 @@ def extract_html_only(raw: str) -> str:
 def stable_id(*parts: str) -> str:
     h = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return h[:16]
+
+
+# =========================
+# Titles (検索寄せの最低限)
+# =========================
+def make_search_title(theme: str, tags: List[str]) -> str:
+    """
+    SNS文っぽいテーマを「検索語に寄せたタイトル」にする最低限。
+    完璧じゃなくてOK。ゼロよりはマシ、を狙う。
+    """
+    t = (theme or "").strip()
+    tl = t.lower()
+
+    # ありがちなノイズ除去
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r"^(show hn:\s*)", "", t, flags=re.IGNORECASE)
+
+    # タグから型を決める
+    suffix = "tool"
+    if "calculator" in (tags or []) or "finance" in (tags or []):
+        suffix = "calculator"
+    elif "convert" in (tags or []):
+        suffix = "converter"
+    elif "time" in (tags or []):
+        suffix = "time converter"
+    elif "pricing" in (tags or []):
+        suffix = "pricing tool"
+    elif "productivity" in (tags or []):
+        suffix = "template tool"
+
+    # できれば英語っぽい核を拾う
+    kws = []
+    for k in ["tax", "ptA", "subscription", "pricing", "timezone", "time zone", "template", "convert", "calculator"]:
+        if k.lower() in tl:
+            kws.append(k.upper() if k.lower() == "pta" else k)
+    core = kws[0] if kws else t[:60]
+
+    # 極端に長い場合は切る
+    title = f"{core} {suffix}".strip()
+    title = re.sub(r"\s+", " ", title)
+    return title[:80]
 
 
 # =========================
@@ -126,35 +170,27 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
         "adult_or_sensitive": 0,
     }
 
-    # ツール欲しい系
     if any(k in t for k in ["is there a tool", "any tool", "tool for", "looking for a tool", "need a tool"]):
         table["tool_request"] += 8
 
-    # convert/generator/calculator は刺さりやすい
     if any(k in t for k in ["convert", "converter", "generator", "calculate", "calculator", "format", "transform"]):
         table["convert_generator_calc"] += 7
 
-    # 出力形式が明確だと作りやすい
     if any(k in t for k in ["json", "csv", "markdown", "notion", "template", "checklist", "table"]):
         table["structured_output"] += 5
 
-    # 入力が具体的だと作りやすい
     if any(k in t for k in ["timezone", "tax", "subscription", "plan", "pricing", "compare", "fee", "rate"]):
         table["specific_inputs"] += 4
 
-    # 「コードの書き方教えて」だけだとツール化しにくい
     if any(k in t for k in ["how do i code", "write code", "bug in my code", "stack trace"]):
         table["how_to_code_only"] -= 6
 
-    # 広すぎる要件
     if any(k in t for k in ["everything", "all-in-one", "ultimate", "perfect solution"]):
         table["too_broad"] -= 4
 
-    # 変な地雷避け（最低限）
     if any(k in t for k in ["porn", "sexual", "nude", "violence", "illegal"]):
         table["adult_or_sensitive"] -= 20
 
-    # HN points などメタ加点
     hn_points = int(meta.get("hn_points", 0) or 0)
     if hn_points > 0:
         table["tool_request"] += min(10, hn_points // 30)
@@ -211,7 +247,7 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
     per = max(5, limit // max(1, len(queries)))
     for q in queries:
         all_items.extend(hn_search(q, limit=per))
-    # だぶり除去（url基準）
+
     seen = set()
     uniq = []
     for it in all_items:
@@ -342,7 +378,6 @@ def collector_real() -> List[Dict[str, Any]]:
     items.extend(collect_bluesky(COLLECT_BSKY))
     items.extend(collect_mastodon(COLLECT_MASTODON))
 
-    # 最低でも何か動くように、空なら軽いスタブ
     if not items:
         samples = [
             ("need a simple calculator to compare subscription plans with hidden fees", "https://news.ycombinator.com/"),
@@ -414,7 +449,6 @@ def load_seed_sites() -> List[Dict[str, Any]]:
         if isinstance(data, list):
             return [x for x in data if isinstance(x, dict)]
         if isinstance(data, dict):
-            # dict -> values list
             vals = []
             for v in data.values():
                 if isinstance(v, dict):
@@ -446,9 +480,6 @@ def _norm_tags(x: Any) -> List[str]:
 
 
 def _seed_map(seed_sites: Any) -> Dict[str, Dict[str, Any]]:
-    """
-    seed_sites が list/dict どっちでも {slug: dict} にする
-    """
     m: Dict[str, Dict[str, Any]] = {}
     if isinstance(seed_sites, dict):
         for k, v in seed_sites.items():
@@ -485,8 +516,6 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
             elif isinstance(e, str):
                 if e in seed_map and isinstance(seed_map[e], dict):
                     normalized_entries.append(seed_map[e])
-            else:
-                continue
 
     normalized_seeds: List[Dict[str, Any]] = []
     if isinstance(seed_sites, list):
@@ -498,7 +527,6 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
 
     candidates: List[Tuple[float, Dict[str, str]]] = []
 
-    # goliath内の過去ページ
     for e in normalized_entries:
         etags = _norm_tags(e.get("tags", []))
         score = jaccard(tags, etags)
@@ -510,7 +538,6 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
             continue
         candidates.append((score, {"title": title, "url": url}))
 
-    # 既存の外部/既存サイト
     for s in normalized_seeds:
         stags = _norm_tags(s.get("tags", []))
         score = jaccard(tags, stags)
@@ -533,9 +560,28 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
         seen.add(u)
         related.append(item)
         if len(related) >= k:
+            return related
+
+    # 0件回避: 新着から埋める
+    for e in normalized_entries:
+        u = (e.get("public_url") or "").strip()
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        related.append({"title": (e.get("title") or "").strip(), "url": u})
+        if len(related) >= k:
+            return related
+
+    for s in normalized_seeds:
+        u = (s.get("url") or s.get("public_url") or "").strip()
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        related.append({"title": (s.get("title") or "").strip(), "url": u})
+        if len(related) >= k:
             break
 
-    return related
+    return related[:k]
 
 
 # =========================
@@ -544,215 +590,72 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
 def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str) -> str:
     # 重要: 余計な文章禁止、HTMLのみ
     # 重要: フッターに規約系リンク、言語切替、関連サイト欄（window.__RELATED__）
-    *** a/goliath/main.py
---- b/goliath/main.py
-***************
-*** 1,10 ****
---- 1,10 ----
-  import os
-  import re
-  import json
-  import time
-  import random
-  import hashlib
-  import datetime
-  from typing import List, Dict, Any, Tuple, Optional
-***************
-*** 300,380 ****
-  def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str) -> str:
-      # 重要: 余計な文章禁止、HTMLのみ
-      # 重要: フッターに規約系リンク、言語切替、関連サイト欄（window.__RELATED__）
-      return f"""
-  You are generating a production-grade single-file HTML tool site.
-  
-  STRICT OUTPUT RULE:
-  - Output ONLY raw HTML that starts with <!DOCTYPE html> and ends with </html>.
-  - No markdown, no backticks, no explanations.
-  
-  [Goal]
-  Create a modern SaaS-style tool page to solve: "{theme}"
-  
-  [Design]
-  - Use Tailwind CSS via CDN
-  - Clean SaaS UI: hero section + centered tool card + sections
-  - Dark/Light mode toggle (CSS class switch)
-  
-  [Tool]
-  - Implement an interactive JS mini-tool relevant to the theme (static, no server).
-  - Must work without any server.
-  
-  [Content]
-  - Include a Japanese long-form article >= 2500 Japanese characters.
-  - Use clear structure with H2/H3 headings, checklist, pitfalls, FAQ(>=5).
-  - Add "References" section with 8-12 reputable external links (official docs / well-known sites).
-  
-  [Multi-language]
-- - Provide language switcher for JA/EN/FR/DE.
-- - At minimum translate: hero, tool labels, and footer pages.
-- - Article can be JA primary; provide short EN/FR/DE summary sections.
-+ - Provide a WORKING language switcher for JA/EN/FR/DE (must work on mobile).
-+ - The switcher MUST be a <select> with id="langSelect" and options: ja,en,fr,de.
-+ - Any translatable UI text MUST use data-i18n keys. Example: <span data-i18n="hero.title"></span>
-+ - Provide a JS dictionary exactly as: window.__I18N__ = { ja:{...}, en:{...}, fr:{...}, de:{...} }
-+ - Provide a JS initializer that:
-+   - reads saved language from localStorage key "goliath_lang" (fallback to "ja")
-+   - sets <html lang="..">
-+   - fills all [data-i18n] elements from window.__I18N__[lang][key]
-+   - wires change event on #langSelect to re-render
-+ - Article can be JA primary; provide short EN/FR/DE summary sections.
-  
-  [Compliance / Footer]
-  - Auto-generate in-page sections for:
-    - Privacy Policy (cookie/ads explanation)
-    - Terms of Service
-    - Disclaimer
-    - About / Operator info
-    - Contact
-  - These must be accessible via footer links using in-page anchors.
-  
-  [Related Sites]
-  - Include a "Related sites" section near bottom as a list:
-    - It must be filled from a JSON embedded in the page: window.__RELATED__ = [];
-    - Render it into the list on load.
-    - If empty, hide the section.
-  
-  [SEO]
-  - Include title/meta description/canonical.
-  - Canonical must be: {canonical_url}
-  
-  Return ONLY the final HTML.
-  """.strip()
-***************
-*** 380,430 ****
-  def validate_html(html: str) -> Tuple[bool, str]:
-      low = html.lower()
-      if "<!doctype html" not in low:
-          return False, "missing doctype"
-      if "</html>" not in low:
-          return False, "missing </html>"
-      if "tailwind" not in low:
-          return False, "tailwind not found"
-      if "__related__" not in low:
-          return False, "missing window.__RELATED__"
-      must = ["privacy", "terms", "disclaimer", "about", "contact"]
-      missing = [m for m in must if m not in low]
-      if missing:
-          return False, f"missing policy sections: {missing}"
-+     # ---- language switcher must be functional (A/B) ----
-+     if 'id="langselect"' not in low:
-+         return False, "missing #langSelect"
-+     if "__i18n__" not in low:
-+         return False, "missing window.__I18N__"
-+     if "data-i18n" not in low:
-+         return False, "missing data-i18n bindings"
-+     if "goliath_lang" not in low:
-+         return False, "missing localStorage key goliath_lang handling"
-      return True, "ok"
-***************
-*** 430,520 ****
-- def pick_related(tags, all_entries, seed_sites, k=8):
--     # --- normalize inputs (防御コード) ---
--     if isinstance(tags, str):
--         tags = [tags]
-- 
--     # seed_sites が dict でも list でも吸収して map を作る
--     seed_map = {}
--     if isinstance(seed_sites, dict):
--         seed_map = seed_sites
--     elif isinstance(seed_sites, list):
--         for s in seed_sites:
--             if isinstance(s, dict) and "slug" in s:
--                 seed_map[s["slug"]] = s
-- 
--     normalized = []
--     for e in all_entries:
--         if isinstance(e, dict):
--             normalized.append(e)
--             continue
--         if isinstance(e, str):
--             # 文字列なら seed_map から引けるなら辞書に戻す / 無理なら捨てる
--             if e in seed_map and isinstance(seed_map[e], dict):
--                 normalized.append(seed_map[e])
--             else:
--                 # ここで捨てる（落ちるより100倍マシ）
--                 continue
--         else:
--             continue
-- 
--     all_entries = normalized
--     # --- ここから下は既存ロジック ---
--     ...
-+ def pick_related(current_tags: List[str], all_entries: List[Dict[str, Any]], seed_sites: List[Dict[str, Any]], k: int = 8) -> List[Dict[str, str]]:
-+     """
-+     (C) Relatedが0件にならないようにする:
-+     1) タグ類似で候補作成
-+     2) 0件なら、新着(all_entries先頭) + seed_sites から埋める
-+     """
-+     # normalize tags
-+     if isinstance(current_tags, str):
-+         current_tags = [current_tags]
-+     current_tags = [t for t in (current_tags or []) if isinstance(t, str)]
-+ 
-+     # normalize entries
-+     a = [e for e in (all_entries or []) if isinstance(e, dict)]
-+     ssites = [s for s in (seed_sites or []) if isinstance(s, dict)]
-+ 
-+     candidates: List[Tuple[float, Dict[str, str]]] = []
-+ 
-+     # 1) similarity candidates from generated pages
-+     for e in a:
-+         tags = e.get("tags", []) or []
-+         tags = [t for t in tags if isinstance(t, str)]
-+         score = jaccard(current_tags, tags)
-+         if score <= 0:
-+             continue
-+         candidates.append((score, {"title": e.get("title", ""), "url": e.get("public_url", "")}))
-+ 
-+     # 2) similarity candidates from seed sites
-+     for s in ssites:
-+         tags = s.get("tags", []) or []
-+         tags = [t for t in tags if isinstance(t, str)]
-+         score = jaccard(current_tags, tags)
-+         if score <= 0:
-+             continue
-+         candidates.append((score, {"title": s.get("title", ""), "url": s.get("url", "")}))
-+ 
-+     candidates.sort(key=lambda x: x[0], reverse=True)
-+ 
-+     seen = set()
-+     related: List[Dict[str, str]] = []
-+     for _, item in candidates:
-+         u = (item.get("url") or "").strip()
-+         if not u or u in seen:
-+             continue
-+         seen.add(u)
-+         related.append(item)
-+         if len(related) >= k:
-+             return related
-+ 
-+     # ---- fallback: ensure at least k items (C) ----
-+     # fill from recent generated pages
-+     for e in a:
-+         u = (e.get("public_url") or "").strip()
-+         if not u or u in seen:
-+             continue
-+         seen.add(u)
-+         related.append({"title": e.get("title", ""), "url": u})
-+         if len(related) >= k:
-+             return related
-+ 
-+     # fill from seed sites
-+     for s in ssites:
-+         u = (s.get("url") or "").strip()
-+         if not u or u in seen:
-+             continue
-+         seen.add(u)
-+         related.append({"title": s.get("title", ""), "url": u})
-+         if len(related) >= k:
-+             break
-+ 
-+     return related[:k]
+    # 重要: Hubへの戻り導線（../../index.html）
+    return f"""
+You are generating a production-grade single-file HTML tool site.
 
+STRICT OUTPUT RULE:
+- Output ONLY raw HTML that starts with <!DOCTYPE html> and ends with </html>.
+- No markdown, no backticks, no explanations.
+
+[Goal]
+Create a modern SaaS-style tool page to solve: "{theme}"
+
+[Design]
+- Use Tailwind CSS via CDN (no build step)
+- Clean SaaS UI: top nav + hero section + centered tool card + sections
+- Use white background + trusted blue/indigo accents + neutral grays
+- Use generous spacing (padding/margin), professional typography (Inter / Noto Sans JP via CDN)
+- Add subtle glassmorphism for the tool card (backdrop-blur, translucent)
+- Dark/Light mode toggle (CSS class switch) and respect saved theme in localStorage.
+
+[Navigation]
+- Add a top nav link back to the hub: href="../../index.html" (label: "All tools")
+- Add a footer link back to hub as well.
+
+[Tool]
+- Implement an interactive JS mini-tool relevant to the theme (static, no server).
+- Must work without any server.
+
+[Content]
+- Include a Japanese long-form article >= 2500 Japanese characters.
+- Use clear structure with H2/H3 headings, checklist, pitfalls, FAQ(>=5).
+- Add "References" section with 8-12 reputable external links (official docs / well-known sites).
+
+[Multi-language]
+- Provide a WORKING language switcher for JA/EN/FR/DE (must work on mobile).
+- The switcher MUST be a <select> with id="langSelect" and options: ja,en,fr,de.
+- Any translatable UI text MUST use data-i18n keys. Example: <span data-i18n="hero.title"></span>
+- Provide a JS dictionary exactly as: window.__I18N__ = {{ ja:{{...}}, en:{{...}}, fr:{{...}}, de:{{...}} }}
+- Provide a JS initializer that:
+  - reads saved language from localStorage key "goliath_lang" (fallback to "ja")
+  - sets <html lang="..">
+  - fills all [data-i18n] elements from window.__I18N__[lang][key]
+  - wires change event on #langSelect to re-render
+- Article can be JA primary; provide short EN/FR/DE summary sections.
+
+[Compliance / Footer]
+- Auto-generate in-page sections for:
+  - Privacy Policy (cookie/ads explanation)
+  - Terms of Service
+  - Disclaimer
+  - About / Operator info
+  - Contact
+- These must be accessible via footer links using in-page anchors.
+
+[Related Sites]
+- Include a "Related sites" section near bottom as a list:
+  - It must be filled from a JSON embedded in the page: window.__RELATED__ = [];
+  - Render it into the list on load.
+  - If empty, hide the section.
+
+[SEO]
+- Include title/meta description/canonical.
+- Canonical must be: {canonical_url}
+- Title should be "search-friendly" (not SNS-like). Use a concise keyword-style title.
+
+Return ONLY the final HTML.
+""".strip()
 
 
 def openai_generate_html(client: OpenAI, prompt: str) -> str:
@@ -778,6 +681,21 @@ def validate_html(html: str) -> Tuple[bool, str]:
     missing = [m for m in must if m not in low]
     if missing:
         return False, f"missing policy sections: {missing}"
+
+    # ---- language switcher must be functional ----
+    if 'id="langselect"' not in low:
+        return False, "missing #langSelect"
+    if "__i18n__" not in low:
+        return False, "missing window.__I18N__"
+    if "data-i18n" not in low:
+        return False, "missing data-i18n bindings"
+    if "goliath_lang" not in low:
+        return False, "missing localStorage key goliath_lang handling"
+
+    # ---- hub link ----
+    if '../../index.html' not in low and "../index.html" not in low:
+        return False, "missing link back to hub (../../index.html)"
+
     return True, "ok"
 
 
@@ -789,7 +707,7 @@ Rules:
 - Output ONLY the diff. No markdown. No explanations.
 - The patch MUST fix this validation error: {error}
 - Do not remove required features: Tailwind CDN, SaaS layout, dark/light toggle, language switcher,
-  footer policy sections, window.__RELATED__ rendering.
+  footer policy sections, window.__RELATED__ rendering, link back to hub.
 
 Current index.html:
 {html}
@@ -851,12 +769,14 @@ def infer_tags_simple(theme: str) -> List[str]:
     tags = []
     rules = {
         "convert": "convert",
+        "converter": "convert",
         "calculator": "calculator",
         "compare": "compare",
         "tax": "finance",
         "timezone": "time",
         "time zone": "time",
         "subscription": "pricing",
+        "pricing": "pricing",
         "plan": "pricing",
         "checklist": "productivity",
         "template": "productivity",
@@ -887,7 +807,7 @@ def inject_related_json(html: str, related: List[Dict[str, str]]) -> str:
 
 
 # =========================
-# Publishing / Index / Notify / SNS
+# Publishing / Index(Hub) / Sitemap / Notify / SNS
 # =========================
 def get_repo_pages_base() -> str:
     repo = os.getenv("GITHUB_REPOSITORY", "mikann20041029/goliath-auto-tool")
@@ -895,68 +815,214 @@ def get_repo_pages_base() -> str:
     return f"https://{owner.lower()}.github.io/{name}/"
 
 
-def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]):
+def normalize_db(raw_db: Any) -> List[Dict[str, Any]]:
+    if isinstance(raw_db, list):
+        return [x for x in raw_db if isinstance(x, dict)]
+    if isinstance(raw_db, dict):
+        if isinstance(raw_db.get("entries"), list):
+            return [x for x in raw_db["entries"] if isinstance(x, dict)]
+        vals = [v for v in raw_db.values() if isinstance(v, dict)]
+        return vals
+    return []
+
+
+def build_sitemap_and_robots(all_entries: List[Dict[str, Any]], pages_base: str):
+    # sitemap.xml は repo ルートに置く（Search Console で扱いやすい）
+    urls = []
+    hub_url = f"{pages_base}{ROOT}/index.html"
+    urls.append(hub_url)
+
+    for e in all_entries:
+        u = (e.get("public_url") or "").strip()
+        if u:
+            urls.append(u.rstrip("/") + "/")
+
+    # 重複除去
+    seen = set()
+    uniq = []
+    for u in urls:
+        if u in seen:
+            continue
+        seen.add(u)
+        uniq.append(u)
+
+    items = []
+    for u in uniq:
+        items.append(
+            "  <url>\n"
+            f"    <loc>{u}</loc>\n"
+            "    <changefreq>daily</changefreq>\n"
+            "  </url>"
+        )
+
+    sitemap = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(items) + "\n</urlset>\n"
+    )
+    write_text(SITEMAP_PATH, sitemap)
+
+    robots = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        f"Sitemap: {pages_base}sitemap.xml\n"
+    )
+    write_text(ROBOTS_PATH, robots)
+
+
+def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]], pages_base: str):
     if not isinstance(all_entries, list):
         all_entries = []
     all_entries.insert(0, entry)
     write_json(DB_PATH, all_entries)
 
-    rows = []
-    for e in all_entries[:50]:
-        rows.append(
-            (
-                '<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 '
-                'hover:bg-slate-50 dark:hover:bg-slate-900 transition" '
-                f'href="{e.get("path","")}/">'
-                f'<div class="font-semibold">{e.get("title","")}</div>'
-                f'<div class="text-sm opacity-70">{e.get("created_at","")} • {", ".join(e.get("tags", []))}</div>'
-                "</a>"
-            )
+    # ---- Hub強化: 人気/新着/目的別(カテゴリ) ----
+    def safe_tags(e: Dict[str, Any]) -> List[str]:
+        t = e.get("tags", []) or []
+        return [x for x in t if isinstance(x, str)]
+
+    # 人気 = best_score 上位（暫定）
+    popular = sorted(all_entries, key=lambda e: int(e.get("best_score", 0) or 0), reverse=True)[:12]
+    newest = all_entries[:24]
+
+    # カテゴリ集計
+    cat_map: Dict[str, List[Dict[str, Any]]] = {}
+    for e in all_entries:
+        for tg in safe_tags(e):
+            cat_map.setdefault(tg, []).append(e)
+
+    # 目的別（タグ）を固定順で出す
+    cat_order = ["pricing", "convert", "time", "productivity", "calculator", "finance", "compare", "tools"]
+    cats = []
+    for c in cat_order:
+        if c in cat_map:
+            cats.append((c, cat_map[c]))
+    for c in sorted(cat_map.keys()):
+        if c not in {x[0] for x in cats}:
+            cats.append((c, cat_map[c]))
+
+    def card(e: Dict[str, Any]) -> str:
+        href = f"{e.get('path','')}/"
+        title = (e.get("search_title") or e.get("title") or "").strip()
+        meta = f"{e.get('created_at','')} • {', '.join(safe_tags(e))}"
+        return (
+            '<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 '
+            'hover:bg-slate-50 dark:hover:bg-slate-900 transition" '
+            f'href="{href}">'
+            f'<div class="font-semibold">{title}</div>'
+            f'<div class="text-sm opacity-70 mt-1">{meta}</div>'
+            "</a>"
         )
 
-    html = """<!DOCTYPE html>
+    popular_html = "\n".join([card(e) for e in popular])
+    newest_html = "\n".join([card(e) for e in newest])
+
+    # カテゴリ一覧（タグ）
+    cat_links = []
+    for c, lst in cats[:16]:
+        cat_links.append(
+            f'<button class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sm" '
+            f'onclick="filterByTag(\'{c}\')">{c} <span class="opacity-60">({len(lst)})</span></button>'
+        )
+    cat_links_html = "\n".join(cat_links)
+
+    # 全件リスト（フィルタ対象）
+    all_cards_html = "\n".join([card(e) for e in all_entries[:200]])
+
+    html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Goliath Tools</title>
+  <title>Goliath Tools Hub</title>
+  <meta name="description" content="Auto-generated tools + long-form guides. Browse by purpose, popular tools, and newest releases." />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-  <div class="max-w-4xl mx-auto p-6">
+  <div class="max-w-5xl mx-auto p-6">
     <div class="flex items-center justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold">Goliath Tools</h1>
-        <p class="opacity-70">Auto-generated tools + long-form guides</p>
+        <div class="text-xl font-bold">Goliath Tools Hub</div>
+        <div class="text-sm opacity-70 mt-1">発見（SEO）と回遊（内部リンク）を強化するための上位ページ</div>
       </div>
       <button id="themeBtn" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800">Dark/Light</button>
     </div>
 
-    <div class="mt-6 grid gap-3">
-      __ROWS__
+    <div class="mt-6">
+      <div class="text-sm font-semibold opacity-80">目的別（カテゴリ）</div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        {cat_links_html}
+      </div>
     </div>
 
-    <div class="mt-10 text-xs opacity-60">
-      <a class="underline" href="./pages/">All pages</a>
+    <div class="mt-8 grid md:grid-cols-2 gap-6">
+      <div>
+        <div class="text-sm font-semibold opacity-80">人気ツール（暫定：スコア上位）</div>
+        <div class="mt-3 grid gap-3">
+          {popular_html}
+        </div>
+      </div>
+      <div>
+        <div class="text-sm font-semibold opacity-80">新着</div>
+        <div class="mt-3 grid gap-3">
+          {newest_html}
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-10">
+      <div class="flex items-center justify-between gap-3">
+        <div class="text-sm font-semibold opacity-80">全ツール（フィルタ/検索）</div>
+        <input id="q" class="w-56 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm"
+               placeholder="search..." />
+      </div>
+      <div id="allList" class="mt-3 grid gap-3">
+        {all_cards_html}
+      </div>
+      <div class="mt-10 text-xs opacity-60">
+        <a class="underline" href="./pages/">All pages</a>
+      </div>
     </div>
   </div>
 
   <script>
+    // theme
     const root = document.documentElement;
     const k = "goliath_theme";
     const saved = localStorage.getItem(k);
     if (saved === "dark") root.classList.add("dark");
-
-    document.getElementById("themeBtn").onclick = () => {
+    document.getElementById("themeBtn").onclick = () => {{
       root.classList.toggle("dark");
       localStorage.setItem(k, root.classList.contains("dark") ? "dark" : "light");
-    };
+    }};
+
+    // filter/search
+    const allCards = Array.from(document.querySelectorAll("#allList > a"));
+    function applyFilter(tag, q) {{
+      const qq = (q || "").toLowerCase().trim();
+      allCards.forEach(a => {{
+        const text = a.innerText.toLowerCase();
+        const okTag = !tag || text.includes(tag.toLowerCase());
+        const okQ = !qq || text.includes(qq);
+        a.style.display = (okTag && okQ) ? "" : "none";
+      }});
+    }}
+    window.filterByTag = (tag) => {{
+      document.getElementById("q").value = "";
+      applyFilter(tag, "");
+      window.scrollTo({{ top: document.getElementById("allList").offsetTop - 20, behavior: "smooth" }});
+    }};
+    document.getElementById("q").addEventListener("input", (e) => {{
+      applyFilter("", e.target.value);
+    }});
   </script>
 </body>
 </html>
 """
-    html = html.replace("__ROWS__", "\n".join(rows))
     write_text(INDEX_PATH, html)
+
+    # ---- sitemap/robots を毎回更新（超重要） ----
+    build_sitemap_and_robots(all_entries, pages_base)
 
 
 def create_github_issue(title: str, body: str):
@@ -1014,7 +1080,7 @@ def post_mastodon(text: str):
 def post_x(text: str):
     """
     Xは無料枠/権限/認証が可変なので、資格情報が揃っているときだけ投げる（揃ってなければ黙ってスキップ）。
-    ここは「壊れないこと優先」で最小実装（Bearerのみだと投稿できないことが多い）。
+    ここは「壊れないこと優先」で最小実装。
     """
     if not (os.getenv("X_API_KEY") and os.getenv("X_API_SECRET") and os.getenv("X_ACCESS_TOKEN") and os.getenv("X_ACCESS_TOKEN_SECRET")):
         return
@@ -1041,10 +1107,6 @@ def extract_keywords(theme: str) -> List[str]:
 
 
 def collect_leads(theme: str) -> List[Dict[str, Any]]:
-    """
-    ツール完成後に「そのツールで解決できそうな悩みURL」を再収集。
-    ここで Bluesky と Mastodon を必ず試みる（鍵が無い場合は空になるが、試行は行う）。
-    """
     keys = extract_keywords(theme)
     leads: List[Dict[str, Any]] = []
     for k in keys:
@@ -1065,9 +1127,6 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
 
 
 def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
-    """
-    返信文（人間らしい / 優しい / 疑問文ベース / 最後にURL）
-    """
     prompt = f"""
 You write a short, natural, polite reply to an online post.
 Rules:
@@ -1149,6 +1208,8 @@ def main():
         return
     client = OpenAI(api_key=api_key)
 
+    pages_base = get_repo_pages_base()
+
     # 1) Collector (Real) -> pick best theme
     items = collector_real()
     best = pick_best_theme(items)
@@ -1162,12 +1223,15 @@ def main():
 
     created_at = now_utc_iso()
     tags = infer_tags_simple(theme)
-    slug = slugify(theme)
+
+    # タイトル（検索寄せ）
+    search_title = make_search_title(theme, tags)
+
+    slug = slugify(search_title)
     folder = f"{int(time.time())}-{slug}"
     page_dir = f"{PAGES_DIR}/{folder}"
     os.makedirs(page_dir, exist_ok=True)
 
-    pages_base = get_repo_pages_base()
     public_url = f"{pages_base}{ROOT}/pages/{folder}/"
     canonical = public_url.rstrip("/")
 
@@ -1203,27 +1267,9 @@ def main():
         )
         return
 
-    # 4) Related sites (existing + seed) and inject JSON
-        # 4) Related sites (existing + seed) and inject JSON
+    # 4) Related sites and inject
     raw_db = read_json(DB_PATH, [])
-    # db.json が壊れて dict になってても落とさない（必ず list に正規化）
-    if isinstance(raw_db, list):
-        all_entries = raw_db
-    elif isinstance(raw_db, dict):
-        # よくある形: {"entries":[...]} を吸収
-        if isinstance(raw_db.get("entries"), list):
-            all_entries = raw_db["entries"]
-        else:
-            # dict の values から list を作る（dict要素だけ採用）
-            vals = [v for v in raw_db.values() if isinstance(v, dict)]
-            all_entries = vals
-    else:
-        all_entries = []
-
-    seed_sites = load_seed_sites()
-    related = pick_related(tags, all_entries, seed_sites, k=8)
-    html = inject_related_json(html, related)
-
+    all_entries = normalize_db(raw_db)
     seed_sites = load_seed_sites()
     related = pick_related(tags, all_entries, seed_sites, k=8)
     html = inject_related_json(html, related)
@@ -1232,10 +1278,11 @@ def main():
     page_path = f"{page_dir}/index.html"
     write_text(page_path, html)
 
-    # 6) Update DB + index
+    # 6) Update DB + hub index + sitemap/robots
     entry = {
         "id": stable_id(created_at, slug),
         "title": (theme or "")[:80],
+        "search_title": search_title,
         "created_at": created_at,
         "path": f"./pages/{folder}",
         "public_url": public_url,
@@ -1248,11 +1295,14 @@ def main():
         "best_score_breakdown": best_table,
         "score_keys": cluster.get("keys", []),
     }
-    update_db_and_index(entry, all_entries)
+    update_db_and_index(entry, all_entries, pages_base)
 
-    # 7) Auto-post (announce)
+    # 7) Auto-post (announce) — 短く固定（CTR優先）
     if ENABLE_AUTO_POST:
-        post_text = f"New tool published: {(theme or '')[:90]}\n{public_url}"
+        # 「何が3秒でできるか」っぽい一言（決め打ちの短文化）
+        short_value = (search_title or "New tool").strip()
+        short_value = short_value[:80]
+        post_text = f"{short_value}\n{public_url}"
         post_bluesky(post_text)
         post_mastodon(post_text)
         post_x(post_text)
@@ -1278,6 +1328,7 @@ def main():
     header = []
     header.append(f"Tool URL: {public_url}")
     header.append(f"Theme: {theme}")
+    header.append(f"Search title: {search_title}")
     header.append(f"Picked from: {best_item.get('source')} / {best_item.get('url')}")
     header.append(f"Best score: {best_score} / breakdown: {json.dumps(best_table, ensure_ascii=False)}")
     header.append(f"Tags: {', '.join(tags)}")
@@ -1297,6 +1348,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-if __name__ == "__main__":
-    main()
