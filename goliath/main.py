@@ -1702,9 +1702,15 @@ def main():
     search_title = make_search_title(theme, tags)
 
     slug = slugify(search_title)
+
+    seen = existing_tool_slugs()
+    slug = ensure_unique_slug(slug, seen)
+
     folder = f"{int(time.time())}-{slug}"
+
     page_dir = f"{PAGES_DIR}/{folder}"
     os.makedirs(page_dir, exist_ok=True)
+    
 
     public_url = f"{pages_base}{ROOT}/pages/{folder}/"
     canonical = public_url.rstrip("/")
