@@ -13,6 +13,23 @@ import os, json, time, re, hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+def existing_tool_slugs() -> set:
+    seen = existing_tool_slugs()
+if tool_slug in seen:
+    # 既に作ったことがあるなら今回スキップ（重複量産防止）
+
+    root = os.path.join(os.path.dirname(__file__), "pages")
+    slugs = set()
+    if not os.path.isdir(root):
+        return slugs
+    for name in os.listdir(root):
+        # 例: 1769181471-template-template-tool
+        m = re.match(r"^\d+-(.+)$", name)
+        if m:
+            slugs.add(m.group(1))
+    return slugs
+
+
 KEYWORDS = [
     "help","need help","anyone know","any idea","how do i","how to","can't","cannot","won't",
     "stuck","blocked","error","bug","issue","problem","failed","failure","broken","crash",
@@ -50,6 +67,11 @@ def _norm(s: str) -> str:
     return s
 
 def _fingerprint(theme: str, tags: List[str]) -> str:
+    ban_words = ["template", "boilerplate", "starter", "scaffold"]
+tlow = theme.lower()
+if any(w in tlow for w in ban_words):
+    return  # 今回のテーマ候補から除外
+
     base = _norm(theme) + "|" + "|".join(sorted(_norm(t) for t in (tags or [])))
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
