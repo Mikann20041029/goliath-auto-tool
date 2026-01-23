@@ -471,6 +471,64 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
         return uniq[:limit]
     except Exception:
         return out[:limit]
+def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
+    """
+    X Free: 100 reads/月, 500 posts/月。:contentReference[oaicite:1]{index=1}
+    8時間ごと(=月90回)運用なら、1 run あたり reads<=1, posts<=5 が安全。
+    ここでは reads 1 だけで「自分宛の最近のメンション」等から拾う想定。
+    """
+    runs_per_month = int(os.getenv("RUNS_PER_MONTH", "90"))
+    max_reads_month = int(os.getenv("X_READS_PER_MONTH", "100"))
+    max_reads_run = max(1, max_reads_month // max(1, runs_per_month))  # だいたい1
+
+    # 認証情報（既にSecretsにある前提）
+    api_key = os.getenv("X_API_KEY", "")
+    api_secret = os.getenv("X_API_SECRET", "")
+    access_token = os.getenv("X_ACCESS_TOKEN", "")
+    access_secret = os.getenv("X_ACCESS_SECRET", "")
+
+    if not (api_key and api_secret and access_token and access_secret):
+        return []
+
+    try:
+        import tweepy
+    except Exception:
+        return []
+
+    out: List[Dict[str, Any]] = []
+
+    # 注意: Xの権限/プラン次第で取れるエンドポイントが変わる
+    # ここは「取れたらラッキー、取れなきゃ空でOK」の設計にする
+    try:
+        client = tweepy.Client(
+            consumer_key=api_key,
+            consumer_secret=api_secret,
+            access_token=access_token,
+            access_token_secret=access_secret,
+            wait_on_rate_limit=True,
+        )
+
+        # reads を節約するため limit=1（= max_reads_run）だけ試す
+        # 例: 自分宛メンション（環境/権限で不可の可能性あり）
+        me = client.get_me(user_auth=True)
+        if not me or not me.data:
+            return []
+        user_id = me.data.id
+
+        # ここも権限で落ちる可能性があるので try/except
+        resp = client.get_users_mentions(id=user_id, max_results=min(5, max_reads_run))
+        if not resp or not resp.data:
+            return []
+
+        for tw in resp.data[:max_reads_run]:
+            txt = (tw.text or "")[:300]
+            url = f"https://x.com/i/web/status/{tw.id}"
+            out.append({"source": "X", "text": txt, "url": url, "meta": {}})
+
+    except Exception:
+        return []
+
+    return out
 
 
 def collector_real() -> List[Dict[str, Any]]:
