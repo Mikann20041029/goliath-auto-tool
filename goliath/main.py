@@ -1171,34 +1171,41 @@ def extract_keywords(theme: str) -> List[str]:
     return base[:6] if base else ["tool"]
 
 
-def collect_leads(theme: str) -> List[Dict[str, Any]]:
+def collect_leads(theme: str) -> list[dict]:
+    """
+    Issueに出す「悩みURL + 返信文」用リードはSNSのみから集める。
+    HNは「ツール生成のネタ集め」では使ってOKだが、Issue用リードでは使わない。
+    """
+    import os
+    from datetime import datetime, timedelta, timezone
+
+    # 何件集めるか（少なめ推奨）
+    LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "40"))
+    PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "20"))
+
+    # days=730 指定（ただしXは原則 recent search の都合で最大7日に丸める）
+    DAYS = int(os.getenv("LEADS_DAYS", "730"))
+
+    # 既存のキーワード抽出関数を使う想定
     keys = extract_keywords(theme)
-    leads: List[Dict[str, Any]] = []
+    query = " OR ".join(keys[:6]) if keys else theme
 
-    b = collect_bluesky(LEADS_PER_SOURCE)
-    m = collect_mastodon(LEADS_PER_SOURCE)
-    leads.extend(b)
-    leads.extend(m)
+    leads: list[dict] = []
+    leads.extend(bluesky_search(query=query, limit=PER_SOURCE, days=DAYS))
+    leads.extend(mastodon_search_wrap(query=query, limit=PER_SOURCE, days=DAYS))
+    leads.extend(x_search_wrap(query=query, limit=PER_SOURCE, days=DAYS))
 
-    if len(leads) < LEADS_TOTAL:
-        for k in keys:
-            leads.extend(hn_search(f"Ask HN {k}", limit=20, ask_only=True))
-
-    if len(b) == 0 or len(m) == 0:
-        report_source_counts(
-            {"Leads_Bluesky": len(b), "Leads_Mastodon": len(m), "Leads_total": len(leads)},
-            "Leads are SNS-first. If SNS is 0, check requirements/secrets."
-        )
-
+    # 重複URLを落とす
     seen = set()
     uniq = []
     for it in leads:
-        u = it.get("url") or ""
+        u = (it.get("url") or "").strip()
         if not u or u in seen:
             continue
         seen.add(u)
         uniq.append(it)
-    return uniq
+
+    return uniq[:LEADS_TOTAL]
 
 
 def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
