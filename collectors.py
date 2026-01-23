@@ -71,6 +71,14 @@ def collect_hn(queries: List[str], days_back: int, limit_per_query: int) -> List
                 continue
 
             hn_url = f"https://news.ycombinator.com/item?id={object_id}"
+            acct = ((st.get("account") or {}).get("acct") or "").lower()
+url_l = (url or "").lower()
+
+if acct == "mikann20041029" or acct.endswith("@mastodon.social") and acct.startswith("mikann20041029"):
+    continue
+if "/@mikann20041029/" in url_l:
+    continue
+
             out.append({"text": text, "url": hn_url, "platform": "hn"})
 
         time.sleep(0.2)
