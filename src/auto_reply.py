@@ -1,45 +1,62 @@
 import os
 import json
 import re
-from urllib.parse import urlparse
 from atproto import Client as BlueskyClient
 from mastodon import Mastodon
 
 def parse_issue_body(body: str):
-    """Issue body をパースしてドラフトリストを返す"""
-    drafts = []
-    blocks = re.split(r'-{3,}', body)  # "---" 以上で区切る
-    current = {}
+    print("=== Raw Issue Body Start ===")
+    print(body)
+    print("=== Raw Issue Body End ===")
     
-    for block in blocks:
+    drafts = []
+    # Issue本文を#1, #2,... で分割（空行考慮）
+    blocks = re.split(r'(?=\n?#\d+\s*\[)', body.strip())
+    print(f"Split into {len(blocks)} potential blocks")
+    
+    for i, block in enumerate(blocks):
         block = block.strip()
-        if not block:
+        if not block or not block.startswith('#'):
             continue
-            
-        # プラットフォーム行を探す (例: 1) [BLUESKY])
-        platform_match = re.search(r'\d+\)\s*\[([^\]]+)\]', block)
+        print(f"\n--- Processing Block {i+1} ---")
+        print(block)
+        
+        # プラットフォーム抽出: #1 [HN] や #2 [Bluesky]
+        platform_match = re.search(r'#\d+\s*\[([^\]]+)\]', block, re.IGNORECASE)
         if platform_match:
-            current = {"platform": platform_match.group(1).strip().upper()}
+            platform = platform_match.group(1).strip().upper()
+            print(f"Found platform: {platform}")
+        else:
+            continue
         
-        # TARGET_URL
-        url_match = re.search(r'TARGET_URL:\s*(https?://[^\s]+)', block, re.IGNORECASE)
-        if url_match and current:
-            current["target_url"] = url_match.group(1).strip()
+        # URL抽出: https://... の最初の行
+        url_match = re.search(r'https?://[^\s\n]+', block)
+        if url_match:
+            target_url = url_match.group(0).rstrip('.').strip()
+            print(f"Found URL: {target_url}")
+        else:
+            continue
         
-        # REPLY_DRAFT（複数行対応）
-        reply_match = re.search(r'REPLY_DRAFT:\s*([\s\S]*?)(?=\n\d+\)|\n---|$)', block, re.IGNORECASE)
-        if reply_match and current.get("target_url"):
+        # 返信文抽出: "返信文:" 以降全部（複数行OK）
+        reply_match = re.search(r'返信文:\s*([\s\S]*?)(?=\n?#\d+|$)', block, re.IGNORECASE)
+        if reply_match:
             reply_text = reply_match.group(1).strip()
             if reply_text:
-                current["reply"] = reply_text
-                drafts.append(current.copy())
-                current = {}  # リセット
+                print(f"Found reply text ({len(reply_text)} chars): {reply_text[:100]}...")
+                drafts.append({
+                    "platform": platform,
+                    "target_url": target_url,
+                    "reply": reply_text
+                })
     
+    print(f"\nParsed {len(drafts)} valid drafts")
     return drafts
 
+# post_to_bluesky と post_to_mastodon は変更なし（ログ強化版のまま）
 def post_to_bluesky(target_url: str, reply_text: str):
-    handle = os.environ.get('BLUESKY_HANDLE')
-    app_password = os.environ.get('BLUESKY_APP_PASSWORD')
+    handle = os.environ.get('BSKY_HANDLE')  # ← ここ修正！君のSecrets名に合わせる
+    app_password = os.environ.get('BSKY_PASSWORD')
+    print(f"Bluesky creds: handle={handle[:5] if handle else 'None'}..., password={'set' if app_password else 'missing'}")
     if not handle or not app_password:
         print("Bluesky credentials missing → skip")
         return False
@@ -47,8 +64,8 @@ def post_to_bluesky(target_url: str, reply_text: str):
     try:
         client = BlueskyClient()
         client.login(handle, app_password)
+        print("Bluesky login success")
         
-        # URLからpost情報を抽出
         match = re.search(r'/profile/([^/]+)/post/([^/]+)', target_url)
         if not match:
             print(f"Invalid Bluesky URL: {target_url}")
@@ -56,24 +73,23 @@ def post_to_bluesky(target_url: str, reply_text: str):
         
         author_handle = match.group(1)
         rkey = match.group(2)
-        
-        # 対象ポストのURIを構築
         root_uri = f"at://{author_handle}/app.bsky.feed.post/{rkey}"
+        print(f"Replying to: {root_uri}")
         
-        # リプライ投稿
         client.send_post(
             text=reply_text,
             reply_to={'root': {'uri': root_uri, 'cid': None}, 'parent': {'uri': root_uri, 'cid': None}}
         )
-        print(f"Bluesky reply sent: {target_url}")
+        print(f"Bluesky SUCCESS: {target_url}")
         return True
     except Exception as e:
-        print(f"Bluesky error ({target_url}): {e}")
+        print(f"Bluesky ERROR: {str(e)}")
         return False
 
 def post_to_mastodon(target_url: str, reply_text: str):
     access_token = os.environ.get('MASTODON_ACCESS_TOKEN')
-    instance_url = os.environ.get('MASTODON_INSTANCE_URL')
+    instance_url = os.environ.get('MASTODON_API_BASE')  # ← 君のSecrets名に合わせる（API_BASE）
+    print(f"Mastodon creds: token={'set' if access_token else 'missing'}, base={instance_url}")
     if not access_token or not instance_url:
         print("Mastodon credentials missing → skip")
         return False
@@ -83,22 +99,21 @@ def post_to_mastodon(target_url: str, reply_text: str):
             access_token=access_token,
             api_base_url=instance_url.rstrip('/')
         )
+        print("Mastodon init success")
         
-        # URLからstatus ID抽出（最後がID）
-        status_id = target_url.split('/')[-1]
+        status_id = target_url.split('/')[-1].split('?')[0]
         if not status_id.isdigit():
-            print(f"Invalid Mastodon status ID: {target_url}")
+            print(f"Invalid Mastodon ID: {status_id}")
             return False
         
-        mastodon.status_post(status=reply_text, in_reply_to_id=status_id)
-        print(f"Mastodon reply sent: {target_url}")
+        mastodon.status_post(status=reply_text, in_reply_to_id=int(status_id))
+        print(f"Mastodon SUCCESS: {target_url}")
         return True
     except Exception as e:
-        print(f"Mastodon error ({target_url}): {e}")
+        print(f"Mastodon ERROR: {str(e)}")
         return False
 
 def main():
-    # GitHub Actions のイベントペイロード取得
     event_path = os.environ.get('GITHUB_EVENT_PATH')
     if not event_path:
         print("No event path")
@@ -114,31 +129,28 @@ def main():
     
     drafts = parse_issue_body(issue_body)
     if not drafts:
-        print("No valid drafts found")
+        print("WARNING: No valid drafts parsed")
         return
     
-    print(f"Found {len(drafts)} drafts")
-    
     success_count = 0
-    for d in drafts:
-        platform = d.get('platform', '').upper()
-        url = d.get('target_url', '')
-        text = d.get('reply', '')
+    for i, d in enumerate(drafts, 1):
+        print(f"\nProcessing {i}/{len(drafts)}: {d['platform']} - {d['target_url']}")
+        platform = d['platform'].upper()
+        url = d['target_url']
+        text = d['reply']
         
-        if not url or not text:
-            print("Missing url or text → skip")
-            continue
-        
-        if platform == 'BLUESKY':
+        if platform in ['BLUESKY', 'BSKY']:
             if post_to_bluesky(url, text):
                 success_count += 1
-        elif platform in ['MASTODON', 'MSTD']:  # 表記揺れ対策
+        elif platform in ['MASTODON', 'MSTD', 'MASTO']:
             if post_to_mastodon(url, text):
                 success_count += 1
+        elif platform == 'HN' or platform == 'X':
+            print(f"Skipping {platform} (no API support yet)")
         else:
-            print(f"Unsupported platform: {platform}")
+            print(f"Unsupported: {platform}")
     
-    print(f"Completed: {success_count}/{len(drafts)} replies sent")
+    print(f"\n=== FINAL: {success_count}/{len(drafts)} sent ===")
 
 if __name__ == '__main__':
     main()
