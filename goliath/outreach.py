@@ -96,18 +96,19 @@ def pick_best_tool(db: List[Dict[str, Any]], text: str) -> Tuple[Optional[Dict[s
 def openai_reply_text(client: OpenAI, platform: str, post_text: str, tool_title: str, tool_url: str) -> str:
     # 「疑問文に適した優しい口調で違和感ない言葉に続けてURLを添える」固定
     prompt = f"""
-You are writing a short public reply on {platform}.
-Goal: help the user, not advertise.
+You write a short, natural, polite reply to an online post.
 Rules:
-- Write in natural English.
-- Must sound friendly and non-salesy.
-- Must include exactly ONE question mark in the whole reply.
-- Must include the tool URL exactly once: {tool_url}
-- Keep under 320 characters if platform is X, otherwise under 450 characters.
-- Mention the tool name naturally: "{tool_title}"
-Context (their post):
+- Tone: kind, non-spammy, helpful.
+- End with a gentle question.
+- Append the tool URL at the end on a new line.
+- Do NOT mention "AI", "automation", "bot".
+- Keep it under 280 characters if possible.
+
+Post:
 {post_text}
-Return ONLY the reply text.
+
+Tool URL:
+{tool_url}
 """.strip()
 
     r = client.chat.completions.create(
