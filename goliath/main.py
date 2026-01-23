@@ -230,6 +230,9 @@ def make_search_title(theme: str, tags: List[str]) -> str:
 # =========================
 # Scoring (ポイント制)
 # =========================
+score = int(sum(table.values()))
+return score, table
+
 def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str, int]]:
     """
     ポイント表（見える形）
