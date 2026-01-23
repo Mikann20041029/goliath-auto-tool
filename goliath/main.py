@@ -1050,6 +1050,15 @@ def create_github_issue(title: str, body: str):
             print("[issue] created:", data.get("html_url"))
     except Exception as e:
         print("[issue] exception:", repr(e))
+def report_source_counts(counts: Dict[str, int], notes: str = ""):
+    msg = []
+    msg.append("Source counts (collector/leads):")
+    for k, v in counts.items():
+        msg.append(f"- {k}: {v}")
+    if notes:
+        msg.append("")
+        msg.append(notes)
+    create_github_issue("[Goliath] Source debug report", "\n".join(msg))
 
 
 def post_bluesky(text: str):
