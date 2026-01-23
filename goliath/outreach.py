@@ -426,3 +426,162 @@ def main():
 
 if __name__ == "__main__":
     main()
+# === Social-only outreach collection (no HN), with "days" filter ===
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _cutoff(days: int) -> datetime:
+    return _utcnow() - timedelta(days=int(days))
+
+def _to_dt(v: Any) -> Optional[datetime]:
+    """
+    Normalize timestamps from various SDKs to aware datetime(UTC).
+    Accepts:
+      - datetime
+      - ISO string (e.g. "2026-01-22T12:34:56.789Z")
+      - None
+    """
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.astimezone(timezone.utc) if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    if isinstance(v, str):
+        s = v.strip()
+        try:
+            # Handle Z
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+    return None
+
+def collect_bluesky_days(query: str, limit: int = 30, days: int = 730) -> List[Dict[str, Any]]:
+    """
+    Bluesky search with client-side cutoff filtering (days).
+    Requires: atproto Client, BSKY_HANDLE/BSKY_PASSWORD in env (your code already uses this).
+    """
+    cutoff = _cutoff(days)
+    try:
+        # You already import/use atproto Client somewhere; reuse your existing client init if you have it.
+        from atproto import Client as BlueskyClient  # type: ignore
+    except Exception:
+        return []
+
+    handle = (os.getenv("BSKY_HANDLE") or "").strip()
+    pw = (os.getenv("BSKY_PASSWORD") or "").strip()
+    if not handle or not pw:
+        return []
+
+    try:
+        cli = BlueskyClient()
+        cli.login(handle, pw)
+    except Exception:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    cursor = None
+    # Try to get enough results while respecting cutoff
+    for _ in range(6):  # small pagination budget
+        try:
+            # atproto: app.bsky.feed.searchPosts
+            res = cli.app.bsky.feed.search_posts({"q": query, "limit": min(100, max(1, limit)), "cursor": cursor})
+        except Exception:
+            break
+
+        posts = (res.get("posts") or [])
+        cursor = res.get("cursor")
+
+        for p in posts:
+            created = _to_dt(p.get("record", {}).get("createdAt"))
+            if created and created < cutoff:
+                continue
+            uri = p.get("uri") or ""
+            text = (p.get("record", {}).get("text") or "").strip()
+            if not uri or not text:
+                continue
+            out.append({"source": "Bluesky", "text": text, "url": uri, "meta": {"created_at": (created.isoformat() if created else None)}})
+            if len(out) >= limit:
+                return out
+
+        if not cursor:
+            break
+
+    return out[:limit]
+
+def collect_mastodon_days(query: str, limit: int = 30, days: int = 730) -> List[Dict[str, Any]]:
+    """
+    Mastodon search with client-side cutoff filtering (days).
+    Requires: Mastodon.py, MASTODON_API_BASE, MASTODON_ACCESS_TOKEN in env.
+    """
+    cutoff = _cutoff(days)
+
+    try:
+        from mastodon import Mastodon  # type: ignore
+    except Exception:
+        return []
+
+    base = (os.getenv("MASTODON_API_BASE") or "").strip().rstrip("/")
+    tok = (os.getenv("MASTODON_ACCESS_TOKEN") or "").strip()
+    if not base or not tok:
+        return []
+
+    try:
+        m = Mastodon(access_token=tok, api_base_url=base)
+    except Exception:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    try:
+        # `search_v2` exists on Mastodon.py>=1.8; fallback to `search` if needed
+        if hasattr(m, "search_v2"):
+            res = m.search_v2(q=query, result_type="statuses", limit=min(40, max(1, limit)))
+            statuses = (res.get("statuses") or [])
+        else:
+            res = m.search(q=query, result_type="statuses", limit=min(40, max(1, limit)))
+            statuses = (res.get("statuses") or [])
+    except Exception:
+        return []
+
+    for st in statuses:
+        created = _to_dt(getattr(st, "created_at", None) if not isinstance(st, dict) else st.get("created_at"))
+        if created and created < cutoff:
+            continue
+        url = getattr(st, "url", None) if not isinstance(st, dict) else st.get("url")
+        content = getattr(st, "content", None) if not isinstance(st, dict) else st.get("content")
+        if not url:
+            continue
+        # content is HTML; keep it short-ish and strip tags minimally if you want
+        text = (content or "").strip()
+        if not text:
+            text = "(no text)"
+        out.append({"source": "Mastodon", "text": text, "url": str(url), "meta": {"created_at": (created.isoformat() if created else None)}})
+        if len(out) >= limit:
+            break
+
+    return out[:limit]
+
+def collect_social_only_days(query: str, limit_per_source: int = 30, days: int = 730) -> List[Dict[str, Any]]:
+    """
+    Social-only (Bluesky + Mastodon), NO HN fallback.
+    """
+    out: List[Dict[str, Any]] = []
+    out.extend(collect_bluesky_days(query, limit=limit_per_source, days=days))
+    out.extend(collect_mastodon_days(query, limit=limit_per_source, days=days))
+
+    # de-dupe by URL
+    seen = set()
+    uniq = []
+    for it in out:
+        u = it.get("url")
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        uniq.append(it)
+    return uniq
