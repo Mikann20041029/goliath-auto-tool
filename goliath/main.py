@@ -954,29 +954,39 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 - Dark/Light mode toggle (CSS class switch) and respect saved theme in localStorage.
 
 [Navigation]
-- Add a top nav link back to the hub: href="../../index.html" (label: "All tools")
-- Add a footer link back to hub as well.
+- Add a top nav link back to the hub: href="../../index.html" (label must be translated via i18n)
+- Add a footer link back to hub as well (translated via i18n).
 
 [Tool]
 - Implement an interactive JS mini-tool relevant to the theme (static, no server).
 - Must work without any server.
 
 [Content]
-- Include a Japanese long-form article >= 2500 Japanese characters.
+- Include a long-form article primarily in English (>= 1200 English words).
+- Also include Japanese full translation of the article (>= 2500 Japanese characters).
 - Use clear structure with H2/H3 headings, checklist, pitfalls, FAQ(>=5).
 - Add "References" section with 8-12 reputable external links (official docs / well-known sites).
 
-[Multi-language]
+[Multi-language - VERY STRICT]
+- Default language MUST be English ("en").
 - Provide a WORKING language switcher for JA/EN/FR/DE (must work on mobile).
-- The switcher MUST be a <select> with id="langSelect" and options: ja,en,fr,de.
+- The switcher MUST be a <select> with id="langSelect" and options: en,ja,fr,de (in that order).
+- EVERY visible text on the page MUST be translatable via i18n keys:
+  - All UI labels, buttons, nav, footer, headings, paragraphs, checklist items, FAQ questions & answers,
+    policy sections text, and any notices.
+- Do NOT hardcode visible strings directly in HTML outside i18n keys.
 - Any translatable UI text MUST use data-i18n keys. Example: <span data-i18n="hero.title"></span>
-- Provide a JS dictionary exactly as: window.__I18N__ = {{ ja:{{...}}, en:{{...}}, fr:{{...}}, de:{{...}} }}
+- For placeholders use data-i18n-placeholder.
+- For title attributes use data-i18n-title.
+- For aria-label use data-i18n-aria.
+- Provide a JS dictionary exactly as: window.__I18N__ = { en:{...}, ja:{...}, fr:{...}, de:{...} }
 - Provide a JS initializer that:
-  - reads saved language from localStorage key "goliath_lang" (fallback to "ja")
+  - reads saved language from localStorage key "goliath_lang" (fallback to "en")
   - sets <html lang="..">
   - fills all [data-i18n] elements from window.__I18N__[lang][key]
+  - also applies placeholder/title/aria-label using data-i18n-placeholder/data-i18n-title/data-i18n-aria
   - wires change event on #langSelect to re-render
-- Article can be JA primary; provide short EN/FR/DE summary sections.
+- Ensure the article section headings and ALL article paragraphs/bullets/FAQ are also i18n-driven.
 
 [Compliance / Footer]
 - Auto-generate in-page sections for:
@@ -986,6 +996,7 @@ Create a modern SaaS-style tool page to solve: "{theme}"
   - About / Operator info
   - Contact
 - These must be accessible via footer links using in-page anchors.
+- All text in these sections MUST be i18n-driven.
 
 [Related Sites]
 - Include a "Related sites" section near bottom as a list:
@@ -1000,6 +1011,7 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 
 Return ONLY the final HTML.
 """.strip()
+
 
 
 def openai_generate_html(client: OpenAI, prompt: str) -> str:
