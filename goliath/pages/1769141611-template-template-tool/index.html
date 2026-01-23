@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ja" class="bg-white text-gray-900">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Goテンプレートファイル自動生成ツール – GoGen | テンプレートベース自動生成</title>
+  <meta name="description" content="GoGenはGo言語のテンプレートからファイルを自動生成できるシンプルなWebツール。Goテンプレートを使った開発効率化や雛形生成に最適。">
+  <link rel="canonical" href="https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769141611-template-template-tool">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body, html { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+    ::selection { background: #c7d2fe; }
+    .glass {
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 1.25rem;
+      box-shadow: 0 2px 32px -8px rgba(50,80,170,0.09);
+    }
+    .dark .glass {
+      background: rgba(27, 34, 58, 0.47);
+      color: #eceefa;
+      box-shadow: 0 6px 36px -10px rgba(35,55,110,0.27);
+    }
+    .transition-colors {
+      transition: background 0.2s, color 0.2s;
+    }
+  </style>
+</head>
+<body class="bg-white dark:bg-gray-950 dark:text-gray-100 transition-colors">
+
+  <!-- Navigation -->
+  <nav class="flex items-center justify-between px-6 py-4 bg-white/70 dark:bg-gray-900/70 backdrop-blur z-20 shadow">
+    <div>
+      <a href="../../index.html" class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline" data-i18n="nav.all_tools">全てのツール</a>
+    </div>
+    <div class="flex gap-2 items-center">
+      <select id="langSelect" class="rounded border-gray-300 dark:bg-gray-800 dark:text-gray-100 text-sm focus:ring-indigo-500 px-2 py-1" aria-label="言語切替">
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+      </select>
+      <button id="darkToggle" class="transition-colors p-2 rounded-full hover:bg-indigo-50 dark:hover:bg-gray-800" aria-label="テーマ切り替え">
+        <svg id="darkIconSun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+        </svg>
+        <svg id="darkIconMoon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 0112.21 3c-3.92 0-7.17 2.68-8.31 6.36a7 7 0 009.92 9.92A9 9 0 0021 12.79z"></path>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="max-w-4xl mx-auto mt-12 px-6">
+    <h1 class="text-4xl md:text-5xl font-bold text-indigo-700 dark:text-indigo-200 mb-4 tracking-tight drop-shadow-sm" data-i18n="hero.title">GoGen – Goテンプレート自動生成ツール</h1>
+    <p class="text-lg md:text-xl text-gray-700 dark:text-gray-300 mb-6 max-w-2xl" data-i18n="hero.subtitle">
+      Goテンプレートから自由にファイルを簡単生成。開発現場の雛形作成やドキュメント自動化を爆速で。
+    </p>
+  </section>
+
+  <!-- Tool Card: Goテンプレートファイル自動生成 -->
+  <section class="flex items-center justify-center py-12 px-2">
+    <div class="glass max-w-2xl w-full px-7 py-8 shadow-xl space-y-6">
+      <h2 class="text-2xl font-semibold text-indigo-600 dark:text-indigo-300 mb-3 flex items-center gap-2">
+        <svg class="w-6 h-6 text-indigo-400 dark:text-indigo-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v16c0 .554.445 1 1 1h14c.555 0 1-.446 1-1V4" /><path d="M4 8h16" /><path d="M16 3v5" /><path d="M8 3v5" /></svg>
+        <span data-i18n="tool.title">Goテンプレート ファイル自動生成</span>
+      </h2>
+      <form id="gogenForm" class="space-y-4" autocomplete="off">
+        <div>
+          <label class="block font-medium mb-1" for="templateInput" data-i18n="tool.template_label">テンプレート</label>
+          <textarea id="templateInput" data-i18n-placeholder="tool.template_placeholder" rows="6" class="w-full bg-white/75 dark:bg-gray-800/70 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-base font-mono focus:ring-2 focus:ring-indigo-300 transition-colors" placeholder="{{.Name}}様へ&#10;本日は{{.Date}}です。"></textarea>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="varsInput" data-i18n="tool.vars_label">変数(JSON形式)</label>
+          <textarea id="varsInput" data-i18n-placeholder="tool.vars_placeholder" rows="3" class="w-full bg-white/75 dark:bg-gray-800/70 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-base font-mono focus:ring-2 focus:ring-indigo-300 transition-colors" placeholder='{"Name": "太郎", "Date": "2024-06-12"}'></textarea>
+        </div>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold px-5 py-2 rounded shadow transition-colors focus:ring-2 focus:ring-indigo-300" data-i18n="tool.generate_btn">ファイル生成</button>
+          <button type="button" id="toolCopyBtn" class="bg-gray-100 dark:bg-gray-900 text-indigo-700 dark:text-indigo-300 border border-gray-300 dark:border-gray-700 font-medium px-4 py-2 rounded hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors" data-i18n="tool.copy_btn">コピー</button>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="output" data-i18n="tool.output_label">出力結果</label>
+          <textarea readonly id="output" rows="6" class="w-full bg-indigo-50/70 dark:bg-gray-900/40 border border-indigo-200 dark:border-gray-800 rounded-lg px-3 py-2 text-base font-mono text-indigo-900 dark:text-indigo-100 resize-y focus:outline-none select-text" data-i18n-placeholder="tool.output_placeholder" placeholder="ここに生成結果が表示されます"></textarea>
+        </div>
+        <div id="toolErr" class="text-red-600 font-medium min-h-5"></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Article & Content -->
+  <main class="max-w-2xl mx-auto px-6 pb-16" id="mainContent">
+    <article class="prose prose-indigo dark:prose-invert leading-relaxed text-lg max-w-full">
+      <h2 data-i18n="article.intro_title">Goテンプレート自動生成ツールの活用ガイド</h2>
+      <p data-i18n="article.intro">
+        Go言語のテンプレート（text/template, html/template）は高い柔軟性と安全性を持ち、ドキュメント・設定ファイル・コードスニペットの自動生成で非常によく利用されます。本ツール「GoGen」はWeb上でサクッとテンプレートに変数を流し込んでファイルを生成できるサービスです。この記事では実活用シーン、便利な使い方、落とし穴、FAQなどを詳しくご紹介します。
+      </p>
+
+      <h3 data-i18n="article.usecases_title">利用ユースケース例</h3>
+      <ul class="list-disc pl-6">
+        <li data-i18n="article.usecases_1">社内外メールやお知らせ文書の自動雛形作成</li>
+        <li data-i18n="article.usecases_2">APIドキュメント、README自動化</li>
+        <li data-i18n="article.usecases_3">設定ファイル(config.yaml等)の自動投入</li>
+        <li data-i18n="article.usecases_4">Goコードスニペットやテンプレ実装の生成</li>
+        <li data-i18n="article.usecases_5">顧客ごとのPDF・案内文・伝票等の一括生成</li>
+      </ul>
+
+      <h3 data-i18n="article.howto_title">使い方ステップ</h3>
+      <ol class="list-decimal pl-6">
+        <li data-i18n="article.howto_1">テンプレート欄にGoテンプレート構文で本文を記述</li>
+        <li data-i18n="article.howto_2">変数欄にJSON形式でデータ（例: {"Name":"太郎"}）を入力</li>
+        <li data-i18n="article.howto_3">「ファイル生成」→下部に出力が生成、コピー・活用可能</li>
+      </ol>
+
+      <h3 data-i18n="article.checklist_title">実務利用前のチェックリスト</h3>
+      <ul class="list-check pl-6 space-y-1">
+        <li data-i18n="article.check_1">テンプレート内で使う全変数がJSONに存在するか</li>
+        <li data-i18n="article.check_2">Goテンプレート構文にシンタックスエラーが無いか</li>
+        <li data-i18n="article.check_3">改行・空白・エンコーディングが想定通りか</li>
+        <li data-i18n="article.check_4">自動変換される文字（&lt;, &gt;, &amp;等）への注意</li>
+        <li data-i18n="article.check_5">外部データ転送前に個人情報流出に注意</li>
+      </ul>
+
+      <h3 data-i18n="article.pitfalls_title">よくある落とし穴</h3>
+      <ul class="list-disc pl-6">
+        <li data-i18n="article.pitfalls_1">{{ '{{.Variable}}' }}のスペルミスで空欄になる</li>
+        <li data-i18n="article.pitfalls_2">JSONでダブルクォート不足やカンマ漏れ（シンタックスエラー）</li>
+        <li data-i18n="article.pitfalls_3">数字・真偽値の型違いで出力が想定外</li>
+        <li data-i18n="article.pitfalls_4">テンプレート内の条件分岐（if/else）が正しく機能しない</li>
+        <li data-i18n="article.pitfalls_5">サーバにアップロード不要のためローカルのみで完結可能</li>
+      </ul>
+
+      <h3 data-i18n="article.faq_title">FAQ</h3>
+      <dl>
+        <dt data-i18n="article.faq_q1">Q. 入力したテンプレートや変数は保存されますか？</dt>
+        <dd data-i18n="article.faq_a1">A. いいえ、サーバに送信せず、全てブラウザ内だけで処理されます。</dd>
+        <dt data-i18n="article.faq_q2">Q. どこまでGoテンプレート構文に対応していますか？</dt>
+        <dd data-i18n="article.faq_a2">A. 基本の置換、関数呼び出し、if/else、range構文に対応しています。</dd>
+        <dt data-i18n="article.faq_q3">Q. セキュリティ上のリスクはありますか？</dt>
+        <dd data-i18n="article.faq_a3">A. 外部送信はありませんが、入力データにはご注意ください。</dd>
+        <dt data-i18n="article.faq_q4">Q. 複雑なテンプレートはどこまで動きますか？</dt>
+        <dd data-i18n="article.faq_a4">A. JS実装のため、完全なGo互換ではありません。単純なものを推奨します。</dd>
+        <dt data-i18n="article.faq_q5">Q. 結果を一括ダウンロードできますか？</dt>
+        <dd data-i18n="article.faq_a5">A. 現状、コピーや手動保存のみ対応ですが将来拡張予定です。</dd>
+      </dl>
+
+      <h3 data-i18n="article.references_title">参考・公式ドキュメント</h3>
+      <ul class="pl-6 list-none" id="refList">
+        <li><a href="https://golang.org/pkg/text/template/" target="_blank" rel="noopener">Go公式: text/template package</a></li>
+        <li><a href="https://golang.org/pkg/html/template/" target="_blank" rel="noopener">Go公式: html/template package</a></li>
+        <li><a href="https://astaxie.gitbooks.io/build-web-application-with-golang/content/ja/06.5.html" target="_blank" rel="noopener">GoでWebアプリを書く（日本語）</a></li>
+        <li><a href="https://zetcode.com/golang/texttemplate/" target="_blank" rel="noopener">Go text/template by ZetCode</a></li>
+        <li><a href="https://medium.com/golang-jp/template-engine-in-go-7fd1548c9ad4" target="_blank" rel="noopener">Goのテンプレートエンジン詳解</a></li>
+        <li><a href="https://stackoverflow.com/questions/tagged/go-templates" target="_blank" rel="noopener">StackOverflow: go-templates</a></li>
+        <li><a href="https://pkg.go.dev/text/template" target="_blank" rel="noopener">pkg.go.dev: text/template</a></li>
+        <li><a href="https://go.dev/doc/articles/wiki/" target="_blank" rel="noopener">Go公式Wikiサンプル</a></li>
+        <li><a href="https://qiita.com/fujiwara/items/893fc0a6e98a3e303c87" target="_blank" rel="noopener">Qiita: Go テンプレートの使い方</a></li>
+      </ul>
+
+      <h3 data-i18n="article.otherlang_title">他言語による概要</h3>
+      <div class="border rounded p-4 mt-2">
+        <div>
+          <h4 class="font-semibold text-base text-indigo-600 mb-1">English</h4>
+          <div data-i18n="article.summary_en">GoGen is a browser-based tool for generating files with Go template syntax. Simply input your template and variables in JSON; no server upload required. Ideal for documentation or configuration scaffolding.</div>
+        </div>
+        <div class="mt-1">
+          <h4 class="font-semibold text-base text-indigo-600 mb-1">Français</h4>
+          <div data-i18n="article.summary_fr">GoGen est un outil en ligne pour générer des fichiers à partir de modèles Go. Saisissez votre modèle et vos variables au format JSON, tout reste sur votre navigateur. Parfait pour automatiser la documentation.</div>
+        </div>
+        <div class="mt-1">
+          <h4 class="font-semibold text-base text-indigo-600 mb-1">Deutsch</h4>
+          <div data-i18n="article.summary_de">GoGen ist ein browserbasiertes Werkzeug zur Dateigenerierung mit Go-Templates. Geben Sie Vorlage und Variablen (JSON) ein, alles bleibt lokal. Optimal für Dokumentations- und Konfigurations-Workflows.</div>
+        </div>
+      </div>
+    </article>
+  </main>
+
+  <!-- Related Sites (hidden if empty) -->
+  <section id="relatedSitesSection" class="max-w-2xl mx-auto px-6 pb-9 hidden">
+    <h3 class="text-xl font-semibold mt-8 mb-2 text-indigo-700 dark:text-indigo-200" data-i18n="related.title">関連サイト</h3>
+    <ul id="relatedSitesList" class="list-disc pl-8 space-y-1"></ul>
+  </section>
+
+  <!-- Footer/Compliance Nav -->
+  <footer class="px-6 py-10 pt-14 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-t dark:border-gray-800">
+    <div class="max-w-3xl mx-auto flex flex-col md:flex-row items-center md:justify-between gap-4">
+      <div class="flex gap-6 mb-2 md:mb-0 text-sm">
+        <a href="../../index.html" class="font-semibold hover:text-indigo-600 dark:hover:text-indigo-300" data-i18n="footer.all_tools">全てのツール</a>
+        <a href="#privacy" class="hover:underline" data-i18n="footer.privacy">プライバシーポリシー</a>
+        <a href="#terms" class="hover:underline" data-i18n="footer.terms">利用規約</a>
+        <a href="#disclaimer" class="hover:underline" data-i18n="footer.disclaimer">免責事項</a>
+        <a href="#about" class="hover:underline" data-i18n="footer.about">運営者情報</a>
+        <a href="#contact" class="hover:underline" data-i18n="footer.contact">問い合わせ</a>
+      </div>
+      <div class="text-xs text-gray-500 dark:text-gray-400" data-i18n="footer.copyright">
+        &copy; 2024 GoGen (goliath-auto-tool)
+      </div>
+    </div>
+    <!-- Compliance Sections -->
+    <div class="max-w-3xl mx-auto mt-6 space-y-10 text-[0.99rem] leading-7" id="complianceSections">
+      <section id="privacy">
+        <h4 class="font-semibold text-indigo-700 dark:text-indigo-200" data-i18n="compliance.privacy_title">プライバシーポリシー</h4>
+        <p data-i18n="compliance.privacy_body">
+          当サイトはCookieや広告を用いておらず、入力データ等はサーバ側で一切保存・収集しません。ツール内の全ての処理は端末ブラウザ上で完結します。
+        </p>
+      </section>
+      <section id="terms">
+        <h4 class="font-semibold text-indigo-700 dark:text-indigo-200" data-i18n="compliance.terms_title">利用規約</h4>
+        <p data-i18n="compliance.terms_body">
+          ユーザーは本サービスを自己責任で利用し、生成結果の妥当性や著作権、安全面を確認してください。第三者の権利侵害や不正利用は禁止です。
+        </p>
+      </section>
+      <section id="disclaimer">
+        <h4 class="font-semibold text-indigo-700 dark:text-indigo-200" data-i18n="compliance.disclaimer_title">免責事項</h4>
+        <p data-i18n="compliance.disclaimer_body">
+          本サイト及びツールの利用により発生したいかなる損害・トラブルについても運営者は責任を負いません。各自の判断にてご利用ください。
+        </p>
+      </section>
+      <section id="about">
+        <h4 class="font-semibold text-indigo-700 dark:text-indigo-200" data-i18n="compliance.about_title">運営者情報</h4>
+        <p data-i18n="compliance.about_body">
+          GoGen (goliath-auto-tool)は個人により開発・運営されています。詳細・開発経緯等はGitHubリポジトリをご参照ください。
+        </p>
+      </section>
+      <section id="contact">
+        <h4 class="font-semibold text-indigo-700 dark:text-indigo-200" data-i18n="compliance.contact_title">問い合わせ</h4>
+        <p data-i18n="compliance.contact_body">
+          本ツールに関するご意見・ご要望はGitHub IssuesまたはTwitter(@mikann20041029)までご連絡ください。
+        </p>
+      </section>
+    </div>
+  </footer>
+
+  <!-- window.__I18N__ (language dictionary) -->
+  <script>
+window.__I18N__ = {
+  ja: {
+    "nav.all_tools": "全てのツール",
+    "hero.title": "GoGen – Goテンプレート自動生成ツール",
+    "hero.subtitle": "Goテンプレートから自由にファイルを簡単生成。開発現場の雛形作成やドキュメント自動化を爆速で。",
+    "tool.title": "Goテンプレート ファイル自動生成",
+    "tool.template_label": "テンプレート",
+    "tool.template_placeholder": "{{.Name}}様へ\n本日は{{.Date}}です。",
+    "tool.vars_label": "変数(JSON形式)",
+    "tool.vars_placeholder": "{\"Name\": \"太郎\", \"Date\": \"2024-06-12\"}",
+    "tool.generate_btn": "ファイル生成",
+    "tool.copy_btn": "コピー",
+    "tool.output_label": "出力結果",
+    "tool.output_placeholder": "ここに生成結果が表示されます",
+    "article.intro_title": "Goテンプレート自動生成ツールの活用ガイド",
+    "article.intro": "Go言語のテンプレート（text/template, html/template）は高い柔軟性と安全性を持ち、ドキュメント・設定ファイル・コードスニペットの自動生成で非常によく利用されます。本ツール「GoGen」はWeb上でサクッとテンプレートに変数を流し込んでファイルを生成できるサービスです。この記事では実活用シーン、便利な使い方、落とし穴、FAQなどを詳しくご紹介します。",
+    "article.usecases_title": "利用ユースケース例",
+    "article.usecases_1": "社内外メールやお知らせ文書の自動雛形作成",
+    "article.usecases_2": "APIドキュメント、README自動化",
+    "article.usecases_3": "設定ファイル(config.yaml等)の自動投入",
+    "article.usecases_4": "Goコードスニペットやテンプレ実装の生成",
+    "article.usecases_5": "顧客ごとのPDF・案内文・伝票等の一括生成",
+    "article.howto_title": "使い方ステップ",
+    "article.howto_1": "テンプレート欄にGoテンプレート構文で本文を記述",
+    "article.howto_2": "変数欄にJSON形式でデータ（例: {\"Name\":\"太郎\"}）を入力",
+    "article.howto_3": "「ファイル生成」→下部に出力が生成、コピー・活用可能",
+    "article.checklist_title": "実務利用前のチェックリスト",
+    "article.check_1": "テンプレート内で使う全変数がJSONに存在するか",
+    "article.check_2": "Goテンプレート構文にシンタックスエラーが無いか",
+    "article.check_3": "改行・空白・エンコーディングが想定通りか",
+    "article.check_4": "自動変換される文字（<, >, &等）への注意",
+    "article.check_5": "外部データ転送前に個人情報流出に注意",
+    "article.pitfalls_title": "よくある落とし穴",
+    "article.pitfalls_1": "{{.Variable}}のスペルミスで空欄になる",
+    "article.pitfalls_2": "JSONでダブルクォート不足やカンマ漏れ（シンタックスエラー）",
+    "article.pitfalls_3": "数字・真偽値の型違いで出力が想定外",
+    "article.pitfalls_4": "テンプレート内の条件分岐（if/else）が正しく機能しない",
+    "article.pitfalls_5": "サーバにアップロード不要のためローカルのみで完結可能",
+    "article.faq_title": "FAQ",
+    "article.faq_q1": "Q. 入力したテンプレートや変数は保存されますか？",
+    "article.faq_a1": "A. いいえ、サーバに送信せず、全てブラウザ内だけで処理されます。",
+    "article.faq_q2": "Q. どこまでGoテンプレート構文に対応していますか？",
+    "article.faq_a2": "A. 基本の置換、関数呼び出し、if/else、range構文に対応しています。",
+    "article.faq_q3": "Q. セキュリティ上のリスクはありますか？",
+    "article.faq_a3": "A. 外部送信はありませんが、入力データにはご注意ください。",
+    "article.faq_q4": "Q. 複雑なテンプレートはどこまで動きますか？",
+    "article.faq_a4": "A. JS実装のため、完全なGo互換ではありません。単純なものを推奨します。",
+    "article.faq_q5": "Q. 結果を一括ダウンロードできますか？",
+    "article.faq_a5": "A. 現状、コピーや手動保存のみ対応ですが将来拡張予定です。",
+    "article.references_title": "参考・公式ドキュメント",
+    "article.otherlang_title": "他言語による概要",
+    "article.summary_en": "GoGen is a browser-based tool for generating files with Go template syntax. Simply input your template and variables in JSON; no server upload required. Ideal for documentation or configuration scaffolding.",
+    "article.summary_fr": "GoGen est un outil en ligne pour générer des fichiers à partir de modèles Go. Saisissez votre modèle et vos variables au format JSON, tout reste sur votre navigateur. Parfait pour automatiser la documentation.",
+    "article.summary_de": "GoGen ist ein browserbasiertes Werkzeug zur Dateigenerierung mit Go-Templates. Geben Sie Vorlage und Variablen (JSON) ein, alles bleibt lokal. Optimal für Dokumentations- und Konfigurations-Workflows.",
+    "footer.all_tools": "全てのツール",
+    "footer.privacy": "プライバシーポリシー",
+    "footer.terms": "利用規約",
+    "footer.disclaimer": "免責事項",
+    "footer.about": "運営者情報",
+    "footer.contact": "問い合わせ",
+    "footer.copyright": "© 2024 GoGen (goliath-auto-tool)",
+    "compliance.privacy_title": "プライバシーポリシー",
+    "compliance.privacy_body": "当サイトはCookieや広告を用いておらず、入力データ等はサーバ側で一切保存・収集しません。ツール内の全ての処理は端末ブラウザ上で完結します。",
+    "compliance.terms_title": "利用規約",
+    "compliance.terms_body": "ユーザーは本サービスを自己責任で利用し、生成結果の妥当性や著作権、安全面を確認してください。第三者の権利侵害や不正利用は禁止です。",
+    "compliance.disclaimer_title": "免責事項",
+    "compliance.disclaimer_body": "本サイト及びツールの利用により発生したいかなる損害・トラブルについても運営者は責任を負いません。各自の判断にてご利用ください。",
+    "compliance.about_title": "運営者情報",
+    "compliance.about_body": "GoGen (goliath-auto-tool)は個人により開発・運営されています。詳細・開発経緯等はGitHubリポジトリをご参照ください。",
+    "compliance.contact_title": "問い合わせ",
+    "compliance.contact_body": "本ツールに関するご意見・ご要望はGitHub IssuesまたはTwitter(@mikann20041029)までご連絡ください。",
+    "related.title": "関連サイト"
+  },
+  en: {
+    "nav.all_tools": "All tools",
+    "hero.title": "GoGen – Go Template File Generator",
+    "hero.subtitle": "Instantly generate files using Go templates. Speed up scaffolding and documentation in your development process.",
+    "tool.title": "Go Template File Generator",
+    "tool.template_label": "Template",
+    "tool.template_placeholder": "{{.Name}} san,\nToday is {{.Date}}.",
+    "tool.vars_label": "Variables (JSON format)",
+    "tool.vars_placeholder": "{\"Name\": \"Taro\", \"Date\": \"2024-06-12\"}",
+    "tool.generate_btn": "Generate",
+    "tool.copy_btn": "Copy",
+    "tool.output_label": "Output",
+    "tool.output_placeholder": "Generated result will appear here",
+    "article.intro_title": "Guide to Go Template File Automation",
+    "article.intro": "Go's templates (text/template, html/template) are widely used for safe, flexible automation of documents, configs, and code snippets. GoGen is a web tool for instant template-based generation in your browser. This article provides tips, use cases, checklist, pitfalls, and a FAQ.",
+    "article.usecases_title": "Use Case Examples",
+    "article.usecases_1": "Internal or external communications and notification templates",
+    "article.usecases_2": "Automating API documentation or README files",
+    "article.usecases_3": "Automatic generation of configuration files (e.g. config.yaml)",
+    "article.usecases_4": "Generating Go code snippets or template implementations",
+    "article.usecases_5": "Bulk creation of customer-facing PDFs, notifications, or forms",
+    "article.howto_title": "How to use",
+    "article.howto_1": "Enter your template using Go template syntax in the template box",
+    "article.howto_2": "Input variables as JSON (e.g.: {\"Name\":\"Taro\"})",
+    "article.howto_3": "Click 'Generate' – output appears below to copy and use",
+    "article.checklist_title": "Checklist before practical use",
+    "article.check_1": "All variables in template exist in JSON input",
+    "article.check_2": "No syntax errors in Go template",
+    "article.check_3": "Newlines, spaces, encoding are as expected",
+    "article.check_4": "Be careful of automatic escaping (&lt;, &gt;, &amp; etc)",
+    "article.check_5": "Watch for personal data leakage before external transfer",
+    "article.pitfalls_title": "Common pitfalls",
+    "article.pitfalls_1": "Misspelling like {{.Variable}} results in blank fields",
+    "article.pitfalls_2": "Missing quotes or commas in JSON (syntax error)",
+    "article.pitfalls_3": "Unexpected output due to type mismatch (number/bool)",
+    "article.pitfalls_4": "Conditionals (if/else) in template not working as expected",
+    "article.pitfalls_5": "No upload required – works locally only",
+    "article.faq_title": "FAQ",
+    "article.faq_q1": "Q. Are my inputs or variables saved anywhere?",
+    "article.faq_a1": "A. No, everything happens in your browser; nothing is sent to a server.",
+    "article.faq_q2": "Q. How much of Go's template syntax is supported?",
+    "article.faq_a2": "A. Supports basic replacement, function calls, if/else, and range.",
+    "article.faq_q3": "Q. Are there any security risks?",
+    "article.faq_a3": "A. No server transfer, but do not input sensitive data.",
+    "article.faq_q4": "Q. Will complex templates work?",
+    "article.faq_a4": "A. This is a JS implementation; not 100% Go compatible. Simple cases recommended.",
+    "article.faq_q5": "Q. Can I bulk download results?",
+    "article.faq_a5": "A. Not yet – copy/paste or manual save for now. More options coming.",
+    "article.references_title": "References & Docs",
+    "article.otherlang_title": "Summaries in Other Languages",
+    "article.summary_en": "GoGen is a browser-based tool for generating files with Go template syntax. Simply input your template and variables in JSON; no server upload required. Ideal for documentation or configuration scaffolding.",
+    "article.summary_fr": "GoGen est un outil en ligne pour générer des fichiers à partir de modèles Go. Saisissez votre modèle et vos variables au format JSON, tout reste sur votre navigateur. Parfait pour automatiser la documentation.",
+    "article.summary_de": "GoGen ist ein browserbasiertes Werkzeug zur Dateigenerierung mit Go-Templates. Geben Sie Vorlage und Variablen (JSON) ein, alles bleibt lokal. Optimal für Dokumentations- und Konfigurations-Workflows.",
+    "footer.all_tools": "All tools",
+    "footer.privacy": "Privacy Policy",
+    "footer.terms": "Terms",
+    "footer.disclaimer": "Disclaimer",
+    "footer.about": "About",
+    "footer.contact": "Contact",
+    "footer.copyright": "© 2024 GoGen (goliath-auto-tool)",
+    "compliance.privacy_title": "Privacy Policy",
+    "compliance.privacy_body": "This site does not use cookies/ads; no data is stored or collected on the server. All processing happens locally in your browser.",
+    "compliance.terms_title": "Terms of Service",
+    "compliance.terms_body": "Use this service at your own risk. You are responsible for ensuring legality, copyright, and safety of generated output. Do not infringe on rights of others.",
+    "compliance.disclaimer_title": "Disclaimer",
+    "compliance.disclaimer_body": "The operator is not responsible for any loss or trouble from using this site or tool. Use at your own discretion.",
+    "compliance.about_title": "About / Operator Info",
+    "compliance.about_body": "GoGen (goliath-auto-tool) is developed and operated individually. See the GitHub repo for details.",
+    "compliance.contact_title": "Contact",
+    "compliance.contact_body": "For questions or feedback, reach out via GitHub Issues or Twitter (@mikann20041029).",
+    "related.title": "Related Sites"
+  },
+  fr: {
+    "nav.all_tools": "Tous les outils",
+    "hero.title": "GoGen – Générateur de fichiers à partir de template Go",
+    "hero.subtitle": "Générez rapidement des fichiers via des templates Go. Accélérez la création d'automatismes et de documentations.",
+    "tool.title": "Générateur de fichiers template Go",
+    "tool.template_label": "Template",
+    "tool.template_placeholder": "{{.Name}} cher,\nAujourd'hui c'est {{.Date}}.",
+    "tool.vars_label": "Variables (format JSON)",
+    "tool.vars_placeholder": "{\"Name\": \"Taro\", \"Date\": \"2024-06-12\"}",
+    "tool.generate_btn": "Générer",
+    "tool.copy_btn": "Copier",
+    "tool.output_label": "Résultat",
+    "tool.output_placeholder": "Le résultat généré apparaîtra ici",
+    "article.intro_title": "Guide de génération automatisée avec Go Template",
+    "article.intro": "Les templates Go (text/template, html/template) sont idéaux pour automatiser documents, configs et snippets de code. GoGen simplifie la génération instantanée en ligne. Cet article propose cas pratiques, vérifications, pièges et FAQ.",
+    "article.usecases_title": "Exemples d'utilisation",
+    "article.usecases_1": "Création automatisée de mails ou notifications",
+    "article.usecases_2": "Génération automatique de documentation API/README",
+    "article.usecases_3": "Création rapide de fichiers de configuration",
+    "article.usecases_4": "Génération d'extraits de code Go ou d'implémentations type",
+    "article.usecases_5": "Création en masse de PDF, courriers clients, factures",
+    "article.howto_title": "Mode d'emploi",
+    "article.howto_1": "Remplissez le template en syntaxe Go",
+    "article.howto_2": "Saisissez les variables en JSON (ex: {\"Name\":\"Taro\"})",
+    "article.howto_3": "Cliquez « Générer » – le résultat apparaît en dessous, copiez selon besoin",
+    "article.checklist_title": "Liste de vérification",
+    "article.check_1": "Toutes les variables du template existent dans le JSON",
+    "article.check_2": "Aucune erreur de syntaxe dans le template Go",
+    "article.check_3": "Sauts de ligne, espaces, encodage corrects",
+    "article.check_4": "Attention aux caractères spéciaux (<, >, &) convertis",
+    "article.check_5": "Vérifiez toute fuite d'information avant tout transfert externe",
+    "article.pitfalls_title": "Pièges courants",
+    "article.pitfalls_1": "Erreur d’orthographe de variable {{.Variable}} : champ vide",
+    "article.pitfalls_2": "Manque de guillemets ou virgule en JSON (erreur de syntaxe)",
+    "article.pitfalls_3": "Type inattendu (nombre, bool) dans le résultat",
+    "article.pitfalls_4": "Conditions (if/else) ne marchent pas comme attendu",
+    "article.pitfalls_5": "Aucun upload requis — tout reste local",
+    "article.faq_title": "FAQ",
+    "article.faq_q1": "Q. Mes entrées sont-elles enregistrées ?",
+    "article.faq_a1": "A. Non, tout se passe dans votre navigateur, rien n’est envoyé.",
+    "article.faq_q2": "Q. Quelle syntaxe Go Template est prise en charge ?",
+    "article.faq_a2": "A. Remplacement de base, fonctions, if/else et range sont supportés.",
+    "article.faq_q3": "Q. Y a-t-il des risques de sécurité ?",
+    "article.faq_a3": "A. Aucun envoi côté serveur. Ne saisissez cependant aucune donnée sensible.",
+    "article.faq_q4": "Q. Les templates complexes fonctionnent-ils ?",
+    "article.faq_a4": "A. Ce n’est pas du Go natif – privilégiez des modèles simples.",
+    "article.faq_q5": "Q. Puis-je télécharger les résultats en lot ?",
+    "article.faq_a5": "A. Pas encore. Utilisez copier/coller ou enregistrez manuellement.",
+    "article.references_title": "Références / Docs",
+    "article.otherlang_title": "Résumé multilingue",
+    "article.summary_en": "GoGen is a browser-based tool for generating files with Go template syntax. Simply input your template and variables in JSON; no server upload required. Ideal for documentation or configuration scaffolding.",
+    "article.summary_fr": "GoGen est un outil en ligne pour générer des fichiers à partir de modèles Go. Saisissez votre modèle et vos variables au format JSON, tout reste sur votre navigateur. Parfait pour automatiser la documentation.",
+    "article.summary_de": "GoGen ist ein browserbasiertes Werkzeug zur Dateigenerierung mit Go-Templates. Geben Sie Vorlage und Variablen (JSON) ein, alles bleibt lokal. Optimal für Dokumentations- und Konfigurations-Workflows.",
+    "footer.all_tools": "Tous les outils",
+    "footer.privacy": "Politique de Confidentialité",
+    "footer.terms": "Conditions",
+    "footer.disclaimer": "Avertissement",
+    "footer.about": "À propos",
+    "footer.contact": "Contact",
+    "footer.copyright": "© 2024 GoGen (goliath-auto-tool)",
+    "compliance.privacy_title": "Politique de Confidentialité",
+    "compliance.privacy_body": "Ce site n'utilise ni cookies ni publicités. Aucune donnée n'est enregistrée sur le serveur. Tout est traité dans votre navigateur.",
+    "compliance.terms_title": "Conditions d'utilisation",
+    "compliance.terms_body": "Utilisez ce service à vos risques. Vous êtes responsable de la légalité, droits d’auteur et sécurité du résultat. Toute infraction est interdite.",
+    "compliance.disclaimer_title": "Avertissement",
+    "compliance.disclaimer_body": "L’éditeur n’est pas responsable des problèmes liés à l’usage de ce site. Utilisez-le sous votre propre responsabilité.",
+    "compliance.about_title": "À propos / Éditeur",
+    "compliance.about_body": "GoGen (goliath-auto-tool) est un projet personnel. Plus d'infos sur le GitHub du projet.",
+    "compliance.contact_title": "Contact",
+    "compliance.contact_body": "Pour commentaires ou questions, GitHub Issues ou Twitter (@mikann20041029).",
+    "related.title": "Sites liés"
+  },
+  de: {
+    "nav.all_tools": "Alle Tools",
+    "hero.title": "GoGen – Go Template Datei Generator",
+    "hero.subtitle": "Generieren Sie Dateien mit Go-Templates sofort. Beschleunigen Sie Boilerplate und Dokumentation im Workflow.",
+    "tool.title": "Go Template Datei Generator",
+    "tool.template_label": "Template",
+    "tool.template_placeholder": "{{.Name}},\nheute ist der {{.Date}}.",
+    "tool.vars_label": "Variablen (JSON-Format)",
+    "tool.vars_placeholder": "{\"Name\": \"Taro\", \"Date\": \"2024-06-12\"}",
+    "tool.generate_btn": "Generieren",
+    "tool.copy_btn": "Kopieren",
+    "tool.output_label": "Ausgabe",
+    "tool.output_placeholder": "Hier erscheint das Ergebnis",
+    "article.intro_title": "Praxisleitfaden: Go Template Datei-Generator",
+    "article.intro": "Go-Templates (text/template, html/template) sind universelle Werkzeuge für automatische Dokumentation, Konfiguration und Codeschnipsel. GoGen ist ein Web-Tool zur lokalen Template-Generierung. Tipps, Anwendungsfälle, Checkliste, Stolperfallen und FAQ finden Sie hier.",
+    "article.usecases_title": "Beispielanwendungen",
+    "article.usecases_1": "Automatisierte Vorlagen für Kommunikation und Benachrichtigungen",
+    "article.usecases_2": "Dokumentation und README automatisieren",
+    "article.usecases_3": "Konfigurationsdateien erzeugen (z.B. config.yaml)",
+    "article.usecases_4": "Go-Code-Snippets und Boilerplate teilen",
+    "article.usecases_5": "Sammelerstellung von PDF, Anschreiben, Formularen",
+    "article.howto_title": "So funktioniert's",
+    "article.howto_1": "Template mit Go-Syntax ins Feld schreiben",
+    "article.howto_2": "Variablen als JSON eingeben (z.B.: {\"Name\":\"Taro\"})",
+    "article.howto_3": "Auf „Generieren“ klicken – unten erscheint das Ergebnis zum Kopieren",
+    "article.checklist_title": "Checkliste vor Produktionseinsatz",
+    "article.check_1": "Alle Template-Variablen im JSON vorhanden",
+    "article.check_2": "Go-Template ohne Syntaxfehler",
+    "article.check_3": "Zeilenumbrüche, Leerzeichen und Kodierung geprüft",
+    "article.check_4": "Auf Escape von Sonderzeichen (&lt;, &gt;, &amp;) achten",
+    "article.check_5": "Vor externem Versand keine sensiblen Daten",
+    "article.pitfalls_title": "Typische Fallstricke",
+    "article.pitfalls_1": "Tippfehler wie {{.Variable}} führen zu leeren Feldern",
+    "article.pitfalls_2": "JSON-Fehler: fehlende Anführungszeichen oder Kommas",
+    "article.pitfalls_3": "Falscher Typ (Nummer/Bool) ergibt komisches Ergebnis",
+    "article.pitfalls_4": "if/else-Bedingungen im Template funktionieren nicht wie erwartet",
+    "article.pitfalls_5": "Kein Upload nötig – alles bleibt lokal",
+    "article.faq_title": "FAQ",
+    "article.faq_q1": "F: Werden meine Eingaben gespeichert?",
+    "article.faq_a1": "A: Nein, alles bleibt im Browser, keine Serverübertragung.",
+    "article.faq_q2": "F: Welche Go Template-Syntax wird unterstützt?",
+    "article.faq_a2": "A: Grundlegender Ersatz, Funktionen, if/else und range.",
+    "article.faq_q3": "F: Gibt es Sicherheitsrisiken?",
+    "article.faq_a3": "A: Keine Übertragung. Dennoch keine sensiblen Daten eingeben.",
+    "article.faq_q4": "F: Funktionieren komplexe Templates?",
+    "article.faq_a4": "A: JS-Implementierung – nicht vollständig kompatibel. Für einfache Templates gedacht.",
+    "article.faq_q5": "F: Kann ich Ergebnisse gebündelt herunterladen?",
+    "article.faq_a5": "A: Momentan nur Kopieren/Einfügen oder Speichern. Mehr wird kommen.",
+    "article.references_title": "Referenzen & Doku",
+    "article.otherlang_title": "Kurzüberblick in andere Sprachen",
+    "article.summary_en": "GoGen is a browser-based tool for generating files with Go template syntax. Simply input your template and variables in JSON; no server upload required. Ideal for documentation or configuration scaffolding.",
+    "article.summary_fr": "GoGen est un outil en ligne pour générer des fichiers à partir de modèles Go. Saisissez votre modèle et vos variables au format JSON, tout reste sur votre navigateur. Parfait pour automatiser la documentation.",
+    "article.summary_de": "GoGen ist ein browserbasiertes Werkzeug zur Dateigenerierung mit Go-Templates. Geben Sie Vorlage und Variablen (JSON) ein, alles bleibt lokal. Optimal für Dokumentations- und Konfigurations-Workflows.",
+    "footer.all_tools": "Alle Tools",
+    "footer.privacy": "Datenschutz",
+    "footer.terms": "Nutzungsbedingungen",
+    "footer.disclaimer": "Haftungsausschluss",
+    "footer.about": "Info",
+    "footer.contact": "Kontakt",
+    "footer.copyright": "© 2024 GoGen (goliath-auto-tool)",
+    "compliance.privacy_title": "Datenschutz",
+    "compliance.privacy_body": "Diese Website verwendet keine Cookies oder Werbung, es werden keine Daten gespeichert oder gesammelt. Das Tool läuft komplett lokal im Browser.",
+    "compliance.terms_title": "Nutzungsbedingungen",
+    "compliance.terms_body": "Sie nutzen diesen Service auf eigenes Risiko. Sie sind verantwortlich für Rechtmäßigkeit, Copyright und Sicherheit der erzeugten Ergebnisse.",
+    "compliance.disclaimer_title": "Haftungsausschluss",
+    "compliance.disclaimer_body": "Der Betreiber übernimmt keine Haftung für Schäden durch die Nutzung dieser Seite. Benutzung auf eigene Verantwortung.",
+    "compliance.about_title": "Info / Betreiber",
+    "compliance.about_body": "GoGen (goliath-auto-tool) wird privat entwickelt und betrieben. Details siehe GitHub.",
+    "compliance.contact_title": "Kontakt",
+    "compliance.contact_body": "Anregungen oder Fragen: GitHub Issues oder Twitter (@mikann20041029).",
+    "related.title": "Verwandte Seiten"
+  }
+};
+  </script>
+  <!-- Related sites data (empty for demonstration) -->
+  <script>
+    window.__RELATED__ = [{"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769138429-template-template-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769116184-show-hn-gogen-a-simple-template-based-file-generator-written/"}, {"title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769115945-show-hn-pta-tax-calculator-calculate-pakistan-mobile-import-/"}];
+  </script>
+
+  <!-- Language switcher, i18n init & theme logic -->
+  <script>
+(function(){
+  var $ = function(sel) { return document.querySelector(sel); };
+  // Theme
+  function setTheme(mode) {
+    var html = document.documentElement;
+    if (mode === "dark") {
+      html.classList.add("dark");
+      localStorage.setItem("goliath_theme", "dark");
+    } else {
+      html.classList.remove("dark");
+      localStorage.setItem("goliath_theme", "light");
+    }
+    // icon toggle
+    $('#darkIconSun').classList.toggle('hidden', !html.classList.contains('dark'));
+    $('#darkIconMoon').classList.toggle('hidden', html.classList.contains('dark'));
+  }
+  var pref = localStorage.getItem("goliath_theme") ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? "dark" : "light");
+  setTheme(pref);
+
+  $('#darkToggle').onclick = function() {
+    setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+  };
+
+  // Language/i18n
+  function getLang() {
+    return localStorage.getItem("goliath_lang") || "ja";
+  }
+  function setLang(lang) {
+    if (!window.__I18N__[lang]) lang = "ja";
+    document.documentElement.lang = lang;
+    localStorage.setItem("goliath_lang", lang);
+    // Fill i18n keys
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.getAttribute('data-i18n');
+      if(window.__I18N__[lang][key]) el.textContent = window.__I18N__[lang][key];
+    });
+    // placeholder i18n
+    [
+      { id: "templateInput", key: "tool.template_placeholder" },
+      { id: "varsInput", key: "tool.vars_placeholder" },
+      { id: "output", key: "tool.output_placeholder" }
+    ].forEach(function(obj){
+      var node = document.getElementById(obj.id);
+      if (node && window.__I18N__[lang][obj.key])
+        node.placeholder = window.__I18N__[lang][obj.key];
+    });
+    // Optionally <option> text? (if non-static).
+  }
+  var selectEl = $('#langSelect');
+  selectEl.value = getLang();
+  function i18nApply() { setLang(selectEl.value); }
+  selectEl.onchange = i18nApply;
+  i18nApply();
+
+  // Tool: Go template-like generator (simplified for browser, no server)
+  // Sufficient for static text and {{.Var}} simple replacement
+  function renderGoTemplate(tpl, data) {
+    // Only {{.Var}} replacement, safe for most templates, extra: {{if}}, {{else}}, {{end}}, {{range ...}}
+    // This is not a real Go parser! For most use, it's sufficient.
+    const varRe = /\{\{\s*\.([A-Za-z0-9_]+)\s*\}\}/g;
+    let out = tpl.replace(varRe, (m, v) => (data[v] !== undefined ? String(data[v]) : ""));
+    // Handle basic {{if .Var}}...{{else}}...{{end}}
+    // Support only 1-level ifs
+    const ifblock = /\{\{\s*if\s+\.([A-Za-z0-9_]+)\s*\}\}([\s\S]*?)((\{\{\s*else\s*\}\}([\s\S]*?))?)\{\{\s*end\s*\}\}/g;
+    out = out.replace(ifblock, (m, v, ifTrue, _elsePart, _, elseBlock) => {
+      if (data[v]) return ifTrue;
+      return elseBlock || '';
+    });
+    // {{range .List}}...{{end}}: List must be Array.
+    const rangeblock = /\{\{\s*range\s+\.([A-Za-z0-9_]+)\s*\}\}([\s\S]*?)\{\{\s*end\s*\}\}/g;
+    out = out.replace(rangeblock, (m, arrName, inner) => {
+      if (!Array.isArray(data[arrName])) return "";
+      return data[arrName].map(function(item) {
+        // Inside {{.}} replaced with the item
+        return inner.replace(/\{\{\s*\.\s*\}\}/g, String(item));
+      }).join('');
+    });
+    return out;
+  }
+
+  $('#gogenForm').onsubmit = function(e){
+    e.preventDefault();
+    var tpl = $('#templateInput').value;
+    var vars = $('#varsInput').value;
+    var errElem = $('#toolErr');
+    errElem.textContent = "";
+    try {
+      var data = {};
+      if(vars.trim()){
+        data = JSON.parse(vars.trim());
+      }
+      var out = renderGoTemplate(tpl, data);
+      $('#output').value = out;
+    } catch(ex){
+      errElem.textContent = (selectEl.value == "ja" ? "JSONエラー：" : "JSON Error: ") + ex.message;
+      $('#output').value = '';
+    }
+  };
+
+  $('#toolCopyBtn').onclick = function(){
+    var val = $('#output').value;
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(function(){
+      $('#toolCopyBtn').textContent = window.__I18N__[selectEl.value]['tool.copy_btn']+" ✓";
+      setTimeout(function(){
+        $('#toolCopyBtn').textContent = window.__I18N__[selectEl.value]['tool.copy_btn'];
+      },900);
+    });
+  };
+
+  // Related Sites render
+  if (window.__RELATED__ && window.__RELATED__.length) {
+    var relsec = $('#relatedSitesSection');
+    relsec.classList.remove('hidden');
+    var list = $('#relatedSitesList');
+    window.__RELATED__.forEach(function(site) {
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = site.url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.className = "hover:underline text-indigo-700 dark:text-indigo-200";
+      a.textContent = site.label;
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+  }
+
+  // Accessibility: Go to hash on anchor click
+  // (no scroll-behavior; handled by browser)
+
+})();
+  </script>
+</body>
+</html>
