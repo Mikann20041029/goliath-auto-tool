@@ -59,12 +59,12 @@ def collect_hn(queries: List[str], days_back: int, limit_per_query: int) -> List
             continue
 
         for h in (data.get("hits") or []):
-    title = (h.get("title") or "").strip()
-    story_title = (h.get("story_title") or "").strip()
-    comment_text = (h.get("comment_text") or "").strip()
-    text = title or story_title or comment_text
-    if not text:
-        continue
+            title = (h.get("title") or "").strip()
+            story_title = (h.get("story_title") or "").strip()
+            comment_text = (h.get("comment_text") or "").strip()
+            text = title or story_title or comment_text
+        if not text:
+            continue
 
     object_id = h.get("objectID")
     if not object_id:
