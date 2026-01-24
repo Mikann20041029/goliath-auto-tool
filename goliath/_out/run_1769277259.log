@@ -17,4 +17,3 @@
 2026-01-24 17:54:20,376 | INFO | Root sitemap/robots not updated (ALLOW_ROOT_UPDATE!=1). Written to goliath/_out instead.
 2026-01-24 17:54:20,376 | INFO | Wrote Issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769277259.md
 2026-01-24 17:54:20,376 | INFO | DONE
-REAL_EXITCODE=0

@@ -1,0 +1,38 @@
+{
+  "run_id": "1769277259",
+  "generated_at": "2026-01-24T17:54:20+00:00",
+  "counts": {
+    "posts": 0,
+    "clusters": 1,
+    "themes": 1,
+    "sites": 1
+  },
+  "sites": [
+    {
+      "title": "checklist / fixing / help / issue / need — Fix Guide & Tool",
+      "slug": "checklist-fixing-help-issue-need-f13019-2",
+      "category": "Dev/Tools",
+      "url": "https://mikanntool.com/goliath/pages/checklist-fixing-help-issue-need-f13019-2/",
+      "created_at": "2026-01-24T17:54:20+00:00",
+      "updated_at": "2026-01-24T17:54:20+00:00",
+      "run_id": "1769277259",
+      "keywords": [
+        "checklist",
+        "fixing",
+        "help",
+        "issue",
+        "need",
+        "quickly",
+        "references.",
+        "safe"
+      ]
+    }
+  ],
+  "notes": {
+    "hub_frozen": true,
+    "hub_updated_files": [
+      "hub/sites.json"
+    ],
+    "root_sitemap_updated": false
+  }
+}
