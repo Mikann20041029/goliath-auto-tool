@@ -32,11 +32,19 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Goliath System (capture exit)
+      - name: Run Goliath (capture exit)
         id: goliath_run
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Optional creds (if you set them):
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+          MASTODON_BASE: ${{ secrets.MASTODON_BASE }}
+          MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_USER_ID: ${{ secrets.X_USER_ID }}
+          LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
         run: |
           set +e
           python main.py 2>&1 | tee run_log.txt
@@ -54,7 +62,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Update tool + SEO + replies (auto)"
+            git commit -m "Update (auto): pages + leads + reports"
             git push
           fi
 
@@ -62,16 +70,18 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GOLIATH_EXITCODE: ${{ steps.goliath_run.outputs.exitcode }}
         run: |
           python tools/report_to_issue.py
 
-      - name: Upload run log
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: goliath-run-log
-          path: run_log.txt
+          name: goliath-artifacts
+          path: |
+            run_log.txt
+            out/leads.json
+            out/stats.json
 
       - name: Fail job if Goliath failed
         if: always()
