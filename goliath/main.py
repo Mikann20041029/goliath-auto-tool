@@ -1496,7 +1496,10 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
     leads: List[Dict[str, Any]] = []
 
     try:
-        leads.extend(collect_bluesky(min(LEADS_PER_SOURCE, LEADS_TOTAL)))
+        _tmp_bsky = collect_bluesky(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+    print(f"[counts] bluesky={len(_tmp_bsky)}")
+    leads.extend(_tmp_bsky)
+
     except Exception:
         pass
 
