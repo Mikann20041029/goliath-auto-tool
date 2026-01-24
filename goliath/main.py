@@ -1344,17 +1344,19 @@ block = f"""
 """.strip()
 
 
-    out = html
+out = html
 
-    # Placeholder marker preferred
-    if "AFF_SLOT" in out:
-        out = out.replace("<!-- AFF_SLOT -->", block)
-    else:
-        # Inject after first <main> or after body start if main missing
-        out2 = re.sub(r"(<main[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
-        if out2 == out:
-            out2 = re.sub(r"(<body[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
-        out = out2
+# Placeholder marker preferred
+if "AFF_SLOT" in out:
+    out = out.replace("<!-- AFF_SLOT -->", block)
+else:
+    # Inject after first <main> or after body start if main missing
+    out2 = re.sub(r"(<main[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
+    if out2 == out:
+        out2 = re.sub(r"(<body[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
+    out = out2
+
+
 
 
     # Inject click logger script
