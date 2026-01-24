@@ -59,7 +59,7 @@ def _load_json(path, default):
 def ensure_affiliates_keys():
  data = _load_json(AFFILIATES_PATH, {})
  if not isinstance(data, dict):
- data = {}
+     data = {}
  missing = []
  for g in GENRES:
  if g not in data:
