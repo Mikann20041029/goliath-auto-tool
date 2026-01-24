@@ -513,13 +513,31 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         c.login(h, p)
 
         # 1) search
-        for q in queries:
+print("[bsky] start collect_bluesky")
+print(f"[bsky] queries={len(queries)}")
+
+c = BskyClient()
+c.login(h, p)
+print("[bsky] login ok")
+
+for q in queries:
     res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
 
     posts = (res or {}).get("posts", []) or []
-    print(f"[bsky] q='{q}' -> n={len(posts)}")
+    print(f"[bsky] q='{q}' posts={len(posts)}")
+
+    # 先頭1件だけ中身確認（多すぎ防止）
+    if posts:
+        p0 = posts[0]
+        uri0 = (p0 or {}).get("uri", "")
+        rec0 = (p0 or {}).get("record", {}) or {}
+        txt0 = (rec0.get("text", "") or "")[:80]
+        print(f"[bsky] sample uri={uri0}")
+        print(f"[bsky] sample text={txt0}")
 
     for post in posts:
+        ...
+
         rec = (post or {}).get("record", {}) or {}
         txt = (rec.get("text", "") or "")
         uri = (post.get("uri", "") or "")
@@ -538,17 +556,27 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
             if len(out) >= limit:
                 break
 
-        # 2) timeline fallback
-        if len(out) < limit:
-            try:
-                tl = c.app.bsky.feed.get_timeline({"limit": 200})
-                feed = (tl or {}).get("feed", []) or []
-                for item in feed:
-                    post = (item or {}).get("post", {}) or {}
-                    record = (post or {}).get("record", {}) or {}
-                    txt = (record.get("text", "") or "")
-                    t = txt.lower()
-                    if not any(k in t for k in keywords):
+       # 2) timeline fallback
+if len(out) < limit:
+    try:
+        tl = c.app.bsky.feed.get_timeline({"limit": 200})
+        feed = (tl or {}).get("feed", []) or []
+        print(f"[bsky] timeline feed={len(feed)}")
+
+        matched = 0
+        for item in feed:
+            post = (item or {}).get("post", {}) or {}
+            record = (post or {}).get("record", {}) or {}
+            txt = (record.get("text", "") or "")
+            t = txt.lower()
+            if any(k in t for k in keywords):
+                matched += 1
+                ...
+        print(f"[bsky] timeline matched={matched}")
+
+    except Exception as e:
+        print(f"[bsky] timeline EXC err={e!r}")
+
                         continue
 
                     uri = (post.get("uri", "") or "")
