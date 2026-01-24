@@ -9,6 +9,12 @@ import datetime
 from pathlib import Path
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Tuple, Optional
+# ===== model lock (cheapest only) =====
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # デフォルトを mini に固定
+if MODEL != "gpt-4o-mini":
+    raise RuntimeError(f"MODEL LOCK: only gpt-4o-mini allowed, got {MODEL}")
+
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "300"))  # 出力上限を固定
 
 import requests
 from openai import OpenAI
