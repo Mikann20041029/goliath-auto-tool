@@ -23,8 +23,9 @@ if MODEL != "gpt-4o-mini":
 
 # Reply output cap (short)
 MAX_OUTPUT_TOKENS_REPLY = int(os.getenv("MAX_OUTPUT_TOKENS_REPLY", "300"))
-# Build output cap (needs to be larger than reply, but still bounded)
-MAX_OUTPUT_TOKENS_BUILD = int(os.getenv("MAX_OUTPUT_TOKENS_BUILD", "2400"))
+
+# Build output cap (bounded)
+MAX_OUTPUT_TOKENS_BUILD = int(os.getenv("MAX_OUTPUT_TOKENS_BUILD", "3000"))
 if MAX_OUTPUT_TOKENS_BUILD > 3200:
     raise RuntimeError("MAX_OUTPUT_TOKENS_BUILD too large; cap at <= 3200 to control cost")
 
@@ -64,14 +65,15 @@ TOOL_HISTORY_PATH = STATE_DIR / "tool_history.json"
 
 AFFILIATES_PATH = f"{ROOT}/affiliates.json"
 
-ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "1") == "1"
+# ✅ デフォルトは自動投稿OFF（手動返信前提）
+ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "0") == "1"
 
-LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "100"))
-LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "60"))
+LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "40"))
+LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "30"))
 
-COLLECT_HN = int(os.getenv("COLLECT_HN", "50"))
-COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "50"))
-COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "50"))
+COLLECT_HN = int(os.getenv("COLLECT_HN", "40"))
+COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "40"))
+COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "40"))
 
 # Click log endpoint (Cloudflare Worker / GAS)
 CLICK_LOG_ENDPOINT = os.getenv("CLICK_LOG_ENDPOINT", "").strip()
@@ -94,7 +96,7 @@ KEYWORDS = [
     "exception", "traceback", "deploy", "build failed", "github actions", "workflow", "docker", "npm", "pip",
     "api", "oauth", "convert", "converter", "calculator", "template", "compare", "timezone"
 ]
-BAN_WORDS = ["template", "boilerplate", "starter", "scaffold"]
+BAN_WORDS = ["boilerplate", "starter", "scaffold"]
 
 # Fixed 12 genres (must match exactly)
 GENRES = [
@@ -158,11 +160,12 @@ def write_text(path: str, text: str) -> None:
 
 def extract_html_only(raw: str) -> str:
     raw = raw or ""
-    m = re.search(r"(<!DOCTYPE\s+html.*?</html\s*>)", raw, flags=re.IGNORECASE | re.DOTALL)
+    m = re.search(r"(<!DOCTYPE\s+html[\s\S]*?</html\s*>)", raw, flags=re.IGNORECASE | re.DOTALL)
     if m:
         return m.group(1).strip()
-    raw = re.sub(r"^```[a-zA-Z]*\s*", "", raw.strip())
-    raw = re.sub(r"\s*```$", "", raw.strip())
+    raw = raw.strip()
+    raw = re.sub(r"^```[a-zA-Z]*\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
     return raw.strip()
 
 
@@ -294,8 +297,6 @@ def make_search_title(theme: str, tags: List[str]) -> str:
         suffix = "time converter"
     elif "pricing" in (tags or []):
         suffix = "pricing tool"
-    elif "productivity" in (tags or []):
-        suffix = "tool"
 
     kws = []
     for k in ["tax", "subscription", "pricing", "timezone", "time zone", "convert", "calculator", "pdf", "image", "video", "dns", "ssl", "oauth", "api"]:
@@ -380,12 +381,11 @@ def infer_genre(theme: str, tags: List[str]) -> str:
         return "Business/Accounting/Tax"
     if any(k in t for k in ["seo", "analytics", "scheduling", "email", "social"]) or "marketing" in tagset:
         return "Marketing/Social"
-    if any(k in t for k in ["notes", "task", "calendar", "focus", "template", "checklist"]) or "productivity" in tagset:
+    if any(k in t for k in ["notes", "task", "calendar", "focus", "checklist"]) or "productivity" in tagset:
         return "Productivity"
     if any(k in t for k in ["english", "language", "toeic", "eiken", "exam", "study"]) or "education" in tagset:
         return "Education/Language"
 
-    # default
     return "Dev/Tools"
 
 
@@ -431,7 +431,6 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
     if hn_points > 0:
         table["tool_request"] += min(10, hn_points // 30)
 
-    # anti-duplicate penalty
     hist = _load_tool_history()
     theme_now = (meta.get("theme") or text or "")
     tags_now = meta.get("tags") or []
@@ -475,7 +474,7 @@ def create_github_issue(title: str, body: str) -> None:
         r = requests.post(url, headers=headers, json=payload, timeout=20)
         print("[issue] status", r.status_code)
         if r.status_code >= 300:
-            print("[issue] error body:", r.text[:500])
+            print("[issue] error body:", r.text[:800])
         else:
             data = r.json()
             print("[issue] created:", data.get("html_url"))
@@ -571,13 +570,6 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
 # Bluesky Collector (DEBUG: reasons visible in Actions logs)
 # ============================================================
 def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
-    """
-    Blueskyは「0の理由」を確実にログに出す:
-    - atproto libの有無
-    - secretsの有無
-    - collectors.collect_bluesky(ext)の有無
-    - 実行例外
-    """
     h = os.getenv("BSKY_HANDLE", "").strip()
     p = os.getenv("BSKY_PASSWORD", "").strip()
 
@@ -590,11 +582,8 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
               "limit": limit
           }, ensure_ascii=False))
 
-    # Prefer your external collector if present (it might do search/timeline efficiently)
     if collect_bluesky_ext:
         try:
-            # Expected signature: collect_bluesky_ext(KEYWORDS, limit_per_query=25) etc.
-            # We'll call it in a safe way and normalize output.
             out = collect_bluesky_ext(KEYWORDS, limit_per_query=25)  # type: ignore
             if not isinstance(out, list):
                 print("[bsky] ext_collector returned non-list")
@@ -612,9 +601,7 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
             return norm[:limit]
         except Exception as e:
             print("[bsky] ext_collector EXC", repr(e))
-            # fallthrough to direct atproto if possible
 
-    # If no atproto or no secrets -> impossible
     if BskyClient is None:
         print("[bsky] skip: atproto not installed")
         return []
@@ -622,19 +609,10 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         print("[bsky] skip: missing BSKY_HANDLE/BSKY_PASSWORD")
         return []
 
-    # Direct atproto minimal (search posts)
     out: List[Dict[str, Any]] = []
     queries = [
-        "need a tool",
-        "is there a tool",
-        "converter",
-        "calculator",
-        "timezone",
-        "pricing",
-        "subscription",
-        "pdf",
-        "image resize",
-        "ffmpeg",
+        "need a tool", "is there a tool", "converter", "calculator", "timezone",
+        "pricing", "subscription", "pdf", "image resize", "ffmpeg",
     ]
 
     def bsky_uri_to_url(uri: str, did: str = "") -> str:
@@ -717,7 +695,6 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
             print("[bsky] search EXC", {"q": q, "err": repr(e)})
             continue
 
-    # dedupe
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in out:
@@ -751,7 +728,7 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
             "error", "bug", "issue", "problem", "failed", "broken", "crash", "traceback",
             "github actions", "docker", "npm", "pip", "api", "oauth",
             "need a tool", "is there a tool", "tool for",
-            "convert", "converter", "calculator", "template", "compare", "timezone",
+            "convert", "converter", "calculator", "compare", "timezone",
         ]
 
         if tok:
@@ -825,7 +802,7 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
 
     queries = [
         "help", "how to", "error", "bug", "issue", "failed", "broken",
-        "convert", "converter", "calculator", "timezone", "template"
+        "convert", "converter", "calculator", "timezone", "compare"
     ]
 
     out: List[Dict[str, Any]] = []
@@ -839,7 +816,7 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
         )
 
         for q in queries:
-            for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=80):
+            for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=60):
                 txt = (getattr(s, "title", "") or "") + "\n" + (getattr(s, "selftext", "") or "")
                 url = getattr(s, "url", "") or ""
                 if url and txt:
@@ -856,7 +833,7 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# X limited (optional)
+# X limited (optional) - mentions only
 # ============================================================
 def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
     runs_per_month = int(os.getenv("RUNS_PER_MONTH", "90"))
@@ -866,7 +843,7 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
     api_key = os.getenv("X_API_KEY", "")
     api_secret = os.getenv("X_API_SECRET", "")
     access_token = os.getenv("X_ACCESS_TOKEN", "")
-    access_secret = os.getenv("X_ACCESS_SECRET", "")
+    access_secret = os.getenv("X_ACCESS_TOKEN_SECRET", "")
 
     if not (api_key and api_secret and access_token and access_secret):
         print("[x] skip: missing secrets")
@@ -945,8 +922,8 @@ def collector_real() -> List[Dict[str, Any]]:
     if not items:
         samples = [
             ("need a simple calculator to compare subscription plans with hidden fees", "https://news.ycombinator.com/"),
-            ("how to convert a messy checklist into a clean template instantly", "https://bsky.app/"),
             ("time zone converter with meeting overlap and daylight saving awareness", "https://mastodon.social/"),
+            ("image resize tool that keeps aspect ratio and reduces file size", "https://bsky.app/"),
         ]
         random.shuffle(samples)
         for t, u in samples:
@@ -978,7 +955,7 @@ def pick_best_theme(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 def cluster_20_around_theme(theme: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
     t = (theme or "").lower()
     keys: List[str] = []
-    for k in ["convert", "calculator", "compare", "timezone", "template", "subscription", "pricing", "tax", "checklist", "pdf", "image", "video"]:
+    for k in ["convert", "calculator", "compare", "timezone", "subscription", "pricing", "tax", "checklist", "pdf", "image", "video"]:
         if k in t:
             keys.append(k)
     if not keys:
@@ -1111,7 +1088,6 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
         if len(related) >= k:
             return related
 
-    # fallback fill
     for e in normalized_entries:
         u = (e.get("public_url") or "").strip()
         if not u or u in seen:
@@ -1154,10 +1130,6 @@ def inject_related_json(html: str, related: List[Dict[str, str]]) -> str:
 # Unsplash background (server-side pick + inject)
 # ============================================================
 def unsplash_pick_image_url() -> str:
-    """
-    Prefer Unsplash API random photo with fixed queries.
-    Fallback to source.unsplash.com (no key).
-    """
     q = random.choice(UNSPLASH_QUERIES)
     if UNSPLASH_ACCESS_KEY:
         try:
@@ -1171,7 +1143,6 @@ def unsplash_pick_image_url() -> str:
             r = requests.get(url, params=params, headers=headers, timeout=20)
             r.raise_for_status()
             data = r.json()
-            # prefer regular
             u = (((data or {}).get("urls") or {}).get("regular") or "").strip()
             if u:
                 print("[unsplash] picked via api", {"q": q})
@@ -1179,18 +1150,15 @@ def unsplash_pick_image_url() -> str:
         except Exception as e:
             print("[unsplash] api EXC", repr(e))
 
-    # fallback
     print("[unsplash] fallback via source", {"q": q})
     return f"https://source.unsplash.com/featured/1600x900/?{requests.utils.quote(q)}"
 
 
 def inject_unsplash_bg(html: str, bg_url: str) -> str:
-    """
-    Adds:
-    - CSS background image on body
-    - overlay div for readability
-    """
     if not bg_url:
+        return html
+
+    if "goliath-bg-style" in html:
         return html
 
     style = f"""
@@ -1216,12 +1184,7 @@ def inject_unsplash_bg(html: str, bg_url: str) -> str:
 </style>
 """.strip()
 
-    # inject overlay after <body ...>
-    out = html
-    if "goliath-bg-style" in html:
-        return html
-
-    out = re.sub(r"</head>", style + "\n</head>", out, flags=re.IGNORECASE)
+    out = re.sub(r"</head>", style + "\n</head>", html, flags=re.IGNORECASE)
     out = re.sub(r"<body([^>]*)>", r"<body\1>\n<div class=\"goliath-bg-overlay\"></div>", out, flags=re.IGNORECASE)
     return out
 
@@ -1247,19 +1210,13 @@ def _has_script(html: str) -> bool:
 
 
 def _ensure_a_attrs(html: str) -> str:
-    """
-    - add target="_blank"
-    - add rel="nofollow sponsored noopener" (merge if exists)
-    """
     if not html:
         return html
 
     def repl_a(m: re.Match) -> str:
         tag = m.group(0)
-        # target
         if re.search(r"\btarget\s*=", tag, flags=re.IGNORECASE) is None:
             tag = tag[:-1] + ' target="_blank">'
-        # rel
         rel_m = re.search(r'\brel\s*=\s*(".*?"|\'.*?\'|[^\s>]+)', tag, flags=re.IGNORECASE)
         need = ["nofollow", "sponsored", "noopener"]
         if rel_m:
@@ -1306,17 +1263,24 @@ def pick_top_ads(aff: Dict[str, List[Dict[str, Any]]], genre: str, n: int = 2) -
     return clean[:max(1, min(3, n))]
 
 
+def ensure_i18n_key(html: str, key: str, vals: Dict[str, str]) -> str:
+    if "__I18N__" not in html:
+        return html
+    if re.search(rf"{re.escape(key)}\s*:", html):
+        return html
+
+    out = html
+    for lang, v in vals.items():
+        pat = rf"({lang}\s*:\s*\{{)"
+        if re.search(pat, out):
+            out = re.sub(pat, rf"\1\n  {json.dumps(key)}: {json.dumps(v)},", out, count=1)
+    return out
+
+
 def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, ads: List[Dict[str, Any]]) -> str:
-    """
-    Requires placeholders in HTML. If missing, inject near top of main content.
-    Adds JS to:
-      - decorate affiliate links with data-ad-id
-      - send click logs to endpoint (if configured)
-    """
     if not ads:
         return html
 
-    # Render block HTML
     cards = []
     for ad in ads:
         aid = ad["id"]
@@ -1344,17 +1308,14 @@ def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, a
 
     out = html
 
-    # Placeholder marker preferred
-    if "AFF_SLOT" in out:
+    if "<!-- AFF_SLOT -->" in out:
         out = out.replace("<!-- AFF_SLOT -->", block)
     else:
-        # Inject after first <main> or after body start if main missing
         out2 = re.sub(r"(<main[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
         if out2 == out:
             out2 = re.sub(r"(<body[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
         out = out2
 
-    # Inject click logger script
     js = f"""
 <script id="goliath-ads-js">
 (function() {{
@@ -1401,7 +1362,6 @@ def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, a
     if "goliath-ads-js" not in out:
         out = re.sub(r"</body>", js + "\n</body>", out, flags=re.IGNORECASE)
 
-    # Also add i18n key for ads title (if missing)
     out = ensure_i18n_key(out, "ads.title", {
         "en": "Sponsored / Recommended",
         "ja": "おすすめ（広告）",
@@ -1412,39 +1372,11 @@ def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, a
     return out
 
 
-
-def ensure_i18n_key(html: str, key: str, vals: Dict[str, str]) -> str:
-    """
-    If window.__I18N__ exists, inject missing key into each locale dict (best-effort string replace).
-    This is a safe additive patch—if it fails, page still works.
-    """
-    if "__I18N__" not in html:
-        return html
-
-    out = html
-    for lang, v in vals.items():
-        # naive insertion: find "lang":{ ... } and add if key missing
-        # We'll only add if key isn't already present.
-        if re.search(rf"{re.escape(key)}\s*:", out):
-            break
-
-    # best-effort: insert near start of each lang dict
-    for lang, v in vals.items():
-        pat = rf"({lang}\s*:\s*\{{)"
-        if re.search(pat, out):
-            # only insert if that lang block does not already contain the key
-            # (rough but prevents dup)
-            lang_block_m = re.search(rf"{lang}\s*:\s*\{{([\s\S]*?)\}}\s*,", out)
-            if lang_block_m and (key in lang_block_m.group(1)):
-                continue
-            out = re.sub(pat, rf"\1\n  {json.dumps(key)}: {json.dumps(v)},", out, count=1)
-    return out
-
-
 # ============================================================
-# Builder prompt (adds AFF_SLOT placeholder + genre + unsplash hint)
+# Builder prompt (REALISTIC for 3200 tokens)
 # ============================================================
 def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str, genre: str) -> str:
+    # ✅ 生成に失敗しやすい「量」を現実値へ調整
     return f"""
 You are generating a production-grade single-file HTML tool site.
 
@@ -1457,50 +1389,52 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 
 [Design]
 - Use Tailwind CSS via CDN (no build step)
-- Clean SaaS UI: top nav + hero section + centered tool card + sections
-- Use generous spacing, professional typography (Inter / Noto Sans JP via CDN)
-- Include a dedicated placeholder comment exactly: <!-- AFF_SLOT --> near top of main content area.
-- Include a subtle translucent white overlay style on content containers to improve readability over photo background.
+- Clean SaaS UI: top nav + hero + centered tool card + sections
+- Use Inter / Noto Sans JP via CDN
+- Include a placeholder comment exactly: <!-- AFF_SLOT --> near top of main content
+- Use translucent cards for readability over photo background
+- Include a Dark/Light toggle (store in localStorage "goliath_theme")
 
 [Navigation]
-- Add a top nav link back to the hub: href="../../index.html" (label must be translated via i18n)
-- Add a footer link back to hub as well (translated via i18n).
+- Top nav link back to hub: href="../../index.html" (label must be i18n)
+- Footer link back to hub (i18n)
 
 [Tool]
-- Implement an interactive JS mini-tool relevant to the theme (static, no server).
-- Must work without any server.
+- Implement an interactive JS mini-tool relevant to the theme (no server)
+- Include input validation and a "Copy result" button
 
 [Content]
-- Include a long-form article primarily in English (>= 1200 English words).
-- Also include Japanese full translation of the article (>= 2500 Japanese characters).
-- Use clear structure with H2/H3 headings, checklist, pitfalls, FAQ(>=5).
-- Add "References" section with 8-12 reputable external links (official docs / well-known sites).
+- Include a long-form article primarily in English (>= 650 words)
+- Include Japanese translation (>= 1200 Japanese characters)
+- Use H2/H3, checklist, pitfalls, FAQ(>=5)
+- Add "References" section with 8-10 reputable links (official docs / well-known sites)
 
-[Multi-language - VERY STRICT]
-- Default language MUST be English ("en").
-- Provide a WORKING language switcher for JA/EN/FR/DE (mobile-friendly).
-- The switcher MUST be a <select> with id="langSelect" and options: en,ja,fr,de (in that order).
-- EVERY visible text on the page MUST be translatable via i18n keys (data-i18n, data-i18n-placeholder, data-i18n-title, data-i18n-aria).
-- Provide a JS dictionary: window.__I18N__ = {{ en:{{...}}, ja:{{...}}, fr:{{...}}, de:{{...}} }}
-- Save language in localStorage key "goliath_lang" (fallback "en"), set <html lang=".."> and re-render on change.
+[Multi-language - STRICT]
+- Default language MUST be English ("en")
+- Provide language switcher: <select id="langSelect"> with options en,ja,fr,de (in that order)
+- EVERY visible text must use i18n keys (data-i18n / data-i18n-placeholder / data-i18n-title / data-i18n-aria)
+- Provide: window.__I18N__ = {{ en:{{...}}, ja:{{...}}, fr:{{...}}, de:{{...}} }}
+- Save lang in localStorage key "goliath_lang" (fallback "en")
+- Set <html lang=".."> and render on change
 
 [Compliance / Footer]
-- Auto-generate in-page sections for: Privacy Policy, Terms of Service, Disclaimer, About, Contact
-- These must be accessible via footer links using anchors. All text i18n-driven.
+- In-page sections: Privacy Policy, Terms of Service, Disclaimer, About, Contact
+- Accessible via footer anchor links
+- All text i18n-driven
 
 [Related Sites]
 - Include a "Related sites" section near bottom:
   - window.__RELATED__ = [];
-  - Render it into the list on load. If empty, hide the section.
+  - Render into list on load; if empty, hide
 
 [Ads / Affiliate]
-- Keep the placeholder <!-- AFF_SLOT --> where sponsored blocks can be injected later.
-- DO NOT include any third-party scripts.
+- Keep <!-- AFF_SLOT --> placeholder
+- DO NOT include any third-party scripts
 
 [Metadata]
-- Include meta description/canonical.
-- Canonical must be: {canonical_url}
-- Add a meta tag: <meta name="goliath-genre" content="{genre}">
+- Include meta description + canonical
+- Canonical: {canonical_url}
+- Add: <meta name="goliath-genre" content="{genre}">
 
 Return ONLY the final HTML.
 """.strip()
@@ -1532,18 +1466,18 @@ def validate_html(html: str) -> Tuple[bool, str]:
         return False, f"missing policy sections: {missing}"
     if 'id="langselect"' not in low:
         return False, "missing #langSelect"
-    if low.count("data-i18n=") < 80:
-        return False, "i18n coverage too small (data-i18n < 80)"
-    if "data-i18n-placeholder" not in low:
-        return False, "missing data-i18n-placeholder"
     if "__i18n__" not in low:
         return False, "missing window.__I18N__"
     if "goliath_lang" not in low:
         return False, "missing localStorage key goliath_lang handling"
-    if "../../index.html" not in low and "../index.html" not in low:
+    if "../../index.html" not in low:
         return False, "missing link back to hub (../../index.html)"
-    if "aff_slot" not in low and "<!-- aff_slot -->" not in low:
+    if "<!-- aff_slot -->" not in low and "aff_slot" not in low:
         return False, "missing affiliate placeholder <!-- AFF_SLOT -->"
+    if low.count("data-i18n=") < 35:
+        return False, "i18n coverage too small (data-i18n < 35)"
+    if "goliath_theme" not in low:
+        return False, "missing dark/light toggle storage key goliath_theme"
     return True, "ok"
 
 
@@ -1562,9 +1496,18 @@ Current index.html:
 """.strip()
 
 
+def _strip_code_fences(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"^```[a-zA-Z]*\s*", "", s)
+    s = re.sub(r"\s*```$", "", s)
+    return s.strip()
+
+
 def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
+    diff_text = _strip_code_fences(diff_text)
     if not diff_text.startswith("---"):
         return None
+
     lines = diff_text.splitlines()
     hunks = [i for i, l in enumerate(lines) if l.startswith("@@")]
     if not hunks:
@@ -1599,6 +1542,9 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
                     oidx += 1
                 elif l.startswith("+"):
                     result.append(l[1:])
+                elif l.startswith("\\"):
+                    # "\ No newline at end of file" etc
+                    pass
                 else:
                     return None
                 i += 1
@@ -1733,7 +1679,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Goliath Tools Hub</title>
-  <meta name="description" content="Auto-generated tools + long-form guides. Browse by purpose, popular tools, and newest releases." />
+  <meta name="description" content="Auto-generated tools + guides. Browse by purpose, popular tools, and newest releases." />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50">
@@ -1820,7 +1766,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
 
 
 # ============================================================
-# Posting (announce) - keep safe / optional
+# Posting (announce) - optional
 # ============================================================
 def post_bluesky(text: str) -> None:
     h = os.getenv("BSKY_HANDLE", "")
@@ -1908,7 +1854,7 @@ def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
         "You write a short, natural, polite reply to an online post.\n"
         "Rules:\n"
         "- Tone: kind, non-spammy, helpful.\n"
-        "- End with a gentle question.\n"
+        "- Do NOT claim you built the tool for them. Just offer it.\n"
         "- Append the tool URL at the end on a new line.\n"
         "- Do NOT mention \"AI\", \"automation\", \"bot\".\n"
         "- Keep it under 280 characters if possible.\n\n"
@@ -1948,50 +1894,7 @@ def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
 
 
 # ============================================================
-# Priority auto-update (reads click logs) — OPTIONAL
-# ============================================================
-def update_affiliate_priorities_from_log(log_summary: Dict[str, int]) -> None:
-    """
-    log_summary: {ad_id: clicks} in window (last 7d/30d)
-    priority = clamp(30, 90, 30 + log(1+clicks)*20)
-    """
-    if not log_summary:
-        print("[aff] no log summary, skip priority update")
-        return
-
-    aff = read_json(AFFILIATES_PATH, {})
-    if not isinstance(aff, dict):
-        print("[aff] affiliates.json missing or invalid")
-        return
-
-    changed = 0
-    for genre, items in aff.items():
-        if not isinstance(items, list):
-            continue
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            aid = (it.get("id") or "").strip()
-            if not aid:
-                continue
-            clicks = int(log_summary.get(aid, 0) or 0)
-            score = math.log(1 + max(0, clicks))
-            pr = int(30 + score * 20)
-            pr = max(30, min(90, pr))
-            old = int(it.get("priority", 50) or 50)
-            if pr != old:
-                it["priority"] = pr
-                changed += 1
-
-    if changed:
-        write_json(AFFILIATES_PATH, aff)
-        print("[aff] priority updated", changed)
-    else:
-        print("[aff] no changes")
-
-
-# ============================================================
-# Build prompt and auto-fix loop
+# Auto-fix loop
 # ============================================================
 def openai_fix_with_diff(client: OpenAI, error: str, html: str) -> str:
     fix_prompt = prompt_for_fix(error, html)
@@ -2000,10 +1903,12 @@ def openai_fix_with_diff(client: OpenAI, error: str, html: str) -> str:
         messages=[{"role": "user", "content": fix_prompt}],
         max_tokens=min(1200, MAX_OUTPUT_TOKENS_BUILD),
     ).choices[0].message.content or ""
-    patched = apply_unified_diff_to_text(html, diff.strip())
+
+    patched = apply_unified_diff_to_text(html, diff)
     if patched is not None:
         return patched
 
+    # fallback: regenerate minimal correction (still bounded)
     regen_prompt = "Fix validation error: " + error + "\nReturn ONLY corrected HTML.\n\n" + html
     res = client.chat.completions.create(
         model=MODEL,
@@ -2093,7 +1998,7 @@ def main() -> None:
     related = pick_related(tags, all_entries, seed_sites, k=8)
     html = inject_related_json(html, related)
 
-    # 5) Unsplash background (server-side pick + inject)
+    # 5) Unsplash background
     bg_url = unsplash_pick_image_url()
     html = inject_unsplash_bg(html, bg_url)
 
@@ -2144,7 +2049,7 @@ def main() -> None:
     except Exception as e:
         print("[history] exc", repr(e))
 
-    # 10) Auto-post (announce)
+    # 10) Auto-post (announce) - OFF by default
     if ENABLE_AUTO_POST:
         short_value = (search_title or "New tool").strip()[:80]
         post_text = f"{short_value}\n{public_url}"
@@ -2152,7 +2057,7 @@ def main() -> None:
         post_mastodon(post_text)
         post_x(post_text)
 
-    # 11) Leads + replies (cheapest model only)
+    # 11) Leads + replies (drafts)
     leads = collect_leads(theme)
 
     scored: List[Tuple[int, Dict[str, Any]]] = []
@@ -2198,4 +2103,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
