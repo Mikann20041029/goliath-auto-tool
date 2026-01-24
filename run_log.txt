@@ -1,4 +1,4 @@
-  File "/home/runner/work/goliath-auto-tool/goliath-auto-tool/main.py", line 52
-    return default
+  File "/home/runner/work/goliath-auto-tool/goliath-auto-tool/main.py", line 65
+    if g not in data:
     ^
-IndentationError: expected an indented block after 'if' statement on line 51
+IndentationError: expected an indented block after 'for' statement on line 64
