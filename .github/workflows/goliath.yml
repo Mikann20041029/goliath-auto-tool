@@ -38,6 +38,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_USER_ID: ${{ secrets.X_USER_ID }}
         run: |
           set +e
           python main.py 2>&1 | tee run_log.txt
@@ -71,6 +73,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REAL_EXITCODE: ${{ steps.goliath_run.outputs.real_exitcode }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_USER_ID: ${{ secrets.X_USER_ID }}
         run: |
           python tools/report_to_issue.py
 
