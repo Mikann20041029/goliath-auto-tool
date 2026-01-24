@@ -466,130 +466,102 @@ def _to_list(x):
         return x
     return []
 
-def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
-    """
-    Bluesky: atprotoで検索 + timeline fallback
-    必要: BSKY_HANDLE / BSKY_PASSWORD
-    """
-    h = os.getenv("BSKY_HANDLE", "")
-    p = os.getenv("BSKY_PASSWORD", "")
-
-    if not h:
-        print("[bluesky] skip: missing env BSKY_HANDLE")
-        return []
-    if not p:
-        print("[bluesky] skip: missing env BSKY_PASSWORD")
-        return []
-    if BskyClient is None:
-        print("[bluesky] skip: BskyClient is None (atproto not installed/import failed)")
-        return []
-        print("[bsky] start collect_bluesky")
-        print(f"[bsky] handle_set={bool(h)} password_set={bool(p)}")
-
-
-
-    queries = [
-        "need a tool",
-        "is there a tool",
-        "how can I convert",
-        "converter",
-        "calculator",
-        "compare plans",
-        "timezone",
-        "template",
-        "error",
-        "bug",
-        "issue",
-        "failed",
-    ]
-    print(f"[bsky] queries={len(queries)}")
-
-
-    keywords = KEYWORDS[:]  # reuse
-
-    out: List[Dict[str, Any]] = []
+    # ===== [bsky] DEBUG BLOCK: replace whole "login + search + timeline fallback" section =====
     try:
         c = BskyClient()
         c.login(h, p)
+        print("[bsky] login ok")
+    except Exception as e:
+        print(f"[bsky] login EXC err={e!r}")
+        return []
 
-        # 1) search
-print("[bsky] start collect_bluesky")
-print(f"[bsky] queries={len(queries)}")
+    # 1) search
+    for q in queries:
+        try:
+            res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
+            resd = _to_dict(res)
+            posts = _to_list(resd.get("posts"))
+            print(f"[bsky] q='{q}' posts={len(posts)} res_keys={list(resd.keys())}")
 
-c = BskyClient()
-c.login(h, p)
-print("[bsky] login ok")
+            if posts:
+                p0 = _to_dict(posts[0])
+                print(f"[bsky] sample_post_keys={list(p0.keys())}")
+                if isinstance(p0.get("post"), dict):
+                    print(f"[bsky] sample_post.post_keys={list(p0['post'].keys())}")
 
-for q in queries:
-    res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
-
-    posts = (res or {}).get("posts", []) or []
-    print(f"[bsky] q='{q}' posts={len(posts)}")
-
-    # 先頭1件だけ中身確認（多すぎ防止）
-    if posts:
-        p0 = posts[0]
-        uri0 = (p0 or {}).get("uri", "")
-        rec0 = (p0 or {}).get("record", {}) or {}
-        txt0 = (rec0.get("text", "") or "")[:80]
-        print(f"[bsky] sample uri={uri0}")
-        print(f"[bsky] sample text={txt0}")
-
-    for post in posts:
-        ...
-
-        rec = (post or {}).get("record", {}) or {}
-        txt = (rec.get("text", "") or "")
-        uri = (post.get("uri", "") or "")
-        did = ((post.get("author", {}) or {}).get("did", "") or "")
-        url = bsky_uri_to_url(uri, did) or uri
-        if not url:
+        except Exception as e:
+            print(f"[bsky] search EXC q='{q}' err={e!r}")
             continue
 
-        out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
-        if len(out) >= limit:
-            break
+        for raw in posts:
+            post = _to_dict(raw)
 
-    if len(out) >= limit:
-        break
+            # APIによっては {"post": {...}} の形が混ざるので吸収
+            base = post.get("post") if isinstance(post.get("post"), dict) else post
 
+            rec = _to_dict(base.get("record"))
+            txt = (rec.get("text") or "").strip()
+
+            uri = base.get("uri") or ""
+            author = _to_dict(base.get("author"))
+            did = author.get("did") or ""
+
+            url = bsky_uri_to_url(uri, did) or uri
+            if not url:
+                print(f"[bsky] drop(no url) uri={uri!r} did={did!r}")
+                continue
+
+            out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"q": q}})
             if len(out) >= limit:
                 break
 
-       # 2) timeline fallback
-if len(out) < limit:
-    try:
-        tl = c.app.bsky.feed.get_timeline({"limit": 200})
-        feed = (tl or {}).get("feed", []) or []
-        print(f"[bsky] timeline feed={len(feed)}")
+        if len(out) >= limit:
+            break
 
-        matched = 0
-        for item in feed:
-            post = (item or {}).get("post", {}) or {}
-            record = (post or {}).get("record", {}) or {}
-            txt = (record.get("text", "") or "")
-            t = txt.lower()
-            if any(k in t for k in keywords):
-                matched += 1
-                ...
-        print(f"[bsky] timeline matched={matched}")
+    # 2) timeline fallback
+    if len(out) < limit:
+        try:
+            tl = c.app.bsky.feed.get_timeline({"limit": 200})
+            tld = _to_dict(tl)
+            feed = _to_list(tld.get("feed"))
+            print(f"[bsky] timeline feed={len(feed)} tl_keys={list(tld.keys())}")
 
-    except Exception as e:
-        print(f"[bsky] timeline EXC err={e!r}")
+            matched = 0
+            for item_raw in feed:
+                item = _to_dict(item_raw)
+                postwrap = _to_dict(item.get("post"))
+                if not postwrap:
+                    continue
 
-                        continue
+                record = _to_dict(postwrap.get("record"))
+                txt = (record.get("text") or "")
+                t = txt.lower()
 
-                    uri = (post.get("uri", "") or "")
-                    did = (post.get("author", {}) or {}).get("did", "") or ""
-                    url = bsky_uri_to_url(uri, did) or uri
-                    if not url:
-                        continue
+                if any((k.lower() in t) for k in keywords if isinstance(k, str)):
+                    matched += 1
+                else:
+                    continue
 
-                    out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
-                    if len(out) >= limit:
-                        break
-            except Exception:
-                pass
+                uri = postwrap.get("uri") or ""
+                author = _to_dict(postwrap.get("author"))
+                did = author.get("did") or ""
+
+                url = bsky_uri_to_url(uri, did) or uri
+                if not url:
+                    continue
+
+                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"from": "timeline"}})
+                if len(out) >= limit:
+                    break
+
+            print(f"[bsky] timeline matched={matched}")
+
+        except Exception as e:
+            print(f"[bsky] timeline EXC err={e!r}")
+
+    print(f"[bsky] out_total={len(out)} limit={limit}")
+    # ===== [/bsky] DEBUG BLOCK =====
+
 
         # 3) dedupe
         seen = set()
