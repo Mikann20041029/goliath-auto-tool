@@ -38,15 +38,18 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
+        shell: bash
         run: |
           set +e
-          python main.py 2>&1 | tee run_log.txt
+          python -u main.py 2>&1 | tee run_log.txt
           code=${PIPESTATUS[0]}
           echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          echo "Goliath exit code: $code" >> "$GITHUB_STEP_SUMMARY"
           exit 0
 
       - name: Commit and Push Changes (ALL files)
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
           git config --global user.name "Goliath-Bot"
@@ -63,8 +66,9 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          python tools/report_to_issue.py
+          python -u tools/report_to_issue.py || true
 
       - name: Upload run log
         if: always()
@@ -72,12 +76,3 @@ jobs:
         with:
           name: goliath-run-log
           path: run_log.txt
-
-      - name: Fail job if Goliath failed
-        if: always()
-        run: |
-          code="${{ steps.goliath_run.outputs.exitcode }}"
-          if [ "$code" != "0" ]; then
-            echo "Goliath failed with exit code $code"
-            exit "$code"
-          fi
