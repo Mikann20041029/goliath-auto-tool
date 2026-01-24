@@ -1,93 +1,83 @@
 name: Goliath Auto Tool System
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 */8 * * *"
+ workflow_dispatch:
+ schedule:
+ - cron: "0 */8 * * *"
 
 permissions:
-  contents: write
-  issues: write
+ contents: write
+ issues: write
 
 concurrency:
-  group: goliath-auto
-  cancel-in-progress: false
+ group: goliath-auto
+ cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+ build:
+ runs-on: ubuntu-latest
+ steps:
+ - name: Checkout Repository
+ uses: actions/checkout@v4
+ with:
+ fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
+ - name: Set up Python
+ uses: actions/setup-python@v5
+ with:
+ python-version: "3.10"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+ - name: Install dependencies
+ run: |
+ python -m pip install --upgrade pip
+ if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Goliath (capture exit)
-        id: goliath_run
-        continue-on-error: true
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Optional creds (if you set them):
-          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
-          MASTODON_BASE: ${{ secrets.MASTODON_BASE }}
-          MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
-          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
-          X_USER_ID: ${{ secrets.X_USER_ID }}
-          LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
-        run: |
-          set +e
-          python main.py 2>&1 | tee run_log.txt
-          code=${PIPESTATUS[0]}
-          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
-          exit 0
+ - name: Run Goliath System (capture exit)
+ id: goliath_run
+ continue-on-error: true
+ env:
+ OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+ LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
+ run: |
+ set +e
+ python main.py 2>&1 | tee run_log.txt
+ code=${PIPESTATUS[0]}
+ echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+ exit 0
 
-      - name: Commit and Push Changes (ALL files)
-        if: always()
-        run: |
-          set -euo pipefail
-          git config --global user.name "Goliath-Bot"
-          git config --global user.email "bot@mikanntool.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update (auto): pages + leads + reports"
-            git push
-          fi
+ - name: Commit and Push Changes (ALL files)
+ if: always()
+ run: |
+ set -euo pipefail
+ git config --global user.name "Goliath-Bot"
+ git config --global user.email "bot@mikanntool.com"
+ git add -A
+ if git diff --cached --quiet; then
+ echo "No changes to commit."
+ else
+ git commit -m "Goliath: generate pages + replies + design (auto)"
+ git push
+ fi
 
-      - name: Create Issue Report (ALWAYS)
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python tools/report_to_issue.py
+ - name: Create Issue Report (ALWAYS)
+ if: always()
+ env:
+ GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ run: |
+ python tools/report_to_issue.py
 
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: goliath-artifacts
-          path: |
-            run_log.txt
-            out/leads.json
-            out/stats.json
+ - name: Upload run log
+ if: always()
+ uses: actions/upload-artifact@v4
+ with:
+ name: goliath-run-log
+ path: run_log.txt
 
-      - name: Fail job if Goliath failed
-        if: always()
-        run: |
-          code="${{ steps.goliath_run.outputs.exitcode }}"
-          if [ "$code" != "0" ]; then
-            echo "Goliath failed with exit code $code"
-            exit "$code"
-          fi
+ - name: Fail job if Goliath failed
+ if: always()
+ run: |
+ code="${{ steps.goliath_run.outputs.exitcode }}"
+ if [ "$code" != "0" ]; then
+ echo "Goliath failed with exit code $code"
+ exit "$code"
+ fi
