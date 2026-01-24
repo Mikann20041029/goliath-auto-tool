@@ -69,12 +69,13 @@ AFFILIATES_PATH = f"{ROOT}/affiliates.json"
 # ✅ デフォルトは自動投稿OFF（手動返信前提）
 ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "0") == "1"
 
-LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "40"))
-LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "30"))
+# ★あなたの命令に合わせてデフォルトを100件へ
+LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "100"))
+LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "120"))
 
 COLLECT_HN = int(os.getenv("COLLECT_HN", "40"))
-COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "40"))
-COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "40"))
+COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "120"))
+COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "120"))
 
 # Click log endpoint (Cloudflare Worker / GAS)
 CLICK_LOG_ENDPOINT = os.getenv("CLICK_LOG_ENDPOINT", "").strip()
@@ -568,11 +569,15 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# Bluesky Collector (DEBUG: reasons visible in Actions logs)
+# Bluesky Collector (cursor paging to dig deeper)
 # ============================================================
 def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
     h = os.getenv("BSKY_HANDLE", "").strip()
     p = os.getenv("BSKY_PASSWORD", "").strip()
+
+    # how many pages per query to try
+    BSKY_MAX_PAGES = int(os.getenv("BSKY_MAX_PAGES", "10"))
+    BSKY_LIMIT_PER_CALL = int(os.getenv("BSKY_LIMIT_PER_CALL", "50"))
 
     print("[bsky] preflight",
           json.dumps({
@@ -580,9 +585,12 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
               "has_password": bool(p),
               "has_atproto": (BskyClient is not None),
               "has_ext_collector": bool(collect_bluesky_ext),
-              "limit": limit
+              "limit": limit,
+              "BSKY_MAX_PAGES": BSKY_MAX_PAGES,
+              "BSKY_LIMIT_PER_CALL": BSKY_LIMIT_PER_CALL,
           }, ensure_ascii=False))
 
+    # If you already have an external collector module, keep it (existing feature)
     if collect_bluesky_ext:
         try:
             out = collect_bluesky_ext(KEYWORDS, limit_per_query=25)  # type: ignore
@@ -611,9 +619,16 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         return []
 
     out: List[Dict[str, Any]] = []
+
+    # More aggressive query set (still aligned with your KEYWORDS)
     queries = [
-        "need a tool", "is there a tool", "converter", "calculator", "timezone",
-        "pricing", "subscription", "pdf", "image resize", "ffmpeg",
+        "need help", "anyone know", "how do i", "how to",
+        "error", "bug", "issue", "problem", "failed", "broken", "crash", "traceback",
+        "github actions", "workflow", "docker", "npm", "pip",
+        "api", "oauth",
+        "need a tool", "is there a tool", "tool for",
+        "convert", "converter", "calculator", "compare", "timezone", "subscription", "pricing",
+        "pdf", "ocr", "image resize", "ffmpeg", "video compress",
     ]
 
     def bsky_uri_to_url(uri: str, did: str = "") -> str:
@@ -664,38 +679,57 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         return []
 
     for q in queries:
-        try:
-            res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
-            resd = _to_dict(res)
-            posts = _to_list(resd.get("posts"))
-            print("[bsky] search", {"q": q, "posts": len(posts), "keys": list(resd.keys())})
+        cursor = None
+        pages = 0
+        while pages < BSKY_MAX_PAGES and len(out) < limit:
+            pages += 1
+            try:
+                payload = {"q": q, "limit": max(1, min(100, BSKY_LIMIT_PER_CALL))}
+                if cursor:
+                    payload["cursor"] = cursor
 
-            for raw in posts:
-                post = _to_dict(raw)
-                base = post.get("post") if isinstance(post.get("post"), dict) else post
+                res = c.app.bsky.feed.search_posts(payload)
+                resd = _to_dict(res)
+                posts = _to_list(resd.get("posts"))
+                cursor = resd.get("cursor") or None
 
-                rec = _to_dict(base.get("record"))
-                txt = (rec.get("text") or "").strip()
-                if not txt:
-                    continue
+                print("[bsky] search", {"q": q, "page": pages, "posts": len(posts), "has_cursor": bool(cursor)})
 
-                uri = (base.get("uri") or "").strip()
-                author = _to_dict(base.get("author"))
-                did = (author.get("did") or "").strip()
-                url = bsky_uri_to_url(uri, did) or uri
-                if not url:
-                    continue
-
-                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"q": q}})
-                if len(out) >= limit:
+                if not posts:
                     break
-            if len(out) >= limit:
+
+                for raw in posts:
+                    post = _to_dict(raw)
+                    base = post.get("post") if isinstance(post.get("post"), dict) else post
+
+                    rec = _to_dict(base.get("record"))
+                    txt = (rec.get("text") or "").strip()
+                    if not txt:
+                        continue
+
+                    uri = (base.get("uri") or "").strip()
+                    author = _to_dict(base.get("author"))
+                    did = (author.get("did") or "").strip()
+                    url = bsky_uri_to_url(uri, did) or uri
+                    if not url:
+                        continue
+
+                    out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"q": q, "page": pages}})
+                    if len(out) >= limit:
+                        break
+
+                # if the API stops giving cursor, we can't page further for this query
+                if not cursor:
+                    break
+
+            except Exception as e:
+                print("[bsky] search EXC", {"q": q, "page": pages, "err": repr(e)})
                 break
 
-        except Exception as e:
-            print("[bsky] search EXC", {"q": q, "err": repr(e)})
-            continue
+        if len(out) >= limit:
+            break
 
+    # de-dup
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in out:
@@ -730,6 +764,7 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
             "github actions", "docker", "npm", "pip", "api", "oauth",
             "need a tool", "is there a tool", "tool for",
             "convert", "converter", "calculator", "compare", "timezone",
+            "subscription", "pricing",
         ]
 
         if tok:
@@ -749,6 +784,7 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
                 except Exception as e:
                     print("[mastodon] search EXC", {"q": q, "err": repr(e)})
 
+        # fallback public timeline
         if len(out) < limit:
             try:
                 statuses = m.timeline_public(limit=80)
@@ -803,7 +839,8 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
 
     queries = [
         "help", "how to", "error", "bug", "issue", "failed", "broken",
-        "convert", "converter", "calculator", "timezone", "compare"
+        "convert", "converter", "calculator", "timezone", "compare",
+        "subscription", "pricing",
     ]
 
     out: List[Dict[str, Any]] = []
@@ -817,7 +854,7 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
         )
 
         for q in queries:
-            for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=60):
+            for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=100):
                 txt = (getattr(s, "title", "") or "") + "\n" + (getattr(s, "selftext", "") or "")
                 url = getattr(s, "url", "") or ""
                 if url and txt:
@@ -872,7 +909,7 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
             return []
         user_id = me.data.id
 
-        resp = client.get_users_mentions(id=user_id, max_results=min(5, max_reads_run))
+        resp = client.get_users_mentions(id=user_id, max_results=min(100, max_reads_run))
         if not resp or not getattr(resp, "data", None):
             return []
 
@@ -1377,7 +1414,6 @@ def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, a
 # Builder prompt (REALISTIC for 3200 tokens)
 # ============================================================
 def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str, genre: str) -> str:
-    # ✅ 生成に失敗しやすい「量」を現実値へ調整
     return f"""
 You are generating a production-grade single-file HTML tool site.
 
@@ -1421,7 +1457,7 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 [Compliance / Footer]
 - In-page sections: Privacy Policy, Terms of Service, Disclaimer, About, Contact
 - Accessible via footer anchor links
-- All text i18n-driven
+- Accessible text i18n-driven
 
 [Related Sites]
 - Include a "Related sites" section near bottom:
@@ -1544,7 +1580,6 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
                 elif l.startswith("+"):
                     result.append(l[1:])
                 elif l.startswith("\\"):
-                    # "\ No newline at end of file" etc
                     pass
                 else:
                     return None
@@ -1795,7 +1830,6 @@ def post_mastodon(text: str) -> None:
 
 
 def post_x(text: str) -> None:
-    # safer: skip actual X posting here
     if not (os.getenv("X_API_KEY") and os.getenv("X_API_SECRET") and os.getenv("X_ACCESS_TOKEN") and os.getenv("X_ACCESS_TOKEN_SECRET")):
         return
     create_github_issue(
@@ -1810,22 +1844,26 @@ def post_x(text: str) -> None:
 def collect_leads(theme: str) -> List[Dict[str, Any]]:
     leads: List[Dict[str, Any]] = []
 
+    # collect aggressively so that after dedup we still have enough
+    want = max(LEADS_TOTAL, 100)
+    per = max(LEADS_PER_SOURCE, want)
+
     try:
-        b = collect_bluesky(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        b = collect_bluesky(min(per, want * 2))
         print(f"[counts] bluesky={len(b)}")
         leads.extend(b)
     except Exception as e:
         print("[counts] bluesky error:", repr(e))
 
     try:
-        m = collect_mastodon(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        m = collect_mastodon(min(per, want * 2))
         print(f"[counts] mastodon={len(m)}")
         leads.extend(m)
     except Exception as e:
         print("[counts] mastodon error:", repr(e))
 
     try:
-        r = collect_reddit(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        r = collect_reddit(min(per, want * 2))
         print(f"[counts] reddit={len(r)}")
         leads.extend(r)
     except Exception as e:
@@ -1847,7 +1885,7 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
         seen.add(u)
         uniq.append(it)
 
-    return uniq[:LEADS_TOTAL]
+    return uniq[:max(LEADS_TOTAL, 100)]
 
 
 def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
@@ -1876,51 +1914,74 @@ def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
     return txt
 
 
-def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
+def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str, header_lines: List[str]) -> str:
     lines: List[str] = []
-    lines.append("以下は「手動返信用」の候補です。\n")
-    lines.append("形式:\n- 対象の悩みURL\n- 返信文（末尾にツールURL入り）\n")
+    lines.extend(header_lines)
+    lines.append("")
+    lines.append("以下は「手動返信用」の候補です。")
+    lines.append("形式:")
+    lines.append("- 対象の悩みURL")
+    lines.append("- 返信文（末尾にツールURL入り）")
     lines.append("----\n")
 
     for i, it in enumerate(leads, 1):
         url = it.get("url", "")
         src = it.get("source", "")
+        txt = (it.get("text", "") or "").strip()
+        rep = (it.get("reply", "") or "").strip()
+
         lines.append(f"#{i} [{src}]")
         lines.append(url)
+        if txt:
+            lines.append("投稿抜粋:")
+            lines.append(txt)
         lines.append("返信文:")
-        lines.append((it.get("reply", "") or "").strip())
+        lines.append(rep if rep else f"(reply missing)\n{tool_url}")
         lines.append("\n----\n")
 
     return "\n".join(lines)
+
+
 def safe_short(s: str, n: int = 260) -> str:
-+    s = (s or "").strip()
-+    s = re.sub(r"\s+", " ", s)
-+    return s[:n]
-+
-+def generate_leads_replies(client: OpenAI, leads: List[Dict[str, Any]], tool_url: str) -> List[Dict[str, Any]]:
-+    out: List[Dict[str, Any]] = []
-+    for it in leads:
-+        txt = safe_short(it.get("text", "") or "", 350)
-+        url = (it.get("url") or "").strip()
-+        if not txt or not url:
-+            continue
-+        try:
-+            reply = openai_generate_reply(client, txt, tool_url)
-+        except Exception as e:
-+            reply = f"(reply generation failed: {repr(e)})\n{tool_url}".strip()
-+        it2 = dict(it)
-+        it2["reply"] = reply
-+        out.append(it2)
-+    return out
-+
-+def create_leads_issue(client: OpenAI, theme: str, leads: List[Dict[str, Any]], tool_url: str) -> None:
-+    if not leads:
-+        return
-+    # 返信生成（短文）
-+    leads2 = generate_leads_replies(client, leads, tool_url)
-+    body = build_leads_issue_body(leads2, tool_url)
-+    chunk_and_create_issues(f"[Goliath] Manual reply candidates: {safe_short(theme, 40)}", body)
-+
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s[:n]
+
+
+def generate_leads_replies(client: OpenAI, leads: List[Dict[str, Any]], tool_url: str) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for it in leads:
+        txt = safe_short(it.get("text", "") or "", 350)
+        url = (it.get("url") or "").strip()
+        if not txt or not url:
+            continue
+        try:
+            reply = openai_generate_reply(client, txt, tool_url)
+        except Exception as e:
+            reply = f"(reply generation failed: {repr(e)})\n{tool_url}".strip()
+        it2 = dict(it)
+        it2["reply"] = reply
+        out.append(it2)
+    return out
+
+
+def create_leads_issue(client: OpenAI, theme: str, leads: List[Dict[str, Any]], tool_url: str, debug_counts: Dict[str, int]) -> None:
+    if not leads:
+        create_github_issue("[Goliath] Manual reply candidates: EMPTY", "leads empty. Check collectors/secrets.")
+        return
+
+    leads2 = generate_leads_replies(client, leads, tool_url)
+
+    header_lines = []
+    header_lines.append(f"Tool URL: {tool_url}")
+    header_lines.append(f"Theme: {safe_short(theme, 120)}")
+    header_lines.append(f"LEADS_TOTAL(target): {LEADS_TOTAL}")
+    header_lines.append(f"Collector counts: {json.dumps(debug_counts, ensure_ascii=False)}")
+    header_lines.append("Bluesky debug hint: Actions logs -> search '[bsky] preflight' and '[bsky] search'")
+
+    body = build_leads_issue_body(leads2, tool_url, header_lines)
+    chunk_and_create_issues(f"[Goliath] Manual reply candidates ({len(leads2)})", body)
+
 
 # ============================================================
 # Auto-fix loop
@@ -1937,7 +1998,6 @@ def openai_fix_with_diff(client: OpenAI, error: str, html: str) -> str:
     if patched is not None:
         return patched
 
-    # fallback: regenerate minimal correction (still bounded)
     regen_prompt = "Fix validation error: " + error + "\nReturn ONLY corrected HTML.\n\n" + html
     res = client.chat.completions.create(
         model=MODEL,
@@ -2086,66 +2146,54 @@ def main() -> None:
         post_mastodon(post_text)
         post_x(post_text)
 
-    # 11) Leads + replies (drafts)
-    leads = collect_leads(theme)
+    # 11) Leads + replies (drafts) -> Issue (100件)
+    # collect + score + top100
+    leads_raw = collect_leads(theme)
+
+    debug_counts = {
+        "Bluesky": sum(1 for x in leads_raw if x.get("source") == "Bluesky"),
+        "Mastodon": sum(1 for x in leads_raw if x.get("source") == "Mastodon"),
+        "Reddit": sum(1 for x in leads_raw if x.get("source") == "Reddit"),
+        "X": sum(1 for x in leads_raw if x.get("source") == "X"),
+        "Other": sum(1 for x in leads_raw if x.get("source") not in ["Bluesky", "Mastodon", "Reddit", "X"]),
+        "TotalUnique": len(leads_raw),
+    }
 
     scored: List[Tuple[int, Dict[str, Any]]] = []
-    for it in leads:
+    for it in leads_raw:
         s, _tbl = score_item(it.get("text", ""), it.get("url", ""), it.get("meta", {}) or {})
         scored.append((s, it))
     scored.sort(key=lambda x: x[0], reverse=True)
-    top = [it for _s, it in scored[: min(12, len(scored))]]
-+
-+    # Issue: 手動返信候補（返信文はこの中で生成）
-+    try:
-+        create_leads_issue(client, theme, top, public_url)
-+    except Exception as e:
-+        create_github_issue("[Goliath] Leads issue failed", f"theme={theme}\nerr={repr(e)}")
-+
-+    print("[done] created:", public_url)
-+
-+
-+if __name__ == "__main__":
-+    try:
-+        main()
-+    except Exception as e:
-+        # Actionsで原因が見えるようにする
-+        print("[fatal]", repr(e))
-+        raise
 
-    final: List[Dict[str, Any]] = []
-    for it in top[:LEADS_TOTAL]:
-        txt = it.get("text", "") or ""
-        reply = openai_generate_reply(client, txt, public_url)
-        it2 = dict(it)
-        it2["reply"] = reply
-        final.append(it2)
+    top_n = max(LEADS_TOTAL, 100)
+    top = [it for _s, it in scored[:min(top_n, len(scored))]]
 
-    header: List[str] = []
-    header.append(f"Tool URL: {public_url}")
-    header.append(f"Theme: {theme}")
-    header.append(f"Search title: {search_title}")
-    header.append(f"Genre: {genre}")
-    header.append(f"Picked from: {best_item.get('source')} / {best_item.get('url')}")
-    header.append(f"Best score: {best_score} / breakdown: {json.dumps(best_table, ensure_ascii=False)}")
-    header.append(f"Tags: {', '.join(tags)}")
-    header.append(f"Related sites count: {len(related)}")
-    header.append(f"Unsplash bg: {bg_url}")
-    header.append(f"Ads injected: {', '.join([a.get('id','') for a in top_ads]) if top_ads else '(none)'}")
-    header.append("")
-    header.append("Bluesky debug hint:")
-    header.append("- In Actions logs, search '[bsky] preflight' and '[bsky] search' to see exact reason for 0.")
-    header.append("")
-    header.append("")
+    # If still not enough, issue a debug report (does not remove existing features)
+    if len(top) < top_n:
+        create_github_issue(
+            "[Goliath] WARNING: not enough leads to reach target",
+            "Wanted: {want}\nGot: {got}\nCounts: {counts}\n\n"
+            "You can try:\n"
+            "- Increase LEADS_PER_SOURCE / BSKY_MAX_PAGES / BSKY_LIMIT_PER_CALL\n"
+            "- Ensure Reddit/PRAW + Mastodon + Bluesky secrets are set\n"
+            "- Check Bluesky logs for cursor paging".format(
+                want=top_n, got=len(top), counts=json.dumps(debug_counts, ensure_ascii=False)
+            )
+        )
 
-    body = "\n".join(header) + build_leads_issue_body(final, public_url)
+    # Create the manual-reply issue (this is the thing you said disappeared)
+    try:
+        create_leads_issue(client, theme, top, public_url, debug_counts)
+    except Exception as e:
+        create_github_issue("[Goliath] Leads issue failed", f"theme={theme}\nerr={repr(e)}")
 
-    chunk_and_create_issues(
-        title_prefix=f"[Goliath] Reply candidates ({LEADS_TOTAL}) + new tool: {slug}",
-        body=body,
-        max_chars=60000
-    )
+    print("[done] created:", public_url)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("[fatal]", repr(e))
+        raise
+
