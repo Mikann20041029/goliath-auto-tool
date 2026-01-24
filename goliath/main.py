@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import sys
 import time
 import glob
 import random
@@ -1891,7 +1892,35 @@ def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
         lines.append("\n----\n")
 
     return "\n".join(lines)
-
+def safe_short(s: str, n: int = 260) -> str:
++    s = (s or "").strip()
++    s = re.sub(r"\s+", " ", s)
++    return s[:n]
++
++def generate_leads_replies(client: OpenAI, leads: List[Dict[str, Any]], tool_url: str) -> List[Dict[str, Any]]:
++    out: List[Dict[str, Any]] = []
++    for it in leads:
++        txt = safe_short(it.get("text", "") or "", 350)
++        url = (it.get("url") or "").strip()
++        if not txt or not url:
++            continue
++        try:
++            reply = openai_generate_reply(client, txt, tool_url)
++        except Exception as e:
++            reply = f"(reply generation failed: {repr(e)})\n{tool_url}".strip()
++        it2 = dict(it)
++        it2["reply"] = reply
++        out.append(it2)
++    return out
++
++def create_leads_issue(client: OpenAI, theme: str, leads: List[Dict[str, Any]], tool_url: str) -> None:
++    if not leads:
++        return
++    # 返信生成（短文）
++    leads2 = generate_leads_replies(client, leads, tool_url)
++    body = build_leads_issue_body(leads2, tool_url)
++    chunk_and_create_issues(f"[Goliath] Manual reply candidates: {safe_short(theme, 40)}", body)
++
 
 # ============================================================
 # Auto-fix loop
@@ -2065,7 +2094,24 @@ def main() -> None:
         s, _tbl = score_item(it.get("text", ""), it.get("url", ""), it.get("meta", {}) or {})
         scored.append((s, it))
     scored.sort(key=lambda x: x[0], reverse=True)
-    top = [it for _s, it in scored[:max(LEADS_TOTAL, 10)]]
+    top = [it for _s, it in scored[: min(12, len(scored))]]
++
++    # Issue: 手動返信候補（返信文はこの中で生成）
++    try:
++        create_leads_issue(client, theme, top, public_url)
++    except Exception as e:
++        create_github_issue("[Goliath] Leads issue failed", f"theme={theme}\nerr={repr(e)}")
++
++    print("[done] created:", public_url)
++
++
++if __name__ == "__main__":
++    try:
++        main()
++    except Exception as e:
++        # Actionsで原因が見えるようにする
++        print("[fatal]", repr(e))
++        raise
 
     final: List[Dict[str, Any]] = []
     for it in top[:LEADS_TOTAL]:
