@@ -574,8 +574,10 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
             uniq.append(it)
 
         return uniq[:limit]
-    except Exception:
-        return out[:limit]
+    except Exception as e:
+    print(f"[bsky] EXC err={e!r}")
+    return []
+
 
 
 def collect_reddit(limit: int) -> List[Dict[str, Any]]:
