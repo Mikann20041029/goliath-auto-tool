@@ -72,7 +72,8 @@ jobs:
           X_RESULTS_PER_REQUEST: "10"
           X_FULL_ARCHIVE: "0"
 
-        run: python goliath/main.py
+        run: python -m goliath.main
+
 
       - name: Commit and push changes
         run: |
