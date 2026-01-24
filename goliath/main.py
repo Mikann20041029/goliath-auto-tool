@@ -69,13 +69,24 @@ AFFILIATES_PATH = f"{ROOT}/affiliates.json"
 # ✅ デフォルトは自動投稿OFF（手動返信前提）
 ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "0") == "1"
 
-# ★あなたの命令に合わせてデフォルトを100件へ
-LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "100"))
-LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "120"))
+# ============================================================
+# Per-source minimum leads (YOUR ORDER)
+# - Guarantee "try to collect >= these numbers", then filter
+# ============================================================
+LEADS_TARGETS = {
+    "Bluesky": int(os.getenv("LEADS_TARGET_BSKY", "50")),
+    "X": int(os.getenv("LEADS_TARGET_X", "3")),
+    "Reddit": int(os.getenv("LEADS_TARGET_REDDIT", "20")),
+    "Mastodon": int(os.getenv("LEADS_TARGET_MASTODON", "100")),
+}
+LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", str(sum(LEADS_TARGETS.values()))))  # default 173
+LEADS_OVERSAMPLE_MULT = float(os.getenv("LEADS_OVERSAMPLE_MULT", "3.0"))       # collect >= target*3 then rank
+LEADS_MAX_OUTPUT = int(os.getenv("LEADS_MAX_OUTPUT", str(max(LEADS_TOTAL, 180))))
 
-COLLECT_HN = int(os.getenv("COLLECT_HN", "40"))
-COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "120"))
-COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "120"))
+# Collector base sizes (independent from leads; used for tool theme picking)
+COLLECT_HN = int(os.getenv("COLLECT_HN", "60"))
+COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "220"))
+COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "360"))
 
 # Click log endpoint (Cloudflare Worker / GAS)
 CLICK_LOG_ENDPOINT = os.getenv("CLICK_LOG_ENDPOINT", "").strip()
@@ -92,29 +103,77 @@ UNSPLASH_QUERIES = [
 # ============================================================
 # Keywords / Scoring
 # ============================================================
-KEYWORDS = [
-    "help", "need help", "anyone know", "any idea", "how do i", "how to", "can't", "cannot", "won't",
-    "stuck", "blocked", "error", "bug", "issue", "problem", "failed", "failure", "broken", "crash",
-    "exception", "traceback", "deploy", "build failed", "github actions", "workflow", "docker", "npm", "pip",
-    "api", "oauth", "convert", "converter", "calculator", "template", "compare", "timezone"
+BASE_HELP_PHRASES = [
+    "help", "need help", "please help", "anyone know", "any idea",
+    "how do i", "how to", "can't", "cannot", "won't", "stuck", "blocked",
+    "error", "bug", "issue", "problem", "failed", "failure", "broken", "crash",
+    "exception", "traceback", "fix", "debug", "setup", "configure",
 ]
+
+BASE_TECH_TERMS = [
+    "deploy", "build failed", "github actions", "workflow", "docker", "kubernetes",
+    "npm", "pnpm", "yarn", "pip", "poetry", "conda", "api", "oauth", "jwt",
+    "ssl", "dns", "cloudflare", "vercel", "netlify", "nginx", "linux", "windows",
+    "convert", "converter", "calculator", "generator", "template", "compare",
+    "timezone", "time zone", "pricing", "subscription", "invoice", "tax",
+    "pdf", "ocr", "docs", "spreadsheet", "excel", "csv", "image", "resize",
+    "compress", "ffmpeg", "video", "audio",
+]
+
+# Ban list
 BAN_WORDS = ["boilerplate", "starter", "scaffold"]
 
-# Fixed 12 genres (must match exactly)
+# Expanded genres (YOUR LIST)
 GENRES = [
-    "Web/Hosting",
-    "Dev/Tools",
-    "AI/Automation",
-    "Security/Privacy",
-    "Media: Video/Audio",
-    "PDF/Docs",
-    "Images/Design",
-    "Data/Spreadsheets",
-    "Business/Accounting/Tax",
-    "Marketing/Social",
+    "Web / Hosting",
+    "Dev / Tools",
+    "AI / Automation",
+    "Security / Privacy",
+    "Media（Video / Audio）",
+    "PDF / Docs",
+    "Images / Design",
+    "Data / Spreadsheets",
+    "Business / Accounting / Tax",
+    "Marketing / Social",
     "Productivity",
-    "Education/Language",
+    "Education / Language",
+    "Travel / Planning",
+    "Food / Cooking",
+    "Health / Fitness",
+    "Study / Learning",
+    "Money / Personal Finance",
+    "Career / Work",
+    "Relationships / Communication",
+    "Home / Life Admin",
+    "Shopping / Products",
+    "Events / Leisure",
 ]
+
+# Genre -> topic terms (for massive query pool)
+GENRE_TERMS: Dict[str, List[str]] = {
+    "Web / Hosting": ["dns", "ssl", "cloudflare", "github pages", "vercel", "domain", "redirect", "cdn", "http", "https", "cname", "a record"],
+    "Dev / Tools": ["git", "ci", "cd", "ide", "vscode", "python", "node", "api", "sdk", "logging", "debug", "build"],
+    "AI / Automation": ["openai", "chatgpt", "agent", "workflow", "automation", "prompt", "llm", "embedding", "vector", "rag"],
+    "Security / Privacy": ["oauth", "2fa", "password", "vpn", "jwt", "privacy", "encryption", "malware", "phishing"],
+    "Media（Video / Audio）": ["ffmpeg", "video compress", "audio convert", "subtitle", "mp4", "mov", "mp3", "aac", "bitrate"],
+    "PDF / Docs": ["pdf", "merge pdf", "split pdf", "ocr", "sign pdf", "docx", "google docs", "convert pdf"],
+    "Images / Design": ["image resize", "remove bg", "svg", "png", "jpg", "webp", "design", "figma", "compress image"],
+    "Data / Spreadsheets": ["excel", "google sheets", "csv", "pivot", "formula", "spreadsheet", "data cleaning"],
+    "Business / Accounting / Tax": ["invoice", "bookkeeping", "tax", "accounting", "receipt", "vat", "expense"],
+    "Marketing / Social": ["seo", "analytics", "utm", "email marketing", "scheduling", "content", "social media"],
+    "Productivity": ["checklist", "notes", "calendar", "task", "habit", "pomodoro", "template"],
+    "Education / Language": ["english", "language", "toeic", "eiken", "study plan", "flashcards"],
+    "Travel / Planning": ["itinerary", "packing list", "timezone", "budget travel", "booking"],
+    "Food / Cooking": ["recipe", "meal plan", "nutrition", "cooking", "shopping list"],
+    "Health / Fitness": ["workout", "fitness", "calorie", "macro", "steps", "sleep"],
+    "Study / Learning": ["study", "learning", "revision", "practice", "exam", "notes"],
+    "Money / Personal Finance": ["budget", "savings", "interest", "loan", "credit card", "investing"],
+    "Career / Work": ["resume", "cv", "job", "interview", "salary", "career"],
+    "Relationships / Communication": ["communication", "dating", "relationship", "conversation", "message"],
+    "Home / Life Admin": ["rent", "utilities", "moving", "home admin", "forms", "documents"],
+    "Shopping / Products": ["compare", "price", "review", "best", "buy", "deal"],
+    "Events / Leisure": ["event", "ticket", "schedule", "weekend", "leisure"],
+}
 
 # ============================================================
 # Utilities
@@ -301,7 +360,7 @@ def make_search_title(theme: str, tags: List[str]) -> str:
         suffix = "pricing tool"
 
     kws = []
-    for k in ["tax", "subscription", "pricing", "timezone", "time zone", "convert", "calculator", "pdf", "image", "video", "dns", "ssl", "oauth", "api"]:
+    for k in ["tax", "subscription", "pricing", "timezone", "time zone", "convert", "calculator", "pdf", "image", "video", "dns", "ssl", "oauth", "api", "budget", "resume"]:
         if k in tl:
             kws.append(k)
     core = kws[0] if kws else t[:60]
@@ -320,13 +379,17 @@ def infer_tags_simple(theme: str) -> List[str]:
         "calculator": "calculator",
         "compare": "compare",
         "tax": "finance",
+        "budget": "finance",
+        "loan": "finance",
         "timezone": "time",
         "time zone": "time",
         "subscription": "pricing",
         "pricing": "pricing",
         "plan": "pricing",
+        "invoice": "finance",
         "checklist": "productivity",
         "notes": "productivity",
+        "calendar": "productivity",
         "pdf": "pdf",
         "ocr": "pdf",
         "ffmpeg": "media",
@@ -334,9 +397,11 @@ def infer_tags_simple(theme: str) -> List[str]:
         "audio": "media",
         "image": "images",
         "resize": "images",
+        "design": "images",
         "dns": "web",
         "ssl": "web",
         "cloudflare": "web",
+        "domain": "web",
         "github": "dev",
         "ci": "dev",
         "api": "dev",
@@ -350,45 +415,84 @@ def infer_tags_simple(theme: str) -> List[str]:
         "english": "education",
         "toeic": "education",
         "eiken": "education",
+        "travel": "travel",
+        "itinerary": "travel",
+        "recipe": "food",
+        "cooking": "food",
+        "workout": "health",
+        "fitness": "health",
+        "resume": "career",
+        "interview": "career",
+        "relationship": "relationships",
+        "dating": "relationships",
+        "rent": "home",
+        "moving": "home",
+        "shopping": "shopping",
+        "price": "shopping",
+        "event": "events",
+        "ticket": "events",
     }
     for k, v in rules.items():
         if k in t and v not in tags:
             tags.append(v)
     if not tags:
         tags = ["tools"]
-    return tags[:8]
+    return tags[:10]
 
 
 def infer_genre(theme: str, tags: List[str]) -> str:
     t = (theme or "").lower()
     tagset = set([x.lower() for x in (tags or [])])
 
-    if any(k in t for k in ["dns", "ssl", "cloudflare", "vercel", "uptime", "github pages"]) or "web" in tagset:
-        return "Web/Hosting"
-    if any(k in t for k in ["ide", "git", "ci", "cd", "logging", "api", "sdk"]) or "dev" in tagset:
-        return "Dev/Tools"
-    if any(k in t for k in ["llm", "agent", "automation", "workflow", "openai", "chatgpt"]) or "ai" in tagset:
-        return "AI/Automation"
-    if any(k in t for k in ["vpn", "password", "2fa", "malware", "privacy", "oauth"]) or "security" in tagset:
-        return "Security/Privacy"
-    if any(k in t for k in ["ffmpeg", "video", "audio", "subtitle", "compress"]) or "media" in tagset:
-        return "Media: Video/Audio"
-    if any(k in t for k in ["pdf", "ocr", "merge", "sign", "doc"]) or "pdf" in tagset:
-        return "PDF/Docs"
-    if any(k in t for k in ["image", "resize", "optimize", "remove bg", "design"]) or "images" in tagset:
-        return "Images/Design"
-    if any(k in t for k in ["csv", "excel", "spreadsheet", "google sheets", "finance template"]) or "data" in tagset:
-        return "Data/Spreadsheets"
-    if any(k in t for k in ["invoice", "bookkeeping", "tax", "accounting"]) or "finance" in tagset:
-        return "Business/Accounting/Tax"
-    if any(k in t for k in ["seo", "analytics", "scheduling", "email", "social"]) or "marketing" in tagset:
-        return "Marketing/Social"
-    if any(k in t for k in ["notes", "task", "calendar", "focus", "checklist"]) or "productivity" in tagset:
-        return "Productivity"
-    if any(k in t for k in ["english", "language", "toeic", "eiken", "exam", "study"]) or "education" in tagset:
-        return "Education/Language"
+    def has_any(words: List[str]) -> bool:
+        return any(w in t for w in words)
 
-    return "Dev/Tools"
+    if has_any(["dns", "ssl", "cloudflare", "vercel", "netlify", "github pages", "domain", "cname", "a record"]) or "web" in tagset:
+        return "Web / Hosting"
+    if has_any(["ide", "git", "ci", "cd", "logging", "sdk", "devtools", "build"]) or "dev" in tagset:
+        return "Dev / Tools"
+    if has_any(["llm", "agent", "automation", "workflow", "openai", "chatgpt", "rag", "embedding"]) or "ai" in tagset:
+        return "AI / Automation"
+    if has_any(["vpn", "password", "2fa", "malware", "privacy", "oauth", "jwt", "encryption"]) or "security" in tagset:
+        return "Security / Privacy"
+    if has_any(["ffmpeg", "video", "audio", "subtitle", "compress", "bitrate", "mp4", "mov", "mp3"]) or "media" in tagset:
+        return "Media（Video / Audio）"
+    if has_any(["pdf", "ocr", "merge", "sign", "doc", "docx"]) or "pdf" in tagset:
+        return "PDF / Docs"
+    if has_any(["image", "resize", "optimize", "remove bg", "design", "figma", "svg", "png", "webp"]) or "images" in tagset:
+        return "Images / Design"
+    if has_any(["csv", "excel", "spreadsheet", "google sheets", "pivot", "formula", "data cleaning"]) or "data" in tagset:
+        return "Data / Spreadsheets"
+    if has_any(["invoice", "bookkeeping", "tax", "accounting", "receipt", "vat", "expense"]) or "finance" in tagset:
+        return "Business / Accounting / Tax"
+    if has_any(["seo", "analytics", "scheduling", "email", "social", "utm"]) or "marketing" in tagset:
+        return "Marketing / Social"
+    if has_any(["notes", "task", "calendar", "focus", "checklist", "pomodoro", "habit"]) or "productivity" in tagset:
+        return "Productivity"
+    if has_any(["english", "language", "toeic", "eiken", "flashcards"]) or "education" in tagset:
+        return "Education / Language"
+    if has_any(["travel", "itinerary", "booking", "packing list", "trip"]) or "travel" in tagset:
+        return "Travel / Planning"
+    if has_any(["recipe", "cooking", "meal plan", "nutrition"]) or "food" in tagset:
+        return "Food / Cooking"
+    if has_any(["workout", "fitness", "calorie", "macro", "sleep", "steps"]) or "health" in tagset:
+        return "Health / Fitness"
+    if has_any(["study plan", "revision", "practice exam", "learning"]) or "study" in tagset:
+        return "Study / Learning"
+    if has_any(["budget", "savings", "interest", "loan", "credit card", "investing"]) or "finance" in tagset:
+        return "Money / Personal Finance"
+    if has_any(["resume", "cv", "job", "interview", "salary", "career"]) or "career" in tagset:
+        return "Career / Work"
+    if has_any(["relationship", "dating", "conversation", "communication", "message"]) or "relationships" in tagset:
+        return "Relationships / Communication"
+    if has_any(["rent", "utilities", "moving", "home admin", "forms", "documents"]) or "home" in tagset:
+        return "Home / Life Admin"
+    if has_any(["shopping", "price", "deal", "review", "buy"]) or "shopping" in tagset:
+        return "Shopping / Products"
+    if has_any(["event", "ticket", "schedule", "weekend", "leisure"]) or "events" in tagset:
+        return "Events / Leisure"
+
+    return "Dev / Tools"
 
 
 # ============================================================
@@ -411,13 +515,13 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
     if any(k in t for k in ["is there a tool", "any tool", "tool for", "looking for a tool", "need a tool"]):
         table["tool_request"] += 8
 
-    if any(k in t for k in ["convert", "converter", "generator", "calculate", "calculator", "format", "transform"]):
+    if any(k in t for k in ["convert", "converter", "generator", "calculate", "calculator", "format", "transform", "compare"]):
         table["convert_generator_calc"] += 7
 
-    if any(k in t for k in ["json", "csv", "markdown", "notion", "template", "checklist", "table"]):
+    if any(k in t for k in ["json", "csv", "markdown", "notion", "template", "checklist", "table", "sheet"]):
         table["structured_output"] += 5
 
-    if any(k in t for k in ["timezone", "tax", "subscription", "plan", "pricing", "compare", "fee", "rate"]):
+    if any(k in t for k in ["timezone", "tax", "subscription", "plan", "pricing", "compare", "fee", "rate", "budget", "loan"]):
         table["specific_inputs"] += 4
 
     if any(k in t for k in ["how do i code", "write code", "bug in my code", "stack trace", "traceback"]):
@@ -543,9 +647,13 @@ def hn_search(query: str, limit: int = 30, ask_only: bool = False) -> List[Dict[
 
 
 def collect_hn(limit: int) -> List[Dict[str, Any]]:
-    queries = ["tool for", "is there a tool", "convert", "calculator", "compare pricing", "timezone"]
+    queries = [
+        "tool for", "need a tool", "is there a tool", "convert", "calculator", "compare pricing",
+        "timezone", "pdf", "image resize", "video compress", "tax calculator", "invoice template",
+        "study plan template", "domain dns help"
+    ]
     all_items: List[Dict[str, Any]] = []
-    per = max(5, limit // max(1, len(queries)))
+    per = max(6, limit // max(1, len(queries)))
     for q in queries:
         all_items.extend(hn_search(q, limit=per))
 
@@ -569,14 +677,68 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
 
 
 # ============================================================
+# Massive query builder (core change)
+# - Creates a large pool, then samples each run to avoid rate limits
+# ============================================================
+def build_query_pool() -> List[str]:
+    pool: List[str] = []
+
+    # 1) help phrases x tech terms
+    for hp in BASE_HELP_PHRASES:
+        for term in random.sample(BASE_TECH_TERMS, k=min(len(BASE_TECH_TERMS), 22)):
+            pool.append(f"{hp} {term}")
+
+    # 2) genre-specific terms
+    for g, terms in GENRE_TERMS.items():
+        for term in terms:
+            pool.append(f"help {term}")
+            pool.append(f"how to {term}")
+            pool.append(f"problem {term}")
+            pool.append(f"need tool {term}")
+
+    # 3) direct "tool intent" queries
+    pool += [
+        "need a tool", "tool for", "is there a tool", "looking for a tool",
+        "convert tool", "free converter", "calculator template", "pricing compare tool",
+        "timezone overlap tool", "pdf merge tool", "image resize tool", "video compress tool",
+        "budget calculator", "loan interest calculator", "resume template", "itinerary planner",
+    ]
+
+    # dedup / normalize
+    seen = set()
+    out: List[str] = []
+    for q in pool:
+        q2 = re.sub(r"\s+", " ", (q or "").strip().lower())
+        if not q2 or q2 in seen:
+            continue
+        seen.add(q2)
+        out.append(q2)
+
+    random.shuffle(out)
+    return out
+
+
+def sample_queries(pool: List[str], n: int) -> List[str]:
+    n = max(10, n)
+    if len(pool) <= n:
+        return pool
+    return random.sample(pool, n)
+
+
+QUERY_POOL = build_query_pool()
+QUERY_SAMPLE_SIZE_BSKY = int(os.getenv("QUERY_SAMPLE_SIZE_BSKY", "120"))
+QUERY_SAMPLE_SIZE_MASTODON = int(os.getenv("QUERY_SAMPLE_SIZE_MASTODON", "120"))
+QUERY_SAMPLE_SIZE_REDDIT = int(os.getenv("QUERY_SAMPLE_SIZE_REDDIT", "80"))
+
+
+# ============================================================
 # Bluesky Collector (cursor paging to dig deeper)
 # ============================================================
 def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
     h = os.getenv("BSKY_HANDLE", "").strip()
     p = os.getenv("BSKY_PASSWORD", "").strip()
 
-    # how many pages per query to try
-    BSKY_MAX_PAGES = int(os.getenv("BSKY_MAX_PAGES", "10"))
+    BSKY_MAX_PAGES = int(os.getenv("BSKY_MAX_PAGES", "16"))
     BSKY_LIMIT_PER_CALL = int(os.getenv("BSKY_LIMIT_PER_CALL", "50"))
 
     print("[bsky] preflight",
@@ -588,12 +750,13 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
               "limit": limit,
               "BSKY_MAX_PAGES": BSKY_MAX_PAGES,
               "BSKY_LIMIT_PER_CALL": BSKY_LIMIT_PER_CALL,
+              "query_pool": len(QUERY_POOL),
           }, ensure_ascii=False))
 
-    # If you already have an external collector module, keep it (existing feature)
+    # External module path (kept)
     if collect_bluesky_ext:
         try:
-            out = collect_bluesky_ext(KEYWORDS, limit_per_query=25)  # type: ignore
+            out = collect_bluesky_ext(QUERY_POOL, limit_per_query=25)  # type: ignore
             if not isinstance(out, list):
                 print("[bsky] ext_collector returned non-list")
                 return []
@@ -620,16 +783,7 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
 
     out: List[Dict[str, Any]] = []
 
-    # More aggressive query set (still aligned with your KEYWORDS)
-    queries = [
-        "need help", "anyone know", "how do i", "how to",
-        "error", "bug", "issue", "problem", "failed", "broken", "crash", "traceback",
-        "github actions", "workflow", "docker", "npm", "pip",
-        "api", "oauth",
-        "need a tool", "is there a tool", "tool for",
-        "convert", "converter", "calculator", "compare", "timezone", "subscription", "pricing",
-        "pdf", "ocr", "image resize", "ffmpeg", "video compress",
-    ]
+    queries = sample_queries(QUERY_POOL, QUERY_SAMPLE_SIZE_BSKY)
 
     def bsky_uri_to_url(uri: str, did: str = "") -> str:
         try:
@@ -718,7 +872,6 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
                     if len(out) >= limit:
                         break
 
-                # if the API stops giving cursor, we can't page further for this query
                 if not cursor:
                     break
 
@@ -729,7 +882,6 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
         if len(out) >= limit:
             break
 
-    # de-dup
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in out:
@@ -749,7 +901,7 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
 def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
     base = os.getenv("MASTODON_API_BASE", "").strip()
     tok = os.getenv("MASTODON_ACCESS_TOKEN", "").strip()
-    print("[mastodon] preflight", {"has_base": bool(base), "has_token": bool(tok), "has_lib": (Mastodon is not None), "limit": limit})
+    print("[mastodon] preflight", {"has_base": bool(base), "has_token": bool(tok), "has_lib": (Mastodon is not None), "limit": limit, "query_pool": len(QUERY_POOL)})
 
     if not base or Mastodon is None:
         return []
@@ -758,14 +910,7 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
     try:
         m = Mastodon(access_token=tok if tok else None, api_base_url=base)
 
-        queries = [
-            "help", "need help", "anyone know", "how do i", "how to", "please help",
-            "error", "bug", "issue", "problem", "failed", "broken", "crash", "traceback",
-            "github actions", "docker", "npm", "pip", "api", "oauth",
-            "need a tool", "is there a tool", "tool for",
-            "convert", "converter", "calculator", "compare", "timezone",
-            "subscription", "pricing",
-        ]
+        queries = sample_queries(QUERY_POOL, QUERY_SAMPLE_SIZE_MASTODON)
 
         if tok:
             for q in queries:
@@ -784,14 +929,13 @@ def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
                 except Exception as e:
                     print("[mastodon] search EXC", {"q": q, "err": repr(e)})
 
-        # fallback public timeline
         if len(out) < limit:
             try:
-                statuses = m.timeline_public(limit=80)
+                statuses = m.timeline_public(limit=120)
                 for st in statuses:
                     txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
                     t = txt.lower()
-                    if not any(k in t for k in KEYWORDS):
+                    if not any(k in t for k in BASE_HELP_PHRASES + BASE_TECH_TERMS):
                         continue
                     url = st.get("url", "") or ""
                     if txt and url:
@@ -837,11 +981,7 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
         print("[reddit] skip: praw not installed")
         return []
 
-    queries = [
-        "help", "how to", "error", "bug", "issue", "failed", "broken",
-        "convert", "converter", "calculator", "timezone", "compare",
-        "subscription", "pricing",
-    ]
+    queries = sample_queries(QUERY_POOL, QUERY_SAMPLE_SIZE_REDDIT)
 
     out: List[Dict[str, Any]] = []
     try:
@@ -854,13 +994,17 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
         )
 
         for q in queries:
-            for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=100):
-                txt = (getattr(s, "title", "") or "") + "\n" + (getattr(s, "selftext", "") or "")
-                url = getattr(s, "url", "") or ""
-                if url and txt:
-                    out.append({"source": "Reddit", "text": txt[:300], "url": url, "meta": {"q": q}})
-                if len(out) >= limit:
-                    break
+            try:
+                for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=120):
+                    txt = (getattr(s, "title", "") or "") + "\n" + (getattr(s, "selftext", "") or "")
+                    url = getattr(s, "url", "") or ""
+                    if url and txt:
+                        out.append({"source": "Reddit", "text": txt[:300], "url": url, "meta": {"q": q}})
+                    if len(out) >= limit:
+                        break
+            except Exception as e:
+                print("[reddit] search EXC", {"q": q, "err": repr(e)})
+
             if len(out) >= limit:
                 break
     except Exception as e:
@@ -877,6 +1021,10 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
     runs_per_month = int(os.getenv("RUNS_PER_MONTH", "90"))
     max_reads_month = int(os.getenv("X_READS_PER_MONTH", "100"))
     max_reads_run = max(1, max_reads_month // max(1, runs_per_month))
+
+    # YOU WANT 3 (minimum request), but plan/mentions may be 0 in reality.
+    desired = int(os.getenv("X_READS_RUN_TARGET", str(LEADS_TARGETS.get("X", 3))))
+    max_reads_run = max(1, min(max_reads_run, desired))
 
     api_key = os.getenv("X_API_KEY", "")
     api_secret = os.getenv("X_API_SECRET", "")
@@ -993,7 +1141,7 @@ def pick_best_theme(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 def cluster_20_around_theme(theme: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
     t = (theme or "").lower()
     keys: List[str] = []
-    for k in ["convert", "calculator", "compare", "timezone", "subscription", "pricing", "tax", "checklist", "pdf", "image", "video"]:
+    for k in ["convert", "calculator", "compare", "timezone", "subscription", "pricing", "tax", "checklist", "pdf", "image", "video", "budget", "resume", "itinerary"]:
         if k in t:
             keys.append(k)
     if not keys:
@@ -1230,7 +1378,29 @@ def inject_unsplash_bg(html: str, bg_url: str) -> str:
 # ============================================================
 # Affiliates (sanitize + select + inject + click logging)
 # ============================================================
+def ensure_affiliates_file() -> None:
+    """
+    Critical change:
+    - If affiliates.json is missing or lacks new genres, fill them with [].
+    - Do NOT overwrite existing genre arrays.
+    """
+    try:
+        cur = read_json(AFFILIATES_PATH, {})
+        if not isinstance(cur, dict):
+            cur = {}
+        changed = False
+        for g in GENRES:
+            if g not in cur or not isinstance(cur.get(g), list):
+                cur[g] = [] if not isinstance(cur.get(g), list) else cur.get(g)
+                changed = True
+        if changed or not os.path.exists(AFFILIATES_PATH):
+            write_json(AFFILIATES_PATH, cur)
+    except Exception as e:
+        print("[affiliates] ensure_affiliates_file exc", repr(e))
+
+
 def load_affiliates() -> Dict[str, List[Dict[str, Any]]]:
+    ensure_affiliates_file()
     data = read_json(AFFILIATES_PATH, {})
     if not isinstance(data, dict):
         return {}
@@ -1674,7 +1844,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
         for tg in safe_tags(e):
             cat_map.setdefault(tg, []).append(e)
 
-    cat_order = ["pricing", "convert", "time", "productivity", "calculator", "finance", "compare", "tools"]
+    cat_order = ["pricing", "convert", "time", "productivity", "calculator", "finance", "compare", "tools", "travel", "food", "health", "career", "relationships", "home", "shopping", "events"]
     cats: List[Tuple[str, List[Dict[str, Any]]]] = []
     for c in cat_order:
         if c in cat_map:
@@ -1700,14 +1870,14 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     newest_html = "\n".join([card(e) for e in newest])
 
     cat_links = []
-    for c, lst in cats[:16]:
+    for c, lst in cats[:18]:
         cat_links.append(
             f'<button class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sm bg-white/70 dark:bg-slate-900/60" '
             f'onclick="filterByTag(\'{c}\')">{c} <span class="opacity-60">({len(lst)})</span></button>'
         )
     cat_links_html = "\n".join(cat_links)
 
-    all_cards_html = "\n".join([card(e) for e in all_entries[:200]])
+    all_cards_html = "\n".join([card(e) for e in all_entries[:250]])
 
     html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -1841,51 +2011,76 @@ def post_x(text: str) -> None:
 # ============================================================
 # Leads + Reply drafts (cheapest model only)
 # ============================================================
+def safe_short(s: str, n: int = 260) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s[:n]
+
+
 def collect_leads(theme: str) -> List[Dict[str, Any]]:
+    """
+    Core change:
+    - Collect per-source with oversampling so we can meet minimum targets after dedup/filtering.
+    - Then selection enforces minimum per source (if possible).
+    """
     leads: List[Dict[str, Any]] = []
 
-    # collect aggressively so that after dedup we still have enough
-    want = max(LEADS_TOTAL, 100)
-    per = max(LEADS_PER_SOURCE, want)
+    def need(src: str) -> int:
+        return int(LEADS_TARGETS.get(src, 0))
+
+    def oversample(n: int) -> int:
+        return max(n, int(math.ceil(n * LEADS_OVERSAMPLE_MULT)))
+
+    # Per-source raw collect sizes
+    want_b = oversample(max(need("Bluesky"), 1))
+    want_m = oversample(max(need("Mastodon"), 1))
+    want_r = oversample(max(need("Reddit"), 1))
+    want_x = max(need("X"), 0)
+
+    # Add extra buffer so dedup doesn't kill counts
+    want_b = max(want_b, 180)
+    want_m = max(want_m, 260)
+    want_r = max(want_r, 90)
 
     try:
-        b = collect_bluesky(min(per, want * 2))
-        print(f"[counts] bluesky={len(b)}")
+        b = collect_bluesky(want_b)
+        print(f"[counts] bluesky={len(b)} (want~{want_b})")
         leads.extend(b)
     except Exception as e:
         print("[counts] bluesky error:", repr(e))
 
     try:
-        m = collect_mastodon(min(per, want * 2))
-        print(f"[counts] mastodon={len(m)}")
+        m = collect_mastodon(want_m)
+        print(f"[counts] mastodon={len(m)} (want~{want_m})")
         leads.extend(m)
     except Exception as e:
         print("[counts] mastodon error:", repr(e))
 
     try:
-        r = collect_reddit(min(per, want * 2))
-        print(f"[counts] reddit={len(r)}")
+        r = collect_reddit(want_r)
+        print(f"[counts] reddit={len(r)} (want~{want_r})")
         leads.extend(r)
     except Exception as e:
         print("[counts] reddit error:", repr(e))
 
     try:
         x = collect_x_limited(theme)
-        print(f"[counts] x={len(x)}")
+        print(f"[counts] x={len(x)} (want~{want_x})")
         leads.extend(x)
     except Exception as e:
         print("[counts] x error:", repr(e))
 
+    # Dedup by URL
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in leads:
-        u = it.get("url") or ""
+        u = (it.get("url") or "").strip()
         if not u or u in seen:
             continue
         seen.add(u)
         uniq.append(it)
 
-    return uniq[:max(LEADS_TOTAL, 100)]
+    return uniq
 
 
 def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
@@ -1912,6 +2107,23 @@ def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
     if tool_url and tool_url not in txt:
         txt = txt.rstrip() + "\n" + tool_url
     return txt
+
+
+def generate_leads_replies(client: OpenAI, leads: List[Dict[str, Any]], tool_url: str) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for it in leads:
+        txt = safe_short(it.get("text", "") or "", 350)
+        url = (it.get("url") or "").strip()
+        if not txt or not url:
+            continue
+        try:
+            reply = openai_generate_reply(client, txt, tool_url)
+        except Exception as e:
+            reply = f"(reply generation failed: {repr(e)})\n{tool_url}".strip()
+        it2 = dict(it)
+        it2["reply"] = reply
+        out.append(it2)
+    return out
 
 
 def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str, header_lines: List[str]) -> str:
@@ -1942,42 +2154,84 @@ def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str, header_li
     return "\n".join(lines)
 
 
-def safe_short(s: str, n: int = 260) -> str:
-    s = (s or "").strip()
-    s = re.sub(r"\s+", " ", s)
-    return s[:n]
+def enforce_minimums(scored: List[Tuple[int, Dict[str, Any]]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """
+    Guarantee selection tries to satisfy:
+      Bluesky 50, X 3, Reddit 20, Mastodon 100
+    Strategy:
+      - pick top per source up to target
+      - then fill remainder by global score
+    """
+    targets = dict(LEADS_TARGETS)
+    picked: List[Dict[str, Any]] = []
+    picked_urls = set()
 
+    # group by source
+    buckets: Dict[str, List[Tuple[int, Dict[str, Any]]]] = {}
+    for s, it in scored:
+        src = (it.get("source") or "Other")
+        buckets.setdefault(src, []).append((s, it))
 
-def generate_leads_replies(client: OpenAI, leads: List[Dict[str, Any]], tool_url: str) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for it in leads:
-        txt = safe_short(it.get("text", "") or "", 350)
-        url = (it.get("url") or "").strip()
-        if not txt or not url:
+    # pick minimums
+    for src, tgt in targets.items():
+        if tgt <= 0:
             continue
-        try:
-            reply = openai_generate_reply(client, txt, tool_url)
-        except Exception as e:
-            reply = f"(reply generation failed: {repr(e)})\n{tool_url}".strip()
-        it2 = dict(it)
-        it2["reply"] = reply
-        out.append(it2)
-    return out
+        arr = buckets.get(src, [])
+        arr.sort(key=lambda x: x[0], reverse=True)
+        for s, it in arr:
+            u = (it.get("url") or "").strip()
+            if not u or u in picked_urls:
+                continue
+            picked.append(it)
+            picked_urls.add(u)
+            if sum(1 for x in picked if (x.get("source") or "") == src) >= tgt:
+                break
+
+    # fill remainder
+    total_target = max(LEADS_TOTAL, sum(targets.values()))
+    for s, it in scored:
+        if len(picked) >= total_target:
+            break
+        u = (it.get("url") or "").strip()
+        if not u or u in picked_urls:
+            continue
+        picked.append(it)
+        picked_urls.add(u)
+
+    counts: Dict[str, int] = {}
+    for it in picked:
+        counts[it.get("source") or "Other"] = counts.get(it.get("source") or "Other", 0) + 1
+
+    return picked[:LEADS_MAX_OUTPUT], counts
 
 
-def create_leads_issue(client: OpenAI, theme: str, leads: List[Dict[str, Any]], tool_url: str, debug_counts: Dict[str, int]) -> None:
-    if not leads:
+def create_leads_issue(client: OpenAI, theme: str, leads_selected: List[Dict[str, Any]], tool_url: str, debug_counts: Dict[str, int], raw_counts: Dict[str, int]) -> None:
+    if not leads_selected:
         create_github_issue("[Goliath] Manual reply candidates: EMPTY", "leads empty. Check collectors/secrets.")
         return
 
-    leads2 = generate_leads_replies(client, leads, tool_url)
+    leads2 = generate_leads_replies(client, leads_selected, tool_url)
 
     header_lines = []
     header_lines.append(f"Tool URL: {tool_url}")
     header_lines.append(f"Theme: {safe_short(theme, 120)}")
-    header_lines.append(f"LEADS_TOTAL(target): {LEADS_TOTAL}")
-    header_lines.append(f"Collector counts: {json.dumps(debug_counts, ensure_ascii=False)}")
+    header_lines.append(f"Targets(min): {json.dumps(LEADS_TARGETS, ensure_ascii=False)}")
+    header_lines.append(f"LEADS_TOTAL(config): {LEADS_TOTAL}")
+    header_lines.append(f"Raw collector counts (before select): {json.dumps(raw_counts, ensure_ascii=False)}")
+    header_lines.append(f"Selected counts (after enforce): {json.dumps(debug_counts, ensure_ascii=False)}")
+    header_lines.append(f"Query pool size: {len(QUERY_POOL)} (sample: bsky={QUERY_SAMPLE_SIZE_BSKY}, mastodon={QUERY_SAMPLE_SIZE_MASTODON}, reddit={QUERY_SAMPLE_SIZE_REDDIT})")
     header_lines.append("Bluesky debug hint: Actions logs -> search '[bsky] preflight' and '[bsky] search'")
+
+    # warn if any src < target
+    warns = []
+    for src, tgt in LEADS_TARGETS.items():
+        got = int(debug_counts.get(src, 0))
+        if got < tgt:
+            warns.append(f"- WARNING: {src} got {got} < target {tgt}")
+    if warns:
+        header_lines.append("")
+        header_lines.append("WARNINGS:")
+        header_lines.extend(warns)
 
     body = build_leads_issue_body(leads2, tool_url, header_lines)
     chunk_and_create_issues(f"[Goliath] Manual reply candidates ({len(leads2)})", body)
@@ -2012,6 +2266,7 @@ def openai_fix_with_diff(client: OpenAI, error: str, html: str) -> str:
 # ============================================================
 def main() -> None:
     ensure_dirs()
+    ensure_affiliates_file()
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
@@ -2146,11 +2401,10 @@ def main() -> None:
         post_mastodon(post_text)
         post_x(post_text)
 
-    # 11) Leads + replies (drafts) -> Issue (100件)
-    # collect + score + top100
+    # 11) Leads + replies (drafts) -> Issue (enforce minimums)
     leads_raw = collect_leads(theme)
 
-    debug_counts = {
+    raw_counts = {
         "Bluesky": sum(1 for x in leads_raw if x.get("source") == "Bluesky"),
         "Mastodon": sum(1 for x in leads_raw if x.get("source") == "Mastodon"),
         "Reddit": sum(1 for x in leads_raw if x.get("source") == "Reddit"),
@@ -2165,25 +2419,34 @@ def main() -> None:
         scored.append((s, it))
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    top_n = max(LEADS_TOTAL, 100)
-    top = [it for _s, it in scored[:min(top_n, len(scored))]]
+    selected, selected_counts = enforce_minimums(scored)
 
-    # If still not enough, issue a debug report (does not remove existing features)
-    if len(top) < top_n:
+    # If still below targets, open warning issue
+    missing_lines = []
+    for src, tgt in LEADS_TARGETS.items():
+        got = int(selected_counts.get(src, 0))
+        if got < tgt:
+            missing_lines.append(f"- {src}: got {got} < target {tgt}")
+    if missing_lines:
         create_github_issue(
-            "[Goliath] WARNING: not enough leads to reach target",
-            "Wanted: {want}\nGot: {got}\nCounts: {counts}\n\n"
-            "You can try:\n"
-            "- Increase LEADS_PER_SOURCE / BSKY_MAX_PAGES / BSKY_LIMIT_PER_CALL\n"
-            "- Ensure Reddit/PRAW + Mastodon + Bluesky secrets are set\n"
-            "- Check Bluesky logs for cursor paging".format(
-                want=top_n, got=len(top), counts=json.dumps(debug_counts, ensure_ascii=False)
-            )
+            "[Goliath] WARNING: could not meet per-source lead targets",
+            "Per-source targets were not met.\n\n"
+            "Targets:\n"
+            f"{json.dumps(LEADS_TARGETS, ensure_ascii=False, indent=2)}\n\n"
+            "Raw counts:\n"
+            f"{json.dumps(raw_counts, ensure_ascii=False, indent=2)}\n\n"
+            "Selected counts:\n"
+            f"{json.dumps(selected_counts, ensure_ascii=False, indent=2)}\n\n"
+            "Missing:\n" + "\n".join(missing_lines) + "\n\n"
+            "Try:\n"
+            "- Ensure secrets/libs for each platform are set\n"
+            "- Increase BSKY_MAX_PAGES / QUERY_SAMPLE_SIZE_* / LEADS_OVERSAMPLE_MULT\n"
+            "- Note: X mentions may be 0 depending on account activity"
         )
 
-    # Create the manual-reply issue (this is the thing you said disappeared)
+    # Create manual-reply issue
     try:
-        create_leads_issue(client, theme, top, public_url, debug_counts)
+        create_leads_issue(client, theme, selected, public_url, selected_counts, raw_counts)
     except Exception as e:
         create_github_issue("[Goliath] Leads issue failed", f"theme={theme}\nerr={repr(e)}")
 
@@ -2196,4 +2459,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("[fatal]", repr(e))
         raise
-
