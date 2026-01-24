@@ -1,4 +1,4 @@
-  File "/home/runner/work/goliath-auto-tool/goliath-auto-tool/main.py", line 65
-    if g not in data:
-    ^
-IndentationError: expected an indented block after 'for' statement on line 64
+Traceback (most recent call last):
+  File "/home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/main.py", line 82, in <module>
+    LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", str(sum(LEADS_TARGETS.values()))))  # default 173
+ValueError: invalid literal for int() with base 10: ''
