@@ -59,29 +59,29 @@ def collect_hn(queries: List[str], days_back: int, limit_per_query: int) -> List
             continue
 
         for h in (data.get("hits") or []):
-            title = (h.get("title") or "").strip()
-            story_title = (h.get("story_title") or "").strip()
-            comment_text = (h.get("comment_text") or "").strip()
-            text = title or story_title or comment_text
-            if not text:
-                continue
+    title = (h.get("title") or "").strip()
+    story_title = (h.get("story_title") or "").strip()
+    comment_text = (h.get("comment_text") or "").strip()
+    text = title or story_title or comment_text
+    if not text:
+        continue
 
-            object_id = h.get("objectID")
-            if not object_id:
-                continue
+    object_id = h.get("objectID")
+    if not object_id:
+        continue
 
-            hn_url = f"https://news.ycombinator.com/item?id={object_id}"
-            acct = ((st.get("account") or {}).get("acct") or "").lower()
-url_l = (url or "").lower()
+    hn_url = f"https://news.ycombinator.com/item?id={object_id}"
+    acct = ((st.get("account") or {}).get("acct") or "").lower()
+    url_l = (url or "").lower()
 
-if acct == "mikann20041029" or acct.endswith("@mastodon.social") and acct.startswith("mikann20041029"):
-    continue
-if "/@mikann20041029/" in url_l:
-    continue
+    if acct == "mikann20041029" or (acct.endswith("@mastodon.social") and acct.startswith("mikann20041029")):
+        continue
+    if "/@mikann20041029/" in url_l:
+        continue
 
     out.append({"text": text, "url": hn_url, "platform": "hn"})
-
     time.sleep(0.2)
+
 
     return _dedup(out)
 
