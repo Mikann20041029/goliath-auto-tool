@@ -763,6 +763,7 @@ def collector_real() -> List[Dict[str, Any]]:
     m = collect_mastodon(COLLECT_MASTODON)
     h = collect_hn(COLLECT_HN)
 
+
     items.extend(b)
     items.extend(m)
     items.extend(h)
