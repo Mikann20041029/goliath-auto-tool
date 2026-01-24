@@ -472,17 +472,17 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
     必要: BSKY_HANDLE / BSKY_PASSWORD
     """
     h = os.getenv("BSKY_HANDLE", "")
-p = os.getenv("BSKY_PASSWORD", "")
+    p = os.getenv("BSKY_PASSWORD", "")
 
-if not h:
-    print("[bluesky] skip: missing env BSKY_HANDLE")
-    return []
-if not p:
-    print("[bluesky] skip: missing env BSKY_PASSWORD")
-    return []
-if BskyClient is None:
-    print("[bluesky] skip: BskyClient is None (atproto not installed/import failed)")
-    return []
+    if not h:
+        print("[bluesky] skip: missing env BSKY_HANDLE")
+        return []
+    if not p:
+        print("[bluesky] skip: missing env BSKY_PASSWORD")
+        return []
+    if BskyClient is None:
+        print("[bluesky] skip: BskyClient is None (atproto not installed/import failed)")
+        return []
 
 
     queries = [
