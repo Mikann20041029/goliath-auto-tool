@@ -514,20 +514,27 @@ def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
 
         # 1) search
         for q in queries:
-            res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
-            posts = (res or {}).get("posts", []) or []
-            for post in posts:
-                rec = post.get("record", {}) or {}
-                txt = (rec.get("text", "") or "")
-                uri = (post.get("uri", "") or "")
-                did = (post.get("author", {}) or {}).get("did", "") or ""
-                url = bsky_uri_to_url(uri, did) or uri
-                if not url:
-                    continue
+    res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
 
-                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
-                if len(out) >= limit:
-                    break
+    posts = (res or {}).get("posts", []) or []
+    print(f"[bsky] q='{q}' -> n={len(posts)}")
+
+    for post in posts:
+        rec = (post or {}).get("record", {}) or {}
+        txt = (rec.get("text", "") or "")
+        uri = (post.get("uri", "") or "")
+        did = ((post.get("author", {}) or {}).get("did", "") or "")
+        url = bsky_uri_to_url(uri, did) or uri
+        if not url:
+            continue
+
+        out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {}})
+        if len(out) >= limit:
+            break
+
+    if len(out) >= limit:
+        break
+
             if len(out) >= limit:
                 break
 
