@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-white text-gray-900 transition-colors duration-300">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="seo.title"></title>
+  <meta name="description" data-i18n="seo.description" content="">
+  <link rel="canonical" href="https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769234968-calculator-calculator-2">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="color-scheme" content="light dark">
+  <style>
+    html { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+    .glass {
+      background: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 4px 32px rgba(50,60,90,0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    html.dark {
+      background: #131b2e;
+      color: #e5e7eb;
+    }
+    .dark .glass {
+      background: rgba(24,33,41,0.6);
+      box-shadow: 0 4px 32px rgba(10,40,90,0.22);
+      color: #f1f5f9;
+    }
+    .transition-bg {
+      transition: background 0.4s;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Top Nav -->
+  <nav class="w-full px-4 lg:px-12 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md transition-bg z-30">
+    <div class="flex items-center">
+      <a href="../../index.html" class="text-indigo-600 font-bold text-lg hover:underline" data-i18n="nav.backToHub"></a>
+    </div>
+    <div class="flex items-center gap-4">
+      <label class="flex items-center gap-2" for="langSelect">
+        <span class="text-sm font-medium" data-i18n="nav.language"></span>
+        <select id="langSelect" class="rounded px-2 py-1 text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="en">EN</option>
+          <option value="ja">日本語</option>
+          <option value="fr">FR</option>
+          <option value="de">DE</option>
+        </select>
+      </label>
+      <button id="themeToggle" aria-label="" type="button" class="flex items-center bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+        <svg id="iconLight" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 11-2 0 1 1 0 012 0zM16.293 7.293a1 1 0 01.083 1.32l-.083.094-2.586 2.586a5 5 0 11-4.829-4.83l2.585-2.585a1 1 0 011.497 1.32l-.083.094-2.586 2.585a3 3 0 104.242 4.242l2.586-2.586a1 1 0 011.32-.083z"/></svg>
+        <svg id="iconDark" class="w-5 h-5 text-indigo-500 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293a8 8 0 01-11.586-11.586A9 9 0 0010 19c2.478 0 4.75-.902 6.586-2.707L17.293 13.293z"/></svg>
+        <span class="ml-1" data-i18n="nav.theme"></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="w-full max-w-3xl mx-auto py-12 lg:py-20 px-4 text-center">
+    <h1 class="text-4xl lg:text-5xl font-extrabold text-indigo-700 dark:text-indigo-400 mb-4" data-i18n="hero.title"></h1>
+    <p class="max-w-xl mx-auto text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-5" data-i18n="hero.subtitle"></p>
+    <div class="flex flex-wrap justify-center gap-4 mt-6">
+      <a href="#tool" class="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:bg-indigo-700 transition" data-i18n="hero.cta"></a>
+    </div>
+  </section>
+
+  <!-- SaaS Tool Card -->
+  <section id="tool" class="flex justify-center items-start pb-16 lg:pb-24">
+    <div class="glass max-w-lg w-full mx-auto p-8 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col items-center mt-2 mb-2">
+      <h2 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-4" data-i18n="tool.title"></h2>
+      <p class="mb-6 text-gray-700 dark:text-gray-200 text-center" data-i18n="tool.description"></p>
+      <!-- Calculator Mini-Tool -->
+      <form id="graphForm" class="w-full flex flex-col items-center gap-2 mb-3">
+        <input type="text" class="w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 mb-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400" required id="functionInput" data-i18n-placeholder="tool.input" />
+        <div class="flex items-center gap-3 w-full mb-2">
+          <button type="submit" class="rounded bg-indigo-600 text-white font-semibold px-5 py-2 hover:bg-indigo-700 transition w-full" data-i18n="tool.plotBtn"></button>
+          <button type="button" class="rounded bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold px-5 py-2 hover:bg-gray-400 dark:hover:bg-gray-600 transition w-full" id="resetBtn" data-i18n="tool.resetBtn"></button>
+        </div>
+        <small class="text-gray-500 dark:text-gray-400 block text-xs w-full text-left px-1" data-i18n="tool.example"></small>
+      </form>
+      <canvas id="graphCanvas" width="400" height="300" class="border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 w-full h-72 mb-2"></canvas>
+      <div id="toolError" class="hidden mt-2 text-red-600 font-semibold text-sm" data-i18n="tool.error"></div>
+      <div id="assistInfo" class="mt-2 text-xs text-gray-500 dark:text-gray-400 italic" data-i18n="tool.assist"></div>
+    </div>
+  </section>
+
+  <!-- Article EN/JA (i18n) -->
+  <article class="max-w-3xl mx-auto px-4 pb-20" id="article">
+    <!-- Hero / What is MatHud? -->
+    <h2 class="text-3xl font-semibold text-indigo-700 dark:text-indigo-400 mb-5 mt-7" data-i18n="article.intro.title"></h2>
+    <p class="leading-relaxed text-gray-700 dark:text-gray-100 mb-4" data-i18n="article.intro.p1"></p>
+    <p class="leading-relaxed text-gray-700 dark:text-gray-100 mb-4" data-i18n="article.intro.p2"></p>
+    <h3 class="text-2xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="article.features.title"></h3>
+    <ul class="list-disc list-inside mb-6 space-y-2">
+      <li data-i18n="article.features.1"></li>
+      <li data-i18n="article.features.2"></li>
+      <li data-i18n="article.features.3"></li>
+      <li data-i18n="article.features.4"></li>
+      <li data-i18n="article.features.5"></li>
+    </ul>
+    <!-- How to Use -->
+    <h2 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-3" data-i18n="article.usage.title"></h2>
+    <ol class="list-decimal list-inside pl-2 mb-6 space-y-2">
+      <li data-i18n="article.usage.1"></li>
+      <li data-i18n="article.usage.2"></li>
+      <li data-i18n="article.usage.3"></li>
+      <li data-i18n="article.usage.4"></li>
+      <li data-i18n="article.usage.5"></li>
+    </ol>
+    <!-- Checklist -->
+    <h3 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="article.checklist.title"></h3>
+    <ul class="mb-6 space-y-1 pl-4">
+      <li class="flex items-center gap-2"><input type="checkbox" checked disabled class="accent-indigo-600"/><span data-i18n="article.checklist.1"></span></li>
+      <li class="flex items-center gap-2"><input type="checkbox" checked disabled class="accent-indigo-600"/><span data-i18n="article.checklist.2"></span></li>
+      <li class="flex items-center gap-2"><input type="checkbox" checked disabled class="accent-indigo-600"/><span data-i18n="article.checklist.3"></span></li>
+      <li class="flex items-center gap-2"><input type="checkbox" checked disabled class="accent-indigo-600"/><span data-i18n="article.checklist.4"></span></li>
+      <li class="flex items-center gap-2"><input type="checkbox" disabled class="accent-indigo-600"/><span data-i18n="article.checklist.5"></span></li>
+    </ul>
+    <!-- Pitfalls -->
+    <h3 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="article.pitfalls.title"></h3>
+    <ul class="list-disc pl-7 mb-6 space-y-1">
+      <li data-i18n="article.pitfalls.1"></li>
+      <li data-i18n="article.pitfalls.2"></li>
+      <li data-i18n="article.pitfalls.3"></li>
+      <li data-i18n="article.pitfalls.4"></li>
+      <li data-i18n="article.pitfalls.5"></li>
+    </ul>
+    <!-- FAQ -->
+    <h2 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-10 mb-4" data-i18n="article.faq.title"></h2>
+    <div class="space-y-5 mb-10">
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q1"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a1"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q2"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a2"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q3"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a3"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q4"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a4"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q5"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a5"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q6"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a6"></div>
+      </div>
+      <div>
+        <button class="font-semibold text-indigo-600 dark:text-indigo-400 text-left focus:outline-none" type="button" data-i18n="article.faq.q7"></button>
+        <div class="pl-4 pt-1 text-gray-700 dark:text-gray-200" data-i18n="article.faq.a7"></div>
+      </div>
+    </div>
+    <!-- References -->
+    <h2 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-4" data-i18n="article.references.title"></h2>
+    <ul class="list-disc pl-7 mb-10 space-y-1">
+      <li><a href="https://www.desmos.com/" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.1"></a></li>
+      <li><a href="https://www.geogebra.org/graphing" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.2"></a></li>
+      <li><a href="https://numpy.org/doc/" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.3"></a></li>
+      <li><a href="https://www.sympy.org/en/index.html" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.4"></a></li>
+      <li><a href="https://mathjs.org/docs/" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.5"></a></li>
+      <li><a href="https://github.com/matplotlib/matplotlib" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.6"></a></li>
+      <li><a href="https://observablehq.com/@d3/gallery" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.7"></a></li>
+      <li><a href="https://github.com/mermaid-js/mermaid" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.8"></a></li>
+      <li><a href="https://math.stackexchange.com/" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.9"></a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Graphing_calculator" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.10"></a></li>
+      <li><a href="https://www.wolframalpha.com/" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.11"></a></li>
+      <li><a href="https://dev.to/elviswolcott/how-graphing-calculators-work-5bbe" class="underline text-indigo-600 dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-i18n="article.references.12"></a></li>
+    </ul>
+    <!-- Related Sites -->
+    <section id="relatedSitesBox" class="mb-12 hidden">
+      <h2 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-4" data-i18n="related.title"></h2>
+      <ul id="relatedSitesList" class="list-disc pl-7 space-y-1"></ul>
+    </section>
+  </article>
+
+  <!-- Compliance Sections — In-page anchors -->
+  <footer class="bg-gray-50 dark:bg-gray-900/80 border-t border-gray-200 dark:border-gray-800 px-4 pt-8 pb-4 mt-auto">
+    <nav class="flex flex-wrap justify-center gap-4 mb-6 text-sm text-indigo-700 dark:text-indigo-300">
+      <a href="../../index.html" data-i18n="footer.backToHub"></a>
+      <a href="#privacy" data-i18n="footer.privacy"></a>
+      <a href="#tos" data-i18n="footer.tos"></a>
+      <a href="#disclaimer" data-i18n="footer.disclaimer"></a>
+      <a href="#about" data-i18n="footer.about"></a>
+      <a href="#contact" data-i18n="footer.contact"></a>
+    </nav>
+    <div class="text-center text-gray-500 dark:text-gray-400 text-xs" data-i18n="footer.copyright"></div>
+  </footer>
+  <section id="privacy" class="max-w-3xl mx-auto px-4 pt-12 pb-5 border-b border-gray-200 dark:border-gray-800">
+    <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="privacy.title"></h2>
+    <p class="mb-2" data-i18n="privacy.p1"></p>
+    <p class="mb-2" data-i18n="privacy.p2"></p>
+    <ul class="list-disc pl-6 mb-2">
+      <li data-i18n="privacy.l1"></li>
+      <li data-i18n="privacy.l2"></li>
+      <li data-i18n="privacy.l3"></li>
+    </ul>
+    <p data-i18n="privacy.p3"></p>
+  </section>
+  <section id="tos" class="max-w-3xl mx-auto px-4 pt-12 pb-5 border-b border-gray-200 dark:border-gray-800">
+    <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="tos.title"></h2>
+    <ol class="list-decimal pl-6 mb-2">
+      <li data-i18n="tos.l1"></li>
+      <li data-i18n="tos.l2"></li>
+      <li data-i18n="tos.l3"></li>
+      <li data-i18n="tos.l4"></li>
+      <li data-i18n="tos.l5"></li>
+    </ol>
+    <p data-i18n="tos.p1"></p>
+  </section>
+  <section id="disclaimer" class="max-w-3xl mx-auto px-4 pt-12 pb-5 border-b border-gray-200 dark:border-gray-800">
+    <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="disclaimer.title"></h2>
+    <p class="mb-2" data-i18n="disclaimer.p1"></p>
+    <p class="mb-2" data-i18n="disclaimer.p2"></p>
+  </section>
+  <section id="about" class="max-w-3xl mx-auto px-4 pt-12 pb-5 border-b border-gray-200 dark:border-gray-800">
+    <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="about.title"></h2>
+    <p class="mb-2" data-i18n="about.p1"></p>
+    <p class="mb-2" data-i18n="about.p2"></p>
+    <ul class="list-disc pl-6">
+      <li data-i18n="about.l1"></li>
+      <li data-i18n="about.l2"></li>
+      <li data-i18n="about.l3"></li>
+    </ul>
+  </section>
+  <section id="contact" class="max-w-3xl mx-auto px-4 pt-12 pb-16">
+    <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-300 mb-2" data-i18n="contact.title"></h2>
+    <p class="mb-2" data-i18n="contact.p1"></p>
+    <ul class="list-disc pl-6 mb-2">
+      <li data-i18n="contact.l1"></li>
+      <li data-i18n="contact.l2"></li>
+    </ul>
+    <p data-i18n="contact.p2"></p>
+  </section>
+  <script>
+    // --- I18N DICTIONARY (EN, JA, FR, DE) ---
+    window.__I18N__ = {
+      en: {
+        // SEO and meta
+        "seo.title": "MatHud Open Source Graphing Calculator | AI-assisted Math Plotter",
+        "seo.description": "MatHud: Free AI-powered open-source graphing calculator. Plot mathematical functions, explore equations, and visualize graphs interactively. Supports English, Japanese, French, and German.",
+        // Nav and UI
+        "nav.backToHub": "← Back to Hub",
+        "nav.language": "Language",
+        "nav.theme": "Theme",
+        "nav.dark": "Dark",
+        "nav.light": "Light",
+        // Hero
+        "hero.title": "MatHud: Open-source AI-assisted Graphing Calculator",
+        "hero.subtitle": "Explore, plot, and visualize mathematical functions easily with a free open-source tool. Powered by AI assistance for more productive math and learning.",
+        "hero.cta": "Try the Calculator",
+        // Tool SaaS Card
+        "tool.title": "Interactive Graphing Calculator",
+        "tool.description": "Plot any mathematical function (e.g., y = sin(x) + 3, y = x^2). Enter your equation below, and MatHud will display the graph interactively. AI can assist with common syntax and expressions.",
+        "tool.input": "Enter function, e.g. y = x^2 + 1",
+        "tool.plotBtn": "Plot Graph",
+        "tool.resetBtn": "Reset",
+        "tool.error": "Please enter a valid math function (e.g., y = x^2 + 1). Supported functions: +, -, *, /, ^, sin, cos, tan, log, sqrt, exp, abs.",
+        "tool.example": "e.g., y = sin(x) + cos(x/2)",
+        "tool.assist": "Tip: Try entering 'y = exp(-x^2/4) * sin(x)', or ask our AI for math plotting tips!",
+        // Article Intro
+        "article.intro.title": "What is MatHud? An Introduction to AI-powered Graphing Calculators",
+        "article.intro.p1": "MatHud is a modern open-source AI-driven graphing calculator designed for students, teachers, engineers, and math enthusiasts alike. It enables users to plot mathematical functions, visualize equations, and explore mathematical relationships with an intuitive, interactive UI. Unlike traditional graphing calculators, MatHud combines advanced plotting technology with AI-powered syntax suggestions, making mathematical exploration faster and more accessible.",
+        "article.intro.p2": "Whether you're learning algebra, solving calculus problems, or modeling real-world data, MatHud makes it effortless to translate equations into visuals. Its open-source nature means anyone can inspect, customize, and extend its capabilities. The tool is accessible in English, Japanese, French, and German to support a diverse international audience.",
+        // Features
+        "article.features.title": "Core Features",
+        "article.features.1": "Plots any mathematical function of x (polynomials, trigonometric, exponential, logarithmic, etc.)",
+        "article.features.2": "Real-time interactive graphing with pan/zoom support",
+        "article.features.3": "AI-powered expression assistance and syntax correction",
+        "article.features.4": "Open-source and privacy-first (all computation is local, no data sent to servers)",
+        "article.features.5": "Multi-language UI: English, Japanese, French, and German",
+        // Usage
+        "article.usage.title": "How to Use MatHud",
+        "article.usage.1": "Enter your function in the input box (e.g., y = x^2 + sin(x)).",
+        "article.usage.2": "Click 'Plot Graph' to render the graph.",
+        "article.usage.3": "Graph appears below, supporting zoom and pan (if supported by your browser).",
+        "article.usage.4": "To try another equation, click 'Reset' and enter a new function.",
+        "article.usage.5": "Switch languages or theme as preferred using the navigation bar.",
+        // Checklist
+        "article.checklist.title": "Quick Checklist for Best Experience",
+        "article.checklist.1": "Use standard math syntax (y = ...).",
+        "article.checklist.2": "Supported functions: sin, cos, tan, log, exp, sqrt, abs, +, -, *, /, ^.",
+        "article.checklist.3": "Only one variable (x) supported per graph.",
+        "article.checklist.4": "No login or registration required.",
+        "article.checklist.5": "Works fully offline after first load.",
+        // Pitfalls
+        "article.pitfalls.title": "Common Pitfalls & Solutions",
+        "article.pitfalls.1": "Forgetting 'y =' at the start of the function.",
+        "article.pitfalls.2": "Using an unsupported function or misspelling (e.g., 'sinn' instead of 'sin').",
+        "article.pitfalls.3": "Entering equations with multiple variables (e.g., y = x + z).",
+        "article.pitfalls.4": "Incorrect powers (e.g., x^ instead of x^2).",
+        "article.pitfalls.5": "Pastings from Word or PDFs causing hidden characters or syntax errors.",
+        // FAQ ≥ 7
+        "article.faq.title": "Frequently Asked Questions",
+        "article.faq.q1": "Q1: Is MatHud free to use?",
+        "article.faq.a1": "Yes, MatHud is 100% free and open-source. You can use it without registration or payment.",
+        "article.faq.q2": "Q2: Is my data secure and private?",
+        "article.faq.a2": "All calculations are performed locally in your browser; nothing is uploaded. No account is needed.",
+        "article.faq.q3": "Q3: Can I plot 3D or parametric graphs?",
+        "article.faq.a3": "The current version supports only 2D functions (y = f(x)). 3D/parametric support is planned for future releases.",
+        "article.faq.q4": "Q4: Does it support variables other than x?",
+        "article.faq.a4": "At the moment, only single-variable functions (in x) are supported.",
+        "article.faq.q5": "Q5: Can I save my graphs?",
+        "article.faq.a5": "Not yet. Export functionality and graph history are planned for upcoming versions.",
+        "article.faq.q6": "Q6: Which browsers are supported?",
+        "article.faq.a6": "MatHud works in all modern browsers (Chrome, Edge, Firefox, Safari).",
+        "article.faq.q7": "Q7: How accurate are the plots compared to calculators like Desmos or GeoGebra?",
+        "article.faq.a7": "While MatHud aims for high accuracy, professional tools may offer more advanced plotting for edge cases.",
+        // References
+        "article.references.title": "References & Further Reading",
+        "article.references.1": "Desmos Online Graphing Calculator",
+        "article.references.2": "GeoGebra Graphing Tool",
+        "article.references.3": "NumPy Documentation",
+        "article.references.4": "SymPy Project",
+        "article.references.5": "MathJS Documentation",
+        "article.references.6": "Matplotlib (Python) Project",
+        "article.references.7": "D3.js Data Visualization Examples",
+        "article.references.8": "Mermaid.js Diagramming Tool",
+        "article.references.9": "Mathematics Stack Exchange Forum",
+        "article.references.10": "Wikipedia: Graphing Calculator",
+        "article.references.11": "WolframAlpha Online Math Engine",
+        "article.references.12": "Graphing Calculator Internals (Dev.to)",
+        // Related
+        "related.title": "Related Sites",
+        // Footer/Compliance
+        "footer.backToHub": "Back to Hub",
+        "footer.privacy": "Privacy Policy",
+        "footer.tos": "Terms of Service",
+        "footer.disclaimer": "Disclaimer",
+        "footer.about": "About",
+        "footer.contact": "Contact",
+        "footer.copyright": "Copyright © 2024 MatHud. Open-source. All rights reserved.",
+        // Privacy
+        "privacy.title": "Privacy Policy",
+        "privacy.p1": "Your privacy is a priority at MatHud. We do not collect any personal data.",
+        "privacy.p2": "All user input and calculations are performed entirely within your browser. We do not use cookies for tracking or analytics.",
+        "privacy.l1": "No personal data or usage history is stored.",
+        "privacy.l2": "No advertisements are delivered.",
+        "privacy.l3": "No data sent to external servers.",
+        "privacy.p3": "Third-party resources (such as fonts and JS from CDN) are loaded per standard web practice.",
+        // TOS
+        "tos.title": "Terms of Service",
+        "tos.l1": "Use MatHud at your own risk; no warranty is provided.",
+        "tos.l2": "You may not use MatHud for illegal or harmful activities.",
+        "tos.l3": "Open-source code is provided under MIT License.",
+        "tos.l4": "We reserve the right to improve and update the service.",
+        "tos.l5": "Service may be discontinued at any time without notice.",
+        "tos.p1": "By using this site, you agree to these terms.",
+        // Disclaimer
+        "disclaimer.title": "Disclaimer",
+        "disclaimer.p1": "MatHud is provided as-is. Results and calculations are intended for educational use and may not always be error-free.",
+        "disclaimer.p2": "Always double-check critical results. Operator does not accept liability for usage.",
+        // About/Operator
+        "about.title": "About MatHud",
+        "about.p1": "MatHud is an open-source project initiated to make graphing and math visualization accessible for all.",
+        "about.p2": "Our mission is to empower students, teachers, and enthusiasts worldwide with trustworthy educational tools.",
+        "about.l1": "Openly developed on GitHub.",
+        "about.l2": "No tracking, ads, or user data collection.",
+        "about.l3": "Community contributions welcome.",
+        // Contact
+        "contact.title": "Contact",
+        "contact.p1": "For inquiries, suggestions, or feedback, contact us below:",
+        "contact.l1": "Email: mathud@mikann.site",
+        "contact.l2": "GitHub Issues: github.com/mikann20041029/goliath-auto-tool",
+        "contact.p2": "We welcome all collaboration and questions.",
+      },
+      ja: {
+        "seo.title": "MatHud オープンソース グラフ電卓 | AI支援 数学プロッター",
+        "seo.description": "MatHud：オープンソースでAI搭載の無料グラフ電卓。数式を入力して関数をプロットし、グラフを対話的に可視化できます。日本語・英語・フランス語・ドイツ語対応。",
+        "nav.backToHub": "← ハブに戻る",
+        "nav.language": "言語",
+        "nav.theme": "テーマ",
+        "nav.dark": "ダーク",
+        "nav.light": "ライト",
+        "hero.title": "MatHud：オープンソースAI補助グラフ電卓",
+        "hero.subtitle": "無料のオープンソースツールで数式のプロットや可視化が簡単。AIサポートで数学学習と作業がより効率的に。",
+        "hero.cta": "グラフ電卓を試す",
+        "tool.title": "インタラクティブ グラフ電卓",
+        "tool.description": "任意の数式（例：y=sin(x)+3, y=x^2等）をプロットできます。下に数式を入力すると、MatHudがインタラクティブなグラフを表示します。AIによる一般的な構文や数式表現の補助も。",
+        "tool.input": "関数を入力（例: y = x^2 + 1）",
+        "tool.plotBtn": "グラフを描く",
+        "tool.resetBtn": "リセット",
+        "tool.error": "有効な数式を y = で入力してください（例: y = x^2 + 1）。対応関数: +, -, *, /, ^, sin, cos, tan, log, sqrt, exp, abs。",
+        "tool.example": "例: y = sin(x) + cos(x/2)",
+        "tool.assist": "ヒント：「y = exp(-x^2/4) * sin(x)」等も試してみてください。AIが作図のアドバイスもできます。",
+        "article.intro.title": "MatHudとは？AI活用グラフ電卓の紹介",
+        "article.intro.p1": "MatHudは、学生・教員・エンジニア・数学愛好家のための、最新オープンソースAI搭載グラフ電卓です。数式や方程式を視覚化し、数学関係を直感的かつ対話的に探索できます。従来の電卓とは異なり、MatHudは先進のグラフ作成技術とAI支援の構文補正を融合し、数式作成や可視化がより速く身近になります。",
+        "article.intro.p2": "代数の学習や微積分問題の解決、実データのモデリングまで、MatHudは式をビジュアルへ簡単に変換します。オープンソースのため、誰でもソースコードを閲覧・カスタマイズ・拡張可能。日本語・英語・フランス語・ドイツ語対応で世界中の利用者に開かれています。",
+        "article.features.title": "主な特長",
+        "article.features.1": "xだけの任意の数式（多項式、三角、指数、対数等）をプロット対応",
+        "article.features.2": "リアルタイムで対話的なグラフ描画（パン・ズーム可）",
+        "article.features.3": "AIによる式補完と構文補正",
+        "article.features.4": "オープンソース＆プライバシー重視（計算は端末内のみ）",
+        "article.features.5": "多言語UI：日本語・英語・フランス語・ドイツ語",
+        "article.usage.title": "MatHud の使い方",
+        "article.usage.1": "入力欄に関数式を入力します（例：y = x^2 + sin(x)）。",
+        "article.usage.2": "「グラフを描く」をクリックするとグラフが描画されます。",
+        "article.usage.3": "グラフ下部でズームやパン（ブラウザ対応時）が利用可能です。",
+        "article.usage.4": "別の式を試す場合は「リセット」して新しい式を入力します。",
+        "article.usage.5": "上部ナビゲーションで言語やテーマを自由に変更可能です。",
+        "article.checklist.title": "快適利用チェックリスト",
+        "article.checklist.1": "標準的な y = ... の数式構文を使う。",
+        "article.checklist.2": "対応関数：sin, cos, tan, log, exp, sqrt, abs, +, -, *, /, ^",
+        "article.checklist.3": "x（1変数）だけに対応。",
+        "article.checklist.4": "ログインや登録不要。",
+        "article.checklist.5": "一度読み込めばオフライン動作可能。",
+        "article.pitfalls.title": "よくある落とし穴と対策",
+        "article.pitfalls.1": "式頭に「y =」を書き忘れる。",
+        "article.pitfalls.2": "未対応関数や綴り違い（例：「sinn」ではなく「sin」）",
+        "article.pitfalls.3": "複数変数（例：y = x + z）は非対応。",
+        "article.pitfalls.4": "累乗指定のミス（x^ とだけ記述）",
+        "article.pitfalls.5": "WordやPDFからの貼り付けによる隠れ文字エラー",
+        "article.faq.title": "よくある質問",
+        "article.faq.q1": "Q1：MatHudは無料ですか？",
+        "article.faq.a1": "はい、MatHudは完全無料＆オープンソースです。登録や支払いは不要です。",
+        "article.faq.q2": "Q2：私の入力内容は安全ですか？",
+        "article.faq.a2": "全ての計算はブラウザ内で行われ、外部送信なし。アカウント不要です。",
+        "article.faq.q3": "Q3：3Dやパラメトリックグラフは描けますか？",
+        "article.faq.a3": "現バージョンは2D（y = f(x)）のみ。将来的に追加予定です。",
+        "article.faq.q4": "Q4：x以外の変数も使えますか？",
+        "article.faq.a4": "今はxのみ対応です（単変数のみ）。",
+        "article.faq.q5": "Q5：グラフを保存できますか？",
+        "article.faq.a5": "現時点では未対応。今後エクスポート／履歴機能を計画中です。",
+        "article.faq.q6": "Q6：対応ブラウザを教えてください。",
+        "article.faq.a6": "Chrome, Edge, Firefox, Safari等、主要最新ブラウザに対応。",
+        "article.faq.q7": "Q7：DesmosやGeoGebra等と比べて精度は？",
+        "article.faq.a7": "MatHudは高精度を目指しますが、一部高度なグラフは専用ツールの方が優れます。",
+        "article.references.title": "参考・外部リンク",
+        "article.references.1": "Desmos オンライングラフ電卓",
+        "article.references.2": "GeoGebra グラフ作成ツール",
+        "article.references.3": "NumPy ドキュメント",
+        "article.references.4": "SymPy プロジェクト",
+        "article.references.5": "MathJS ドキュメント",
+        "article.references.6": "Matplotlib (Python) プロジェクト",
+        "article.references.7": "D3.js データ可視化例",
+        "article.references.8": "Mermaid.js 図自動生成ツール",
+        "article.references.9": "Mathematics Stack Exchange フォーラム",
+        "article.references.10": "Wikipedia: グラフ電卓",
+        "article.references.11": "WolframAlpha オンライン数学エンジン",
+        "article.references.12": "グラフ電卓の仕組み (dev.to)",
+        "related.title": "関連サイト",
+        "footer.backToHub": "ハブに戻る",
+        "footer.privacy": "プライバシーポリシー",
+        "footer.tos": "利用規約",
+        "footer.disclaimer": "免責事項",
+        "footer.about": "本サイトについて",
+        "footer.contact": "連絡先",
+        "footer.copyright": "Copyright © 2024 MatHud. オープンソース。全著作権所有。",
+        "privacy.title": "プライバシーポリシー",
+        "privacy.p1": "MatHudはプライバシーを最優先しています。個人情報は一切収集しません。",
+        "privacy.p2": "全ての入力・計算処理はご利用の端末内で完結します。Cookieによる追跡や解析も行いません。",
+        "privacy.l1": "個人情報保存・履歴記録なし",
+        "privacy.l2": "広告表示なし",
+        "privacy.l3": "外部サーバへの通信なし",
+        "privacy.p3": "Web標準により外部リソース（フォントやJS）はCDN経由で取得されます。",
+        "tos.title": "利用規約",
+        "tos.l1": "利用者ご自身の責任にてご利用ください。いかなる保証もありません。",
+        "tos.l2": "法令違反・有害行為目的での使用不可。",
+        "tos.l3": "MITライセンス下でソースコード公開。",
+        "tos.l4": "サービス品質や機能は予告なく改善・変更される場合があります。",
+        "tos.l5": "都合によりサービス終了する場合があります。",
+        "tos.p1": "本ツール利用時点で本規約に同意したものとみなします。",
+        "disclaimer.title": "免責事項",
+        "disclaimer.p1": "MatHudは現状有姿で提供しております。計算結果やグラフは教育利用を想定し、常に絶対的な正確性は保証されません。",
+        "disclaimer.p2": "重要な用途には必ず再確認を。運営者は本ツール利用による損害責任を負いません。",
+        "about.title": "MatHudとは",
+        "about.p1": "MatHudは誰もが数式可視化を手軽にできるよう目指したオープンソースプロジェクトです。",
+        "about.p2": "世界中の学生・教育者・愛好家の学びと活動を応援します。",
+        "about.l1": "開発はGitHub上でオープンに実施",
+        "about.l2": "追跡・広告・データ収集一切なし",
+        "about.l3": "コミュニティによる開発参加歓迎",
+        "contact.title": "お問い合わせ",
+        "contact.p1": "ご要望、ご指摘、質問があれば下記へご連絡ください：",
+        "contact.l1": "メール: mathud@mikann.site",
+        "contact.l2": "GitHub Issues: github.com/mikann20041029/goliath-auto-tool",
+        "contact.p2": "ご協力・ご質問お待ちしております。",
+      },
+      fr: {
+        "seo.title": "MatHud Calculatrice Graphique Open Source | Tracé Mathématique AI",
+        "seo.description": "MatHud : calculatrice graphique open source et gratuite, optimisée par l’IA. Tracez et explorez les fonctions mathématiques, visualisez les équations. Disponible en français.",
+        "nav.backToHub": "← Retour au hub",
+        "nav.language": "Langue",
+        "nav.theme": "Thème",
+        "nav.dark": "Sombre",
+        "nav.light": "Clair",
+        "hero.title": "MatHud : Calculatrice Graphique Open Source Assistée par IA",
+        "hero.subtitle": "Explorez, tracez et visualisez des fonctions mathématiques facilement grâce à un outil open source gratuit, optimisé par IA.",
+        "hero.cta": "Essayer la calculatrice",
+        "tool.title": "Calculatrice Graphique Interactive",
+        "tool.description": "Tracez toute fonction mathématique (ex : y = sin(x) + 3, y = x^2). Saisissez votre équation ci-dessous et MatHud affiche le graphe. L’IA assiste la syntaxe et suggère des expressions.",
+        "tool.input": "Entrer fonction ex: y = x^2 + 1",
+        "tool.plotBtn": "Tracer",
+        "tool.resetBtn": "Réinitialiser",
+        "tool.error": "Veuillez saisir une fonction mathématique valide (ex: y = x^2 + 1). Fonctions supportées : +, -, *, /, ^, sin, cos, tan, log, sqrt, exp, abs.",
+        "tool.example": "ex : y = sin(x) + cos(x/2)",
+        "tool.assist": "Astuce : essayez « y = exp(-x^2/4) * sin(x) » ou demandez conseil à l’IA !",
+        "article.intro.title": "Qu’est-ce que MatHud ? Présentation des calculatrices graphiques à IA",
+        "article.intro.p1": "MatHud est une calculatrice graphique open source moderne, assistée par IA, destinée aux élèves, enseignants, ingénieurs et amateurs de mathématiques. Tracez et visualisez facilement des équations et explorez des relations mathématiques dans une interface intuitive et interactive. Contrairement aux anciennes calculatrices, MatHud ajoute l’assistance syntaxique IA.",
+        "article.intro.p2": "Que vous appreniez l’algèbre, résolviez des problèmes de calcul ou modélisiez des données, MatHud facilite la visualisation des équations. Open source, personnalisable, disponible en français, anglais, japonais et allemand.",
+        "article.features.title": "Fonctionnalités principales",
+        "article.features.1": "Trace toutes les fonctions en x (polynômes, trigonométriques, exponentielles, logarithmes, etc.)",
+        "article.features.2": "Tracé interactif en temps réel avec pan/zoom",
+        "article.features.3": "Assistance IA pour la syntaxe et les expressions",
+        "article.features.4": "Open source, priorité à la vie privée (calculs locaux uniquement)",
+        "article.features.5": "Interface multilingue : français, anglais, japonais, allemand",
+        "article.usage.title": "Utilisation de MatHud",
+        "article.usage.1": "Saisir la fonction dans le champ (ex : y = x^2 + sin(x)).",
+        "article.usage.2": "Cliquer sur « Tracer » pour afficher le graphe.",
+        "article.usage.3": "Le graphique apparaît dessous, avec possibilité de zoom/pan.",
+        "article.usage.4": "Pour une nouvelle équation, cliquez sur « Réinitialiser ».",
+        "article.usage.5": "Changez de langue ou thème via la barre de navigation.",
+        "article.checklist.title": "Checklist d’utilisation optimale",
+        "article.checklist.1": "Utilisez la syntaxe y = ... standard.",
+        "article.checklist.2": "Fonctions supportées : sin, cos, tan, log, exp, sqrt, abs, +, -, *, /, ^.",
+        "article.checklist.3": "Une seule variable (x) par graphe.",
+        "article.checklist.4": "Pas besoin de compte.",
+        "article.checklist.5": "Fonctionne hors ligne après chargement initial.",
+        "article.pitfalls.title": "Erreurs courantes & solutions",
+        "article.pitfalls.1": "Oubli du « y = » au début.",
+        "article.pitfalls.2": "Fonction non supportée ou mal orthographiée (ex: « sinn »).",
+        "article.pitfalls.3": "Utilisation de plusieurs variables (ex: y = x + z).",
+        "article.pitfalls.4": "Erreur d’exposant (ex: x^ au lieu de x^2).",
+        "article.pitfalls.5": "Collage depuis Word/PDF causant des caractères invisibles.",
+        "article.faq.title": "FAQ",
+        "article.faq.q1": "Q1: MatHud est-il gratuit ?",
+        "article.faq.a1": "Oui, MatHud est complètement gratuit et open source. Aucun compte requis.",
+        "article.faq.q2": "Q2: Mes données sont-elles privées ?",
+        "article.faq.a2": "Toutes les opérations sont locales, aucune donnée collectée ou envoyée.",
+        "article.faq.q3": "Q3: Puis-je tracer des graphes 3D ?",
+        "article.faq.a3": "La version actuelle ne supporte que les fonctions 2D; 3D/paramétrique peut venir plus tard.",
+        "article.faq.q4": "Q4: Puis-je utiliser des variables autres que x ?",
+        "article.faq.a4": "Actuellement non, seule la variable x est supportée.",
+        "article.faq.q5": "Q5: Puis-je sauvegarder mes graphes ?",
+        "article.faq.a5": "Pas encore. L’export et l’historique sont prévus.",
+        "article.faq.q6": "Q6: Navigateurs supportés ?",
+        "article.faq.a6": "MatHud fonctionne sur tous les navigateurs modernes (Chrome, Edge, Firefox, Safari).",
+        "article.faq.q7": "Q7: Quelle précision comparé à Desmos, GeoGebra ?",
+        "article.faq.a7": "MatHud est fiable, mais les outils professionnels peuvent gérer les cas avancés.",
+        "article.references.title": "Références & liens",
+        "article.references.1": "Desmos Calculatrice en Ligne",
+        "article.references.2": "Outil Graphique GeoGebra",
+        "article.references.3": "Documentation NumPy",
+        "article.references.4": "Projet SymPy",
+        "article.references.5": "Documentation MathJS",
+        "article.references.6": "Projet Matplotlib (Python)",
+        "article.references.7": "Exemples D3.js Visualisation",
+        "article.references.8": "Outil Mermaid.js",
+        "article.references.9": "Forum Mathematics StackExchange",
+        "article.references.10": "Wikipedia: Calculatrice Graphique",
+        "article.references.11": "WolframAlpha Moteur Maths",
+        "article.references.12": "Fonctionnement des Calculatrices Graphiques (Dev.to)",
+        "related.title": "Sites associés",
+        "footer.backToHub": "Retour au hub",
+        "footer.privacy": "Confidentialité",
+        "footer.tos": "Conditions",
+        "footer.disclaimer": "Avertissement",
+        "footer.about": "À propos",
+        "footer.contact": "Contact",
+        "footer.copyright": "© 2024 MatHud. Open source. Tous droits réservés.",
+        "privacy.title": "Politique de confidentialité",
+        "privacy.p1": "MatHud respecte la vie privée. Aucune donnée personnelle n’est collectée.",
+        "privacy.p2": "Toutes les opérations se font dans votre navigateur. Aucun cookie d’analyse.",
+        "privacy.l1": "Aucune donnée ou historique stocké",
+        "privacy.l2": "Pas de publicité",
+        "privacy.l3": "Aucune donnée envoyée à l’extérieur",
+        "privacy.p3": "Certaines ressources (polices, JS) sont chargées depuis un CDN standard.",
+        "tos.title": "Conditions d’utilisation",
+        "tos.l1": "Utilisation à vos risques, aucune garantie.",
+        "tos.l2": "Usage illicite ou dangereux interdit.",
+        "tos.l3": "Code open source (MIT).",
+        "tos.l4": "L’outil peut évoluer sans préavis.",
+        "tos.l5": "Service susceptible d’être interrompu sans préavis.",
+        "tos.p1": "L’utilisation vaut acceptation de ces conditions.",
+        "disclaimer.title": "Avertissement",
+        "disclaimer.p1": "MatHud est fourni tel quel. L’exactitude n’est pas garantie pour un usage critique.",
+        "disclaimer.p2": "Toujours vérifier les résultats. L’opérateur n’est pas responsable.",
+        "about.title": "À propos de MatHud",
+        "about.p1": "MatHud est un projet open source pour démocratiser la visualisation mathématique.",
+        "about.p2": "Notre mission : soutenir l’apprentissage mathématique mondial.",
+        "about.l1": "Développé publiquement sur GitHub.",
+        "about.l2": "Pas de tracking, ni de collecte de données.",
+        "about.l3": "Contributions bienvenues.",
+        "contact.title": "Contact",
+        "contact.p1": "Pour toute suggestion, contactez-nous :",
+        "contact.l1": "Email : mathud@mikann.site",
+        "contact.l2": "GitHub Issues : github.com/mikann20041029/goliath-auto-tool",
+        "contact.p2": "Questions, collaborations et contributions sont les bienvenus.",
+      },
+      de: {
+        "seo.title": "MatHud Open-Source Grafikrechner | KI-assistierter Mathe-Plotter",
+        "seo.description": "MatHud: Kostenloser, quelloffener Grafikrechner mit KI-Unterstützung. Mathematische Funktionen plotten, Gleichungen visualisieren. Deutsch, Englisch, Japanisch, Französisch verfügbar.",
+        "nav.backToHub": "← Zurück zum Hub",
+        "nav.language": "Sprache",
+        "nav.theme": "Thema",
+        "nav.dark": "Dunkel",
+        "nav.light": "Hell",
+        "hero.title": "MatHud: Open-Source KI-Grafikrechner",
+        "hero.subtitle": "Mathematische Funktionen kostenlos, schnell und anschaulich plotten. Open Source. Mit KI-Hilfe für effizientes Lernen und Arbeiten.",
+        "hero.cta": "Rechner ausprobieren",
+        "tool.title": "Interaktiver Grafikrechner",
+        "tool.description": "Beliebige mathematische Funktion zeichnen (z.B. y = sin(x) + 3, y = x^2). Gleichung eingeben und MatHud zeigt den Graphen. KI hilft bei Syntax und Ausdruck.",
+        "tool.input": "Funktion eingeben, z.B. y = x^2 + 1",
+        "tool.plotBtn": "Plotten",
+        "tool.resetBtn": "Zurücksetzen",
+        "tool.error": "Bitte eine gültige Funktion eingeben (z.B. y = x^2 + 1). Unterstützte Funktionen: +, -, *, /, ^, sin, cos, tan, log, sqrt, exp, abs.",
+        "tool.example": "z.B. y = sin(x) + cos(x/2)",
+        "tool.assist": "Tipp: Probieren Sie z.B. 'y = exp(-x^2/4)*sin(x)'. Die KI kann Tipps geben!",
+        "article.intro.title": "Was ist MatHud? Einführung in KI-Grafikrechner",
+        "article.intro.p1": "MatHud ist ein moderner, quelloffener Grafikrechner mit KI-Unterstützung, für Schüler, Lehrende, Ingenieure und Mathe-Fans. Gleichungen anschaulich als Graph visualisieren, mathematische Beziehungen interaktiv erforschen - einfacher als je zuvor! Durch KI werden Syntaxvorschläge und Fehlerkorrekturen geboten.",
+        "article.intro.p2": "Ob beim Algebra-Lernen, der Kurvendiskussion oder Datenmodellierung: Mit MatHud wird die Visualisierung von Gleichungen spielend einfach. Die Open-Source-Natur erlaubt jeden Einblick und Erweiterung. Mehrsprachig (Deutsch, Englisch, Japanisch, Französisch).",
+        "article.features.title": "Kernfunktionen",
+        "article.features.1": "Zeichnet beliebige Funktionen von x (Polynome, trigonometrisch, exponentiell, logarithmisch usw.)",
+        "article.features.2": "Interaktives Plotten in Echtzeit mit Zoom und Pan",
+        "article.features.3": "KI-gestützte Ausdrucks- und Syntax-Hilfe",
+        "article.features.4": "Open-Source & Datenschutz: lokale Berechnung, keine Serveranfrage",
+        "article.features.5": "Mehrsprachige Oberfläche: Deutsch, Englisch, Japanisch, Französisch",
+        "article.usage.title": "So funktioniert MatHud",
+        "article.usage.1": "Funktion ins Eingabefeld schreiben (z.B. y = x^2 + sin(x)).",
+        "article.usage.2": "Auf 'Plotten' klicken, um den Graphen zu sehen.",
+        "article.usage.3": "Graph erscheint darunter (mit Zoom & Pan, je nach Browser).",
+        "article.usage.4": "Für neue Funktion auf 'Zurücksetzen' klicken.",
+        "article.usage.5": "Sprache/Thema oben rechts nach Wunsch anpassen.",
+        "article.checklist.title": "Checkliste für optimale Nutzung",
+        "article.checklist.1": "Normale Mathe-Syntax (y = ...) verwenden.",
+        "article.checklist.2": "Funktionen: sin, cos, tan, log, exp, sqrt, abs, +, -, *, /, ^",
+        "article.checklist.3": "Nur 1 Variable (x) pro Funktion.",
+        "article.checklist.4": "Keine Anmeldung/Registrierung nötig.",
+        "article.checklist.5": "Nach dem ersten Laden auch offline nutzbar.",
+        "article.pitfalls.title": "Typische Fehler & Lösungen",
+        "article.pitfalls.1": "\"y =\" vergessen am Anfang.",
+        "article.pitfalls.2": "Nicht unterstützte oder falsch geschriebene Funktionen (z.B. sinn statt sin).",
+        "article.pitfalls.3": "Mehrere Variablen in einer Gleichung (z.B. y = x + z).",
+        "article.pitfalls.4": "Falsche Potenzschreibweise (z.B. x^ statt x^2).",
+        "article.pitfalls.5": "Unsichtbare Zeichen durch Kopieren aus Word/PDF.",
+        "article.faq.title": "Häufige Fragen",
+        "article.faq.q1": "F1: Ist MatHud kostenlos?",
+        "article.faq.a1": "Ja, MatHud ist völlig kostenlos und Open Source. Keine Registrierung nötig.",
+        "article.faq.q2": "F2: Wie steht es um Datenschutz?",
+        "article.faq.a2": "Alle Berechnungen erfolgen lokal. Keine Nutzerdaten, keine Speicherung.",
+        "article.faq.q3": "F3: Kann man 3D- oder Parametergraphen zeichnen?",
+        "article.faq.a3": "Aktuell nur 2D-Funktionen, 3D-Unterstützung wird geprüft.",
+        "article.faq.q4": "F4: Sind andere Variablen als x möglich?",
+        "article.faq.a4": "Zurzeit nein: nur Einzelvariable x ist verfügbar.",
+        "article.faq.q5": "F5: Kann ich Graphen speichern?",
+        "article.faq.a5": "Diese Funktion ist in Planung.",
+        "article.faq.q6": "F6: Unterstützte Browser?",
+        "article.faq.a6": "MatHud läuft auf allen modernen Browsern.",
+        "article.faq.q7": "F7: Plot-Genauigkeit im Vergleich zu Desmos/GeoGebra?",
+        "article.faq.a7": "MatHud ist genau, aber Spezialfälle beherrschen Profiprogramme oft besser.",
+        "article.references.title": "Quellen & Links",
+        "article.references.1": "Desmos Online Grafikrechner",
+        "article.references.2": "GeoGebra Grafik-Tool",
+        "article.references.3": "NumPy Dokumentation",
+        "article.references.4": "SymPy Projekt",
+        "article.references.5": "MathJS Dokumentation",
+        "article.references.6": "Matplotlib (Python) Projekt",
+        "article.references.7": "D3.js Visualisierungsbeispiele",
+        "article.references.8": "Mermaid.js Diagrammtool",
+        "article.references.9": "Mathematics Stack Exchange",
+        "article.references.10": "Wikipedia: Grafikrechner",
+        "article.references.11": "WolframAlpha Online-Mathe",
+        "article.references.12": "Funktionsweise von Grafikrechnern (Dev.to)",
+        "related.title": "Verwandte Seiten",
+        "footer.backToHub": "Zurück zum Hub",
+        "footer.privacy": "Datenschutz",
+        "footer.tos": "Nutzungsbedingungen",
+        "footer.disclaimer": "Haftungsausschluss",
+        "footer.about": "Über uns",
+        "footer.contact": "Kontakt",
+        "footer.copyright": "© 2024 MatHud. Open Source. Alle Rechte vorbehalten.",
+        "privacy.title": "Datenschutz",
+        "privacy.p1": "Datenschutz ist MatHud wichtig. Keine Speicherung persönlicher Daten.",
+        "privacy.p2": "Alle Eingaben und Berechnungen erfolgen im Browser. Es gibt keine Tracking-Cookies.",
+        "privacy.l1": "Keine Speicherung von Daten oder Historie.",
+        "privacy.l2": "Keine Werbung.",
+        "privacy.l3": "Keine Übertragung zu Servern.",
+        "privacy.p3": "Drittanbieter (Fonts/JS) werden wie üblich von CDN geladen.",
+        "tos.title": "Nutzungsbedingungen",
+        "tos.l1": "Nutzung auf eigene Gefahr. Keine Gewährleistung.",
+        "tos.l2": "Keine Nutzung zu illegalen oder schädlichen Zwecken.",
+        "tos.l3": "Quellcode unter MIT-Lizenz.",
+        "tos.l4": "Dienst kann sich ohne Ankündigung ändern.",
+        "tos.l5": "Einstellung des Dienstes jederzeit möglich.",
+        "tos.p1": "Mit Nutzung gelten die Bedingungen als akzeptiert.",
+        "disclaimer.title": "Haftungsausschluss",
+        "disclaimer.p1": "MatHud wird ohne Garantie bereitgestellt. Ergebnisse sind für Lernzwecke gedacht.",
+        "disclaimer.p2": "Bitte Ergebnisse prüfen. Haftung durch Betreiber ausgeschlossen.",
+        "about.title": "Über MatHud",
+        "about.p1": "MatHud ist ein Open-Source-Projekt für intuitive mathematische Visualisierung.",
+        "about.p2": "Unser Ziel: Weltweit Lernen und Entdecken in Mathe fördern.",
+        "about.l1": "Entwicklung offen auf GitHub.",
+        "about.l2": "Keine Nachverfolgung oder Datensammlung.",
+        "about.l3": "Mitarbeit willkommen.",
+        "contact.title": "Kontakt",
+        "contact.p1": "Fragen oder Anregungen? Kontaktieren Sie uns:",
+        "contact.l1": "E-Mail: mathud@mikann.site",
+        "contact.l2": "GitHub Issues: github.com/mikann20041029/goliath-auto-tool",
+        "contact.p2": "Feedback und Zusammenarbeit jederzeit willkommen.",
+      },
+    };
+    // -- Language switching and DOM render --
+    function i18nRender(lang) {
+      var dict = window.__I18N__ && window.__I18N__[lang] ? window.__I18N__[lang] : window.__I18N__.en;
+      document.documentElement.lang = lang;
+      if ('seo.title' in dict) document.title = dict['seo.title'];
+      var descMeta = document.querySelector('meta[name="description"]');
+      if (descMeta && 'seo.description' in dict) descMeta.setAttribute('content', dict['seo.description']);
+      Array.from(document.querySelectorAll('[data-i18n]')).forEach(function(el){
+        var v = dict[el.getAttribute('data-i18n')] || '';
+        if(el.tagName==='INPUT' || el.tagName==='TEXTAREA') el.value = v;
+        else el.innerHTML = v;
+      });
+      Array.from(document.querySelectorAll('[data-i18n-placeholder]')).forEach(function(el){
+        var key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = dict[key] || '';
+      });
+      Array.from(document.querySelectorAll('[data-i18n-title]')).forEach(function(el){
+        var key = el.getAttribute('data-i18n-title');
+        el.title = dict[key] || '';
+      });
+      Array.from(document.querySelectorAll('[data-i18n-aria]')).forEach(function(el){
+        var key = el.getAttribute('data-i18n-aria');
+        el.setAttribute('aria-label', dict[key] || '');
+      });
+    }
+    function setLang(lang) {
+      if(!(lang in window.__I18N__)) lang = "en";
+      window.localStorage.setItem("goliath_lang", lang);
+      document.getElementById('langSelect').value = lang;
+      i18nRender(lang);
+    }
+    // Theme
+    (function(){
+      let dark = false;
+      try {
+        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch{}
+      let saved = localStorage.getItem('goliath_theme');
+      if(saved==="dark" || (saved===null && dark)) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+    })();
+    document.addEventListener('DOMContentLoaded', function(){
+      // --- I18N render init ---
+      let lang = localStorage.getItem('goliath_lang') || 'en';
+      if(!(lang in window.__I18N__)) lang = 'en';
+      document.getElementById('langSelect').value = lang;
+      i18nRender(lang);
+      document.getElementById('langSelect').addEventListener('change', function(){
+        setLang(this.value);
+      });
+      // Dark/Light Mode toggle
+      const tgl = document.getElementById('themeToggle');
+      function updateThemeBtn(){
+        const isDark = document.documentElement.classList.contains('dark');
+        document.getElementById('iconLight').style.display = isDark ? 'none' : '';
+        document.getElementById('iconDark').style.display = isDark ? '' : 'none';
+        let lang = localStorage.getItem('goliath_lang')||'en';
+        tgl.querySelector('span').textContent = window.__I18N__[lang][isDark ? 'nav.light' : 'nav.dark'];
+        tgl.setAttribute('aria-label', window.__I18N__[lang]['nav.theme']);
+      }
+      tgl.addEventListener('click',function(){
+        const d = document.documentElement.classList;
+        if(d.contains('dark')){ d.remove('dark'); localStorage.setItem('goliath_theme','light'); }
+        else { d.add('dark');  localStorage.setItem('goliath_theme','dark'); }
+        updateThemeBtn();
+      });
+      updateThemeBtn();
+
+      // --- Related Sites section render ---
+      var related = window.__RELATED__ || [];
+      var box = document.getElementById('relatedSitesBox'), list = document.getElementById('relatedSitesList');
+      if(related.length) {
+        box.classList.remove('hidden');
+        list.innerHTML = '';
+        for(var i=0; i<related.length; ++i) {
+          var li = document.createElement('li');
+          var a = document.createElement('a');
+          a.className = "underline text-indigo-600 dark:text-indigo-400";
+          a.href = related[i].url;
+          a.textContent = related[i].title;
+          a.target = "_blank";
+          li.appendChild(a);
+          list.appendChild(li);
+        }
+      } else if (box) {
+        box.classList.add('hidden');
+      }
+    });
+    // --- Minimal Math Parser and Plotting Tool ---
+    (function(){
+      function parseFunc(str) {
+        // Accepts e.g. y = sin(x) + x^2
+        // Remove spaces, lowercase, basic parsing to JS
+        str = str.trim().toLowerCase();
+        if(!/^y\s*=/.test(str)) return null;
+        str = str.replace(/^y\s*=\s*/, '');
+        // Basic secure replacements
+        var allowed = ['x','sin','cos','tan','log','exp','sqrt','abs','Math.', '+','-','*','/','^','(',')','0','1','2','3','4','5','6','7','8','9','.'];
+        // Map functions to Math
+        str = str.replace(/([a-z]+)\s*\(/g, function(f,s){
+          if(['sin','cos','tan','log','exp','sqrt','abs'].indexOf(s)>=0) return 'Math.'+s+'(';
+          return s+'(';
+        });
+        str = str.replace(/\^/g, '**');
+        // Semi-safe filter (block unusual tokens)
+        if(/[^0-9x\.\/\*\+\-\(\) ]|math\.(?!sin|cos|tan|log|exp|sqrt|abs)/.test(str.replace(/math\./g,''))) return null;
+        // Now build function
+        try {
+          // eslint-disable-next-line no-new-func
+          var f = new Function('x','return '+str+';');
+          f(1); // test
+          return f;
+        } catch(e){ return null; }
+      }
+      function plot(func) {
+        var ctx = document.getElementById('graphCanvas').getContext('2d');
+        var w = ctx.canvas.width, h=ctx.canvas.height;
+        ctx.save();
+        ctx.clearRect(0, 0, w, h);
+        // Draw axes
+        ctx.strokeStyle = "#8caef3";
+        let cx = w/2, cy = h/2;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, cy); ctx.lineTo(w, cy); // x-axis
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, h); // y-axis
+        ctx.stroke();
+        // Ticks
+        ctx.strokeStyle = "#b6c1e6";
+        for(let dx= -4; dx<=4; ++dx){
+          let x = cx + dx*50;
+          ctx.beginPath(); ctx.moveTo(x, cy-5); ctx.lineTo(x, cy+5); ctx.stroke();
+          if(dx!==0){
+            ctx.font = "10px Inter,Noto Sans JP,sans-serif";
+            ctx.fillStyle = "#8597b2";
+            ctx.textAlign = "center";
+            ctx.fillText(""+dx, x, cy+16);
+          }
+        }
+        for(let dy= -2; dy<=2; ++dy){
+          let y = cy-dy*50;
+          ctx.beginPath(); ctx.moveTo(cx-5, y); ctx.lineTo(cx+5,y); ctx.stroke();
+          if(dy!==0){
+            ctx.font = "10px Inter,Noto Sans JP,sans-serif";
+            ctx.fillStyle = "#8597b2";
+            ctx.textAlign = "right";
+            ctx.fillText(""+dy, cx-8, y+3);
+          }
+        }
+        // Draw function
+        ctx.strokeStyle = "#4f46e5";
+        if(document.documentElement.classList.contains('dark')) ctx.strokeStyle="#a5b4fc";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        let first=true;
+        for(var px=0; px<=w; px++){
+          let x = (px-cx)/50;  // x from -width/2..width/2 scaled
+          let y;
+          try { y = func(x); }
+          catch(e){ y=NaN;}
+          if(isNaN(y)||!isFinite(y)) first = true;
+          else{
+            let py = cy - y*50;
+            if(first){ ctx.moveTo(px,py); first=false; }
+            else ctx.lineTo(px,py);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      document.addEventListener('DOMContentLoaded',function(){
+        var fInput = document.getElementById('functionInput'),
+          form = document.getElementById('graphForm'),
+          err = document.getElementById('toolError'),
+          assist = document.getElementById('assistInfo');
+        // i18n placeholder
+        var lang = localStorage.getItem('goliath_lang')||'en';
+        fInput.placeholder = (window.__I18N__[lang]||window.__I18N__.en)['tool.input'];
+        form.onsubmit = function(e){
+          e.preventDefault();
+          var fn = parseFunc(fInput.value || "");
+          if(!fn){
+            err.classList.remove('hidden');
+            return false;
+          }
+          err.classList.add('hidden');
+          plot(fn);
+          return false;
+        };
+        document.getElementById('resetBtn').onclick = function(){
+          fInput.value="";
+          var ctx=document.getElementById('graphCanvas').getContext('2d');
+          ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+          err.classList.add('hidden');
+        };
+      });
+    })();
+    // --- Related sites JSON (populate as needed) ---
+    window.__RELATED__ = [{"title": "Compound Interest Calculator", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769223724-calculator-calculator/"}, {"title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769195313-tax-calculator-3/"}, {"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769189699-tax-calculator-2/"}, {"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769158606-tax-calculator/"}, {"title": "Show HN: I built a MACRS calculator because TurboTax was overkill", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769155768-tax-calculator/"}, {"title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769115945-show-hn-pta-tax-calculator-calculate-pakistan-mobile-import-/"}, {"title": "TerabyteDeals – Compare storage prices by $/TB", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769218389-terabytedeals-compare-storage-prices-by-tb-tool/"}, {"title": "Show HN: GoGen – A simple template-based file generator written in Go", "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769181471-template-template-tool/"}];
+  </script>
+</body>
+</html>

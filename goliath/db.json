@@ -1,5 +1,88 @@
 [
   {
+    "id": "28c02d06c339f88e",
+    "title": "Show HN: MatHud – Open-source AI-assisted graphing calculator",
+    "search_title": "calculator calculator",
+    "created_at": "2026-01-24T06:09:28Z",
+    "path": "./pages/1769234968-calculator-calculator-2",
+    "public_url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769234968-calculator-calculator-2/",
+    "tags": [
+      "calculator"
+    ],
+    "source_urls": [
+      "https://www.investor.gov/financial-tools-calculators/calculators/compound-interest-calculator",
+      "https://whatsmydepreciation.co/",
+      "https://github.com/vl3c/MatHud",
+      "https://brightgrade.app",
+      "https://ptataxcalculator.org",
+      "https://masto.globaleas.org/@iembot_wpc/115948582275974079",
+      "https://mastodon.social/@Pitico/115948582186866495",
+      "https://mastodon.social/@rsmon77/115948581634565743",
+      "https://github.com/xayhemLLC/supe",
+      "https://ring0.holyc.xyz/",
+      "https://news.ycombinator.com/item?id=46740767",
+      "https://news.ycombinator.com/item?id=46740645",
+      "https://docs.python.org/3/library/json.html",
+      "https://cholesterol-tracker.poniansoft.com/",
+      "https://fortune.com/2026/01/13/us-workers-smallest-labor-share-gdp-on-record/",
+      "https://github.com/saysjonathan/dwm.tmux",
+      "https://blog.bymitch.com/posts/bets-by-mitch/",
+      "https://news.ycombinator.com/item?id=46739230",
+      "https://github.com/Amaculus/sf-config-tool",
+      "https://news.ycombinator.com/item?id=46738260"
+    ],
+    "related": [
+      {
+        "title": "Compound Interest Calculator",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769223724-calculator-calculator/"
+      },
+      {
+        "title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769195313-tax-calculator-3/"
+      },
+      {
+        "title": "Show HN: I built a MACRS calculator because TurboTax was overkill",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769189699-tax-calculator-2/"
+      },
+      {
+        "title": "Show HN: I built a MACRS calculator because TurboTax was overkill",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769158606-tax-calculator/"
+      },
+      {
+        "title": "Show HN: I built a MACRS calculator because TurboTax was overkill",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769155768-tax-calculator/"
+      },
+      {
+        "title": "Show HN: PTA Tax Calculator – Calculate Pakistan mobile import taxes instantly",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769115945-show-hn-pta-tax-calculator-calculate-pakistan-mobile-import-/"
+      },
+      {
+        "title": "TerabyteDeals – Compare storage prices by $/TB",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769218389-terabytedeals-compare-storage-prices-by-tb-tool/"
+      },
+      {
+        "title": "Show HN: GoGen – A simple template-based file generator written in Go",
+        "url": "https://mikann20041029.github.io/goliath-auto-tool/goliath/pages/1769181471-template-template-tool/"
+      }
+    ],
+    "best_source": "HN",
+    "best_url": "https://github.com/vl3c/MatHud",
+    "best_score": 7,
+    "best_score_breakdown": {
+      "tool_request": 0,
+      "convert_generator_calc": 7,
+      "structured_output": 0,
+      "specific_inputs": 0,
+      "how_to_code_only": 0,
+      "too_broad": 0,
+      "adult_or_sensitive": 0,
+      "duplicate_penalty": 0
+    },
+    "score_keys": [
+      "calculator"
+    ]
+  },
+  {
     "id": "5f4f1cfdefd6132e",
     "title": "Compound Interest Calculator",
     "search_title": "calculator calculator",
