@@ -1,71 +1,80 @@
-import os, json, urllib.request
+import os
+import json
+import pathlib
+import datetime
+import urllib.request
 
-def gh_api(method: str, url: str, token: str, payload=None):
- req = urllib.request.Request(url, method=method)
- req.add_header("Authorization", f"Bearer {token}")
- req.add_header("Accept", "application/vnd.github+json")
- if payload is not None:
- data = json.dumps(payload).encode("utf-8")
- req.add_header("Content-Type", "application/json")
- req.data = data
- with urllib.request.urlopen(req) as resp:
- body = resp.read().decode("utf-8")
- return resp.getcode(), json.loads(body) if body else {}
+def _read_tail(path: str, max_chars: int = 12000) -> str:
+    try:
+        p = pathlib.Path(path)
+        if not p.exists():
+            return f"(no file: {path})"
+        text = p.read_text(encoding="utf-8", errors="replace")
+        if len(text) > max_chars:
+            return text[-max_chars:]
+        return text
+    except Exception as e:
+        return f"(failed to read {path}: {e})"
 
-def read_file(path: str, limit_chars: int = 12000) -> str:
- if not os.path.exists(path):
- return "(run_log.txt not found)"
- with open(path, "r", encoding="utf-8", errors="replace") as f:
- s = f.read()
- s = s.strip("\ufeff")
- if not s.strip():
- return "(run_log.txt empty)"
- if len(s) <= limit_chars:
- return s
- return s[:limit_chars] + "\n...(truncated)..."
+def main() -> int:
+    # Always avoid failing the workflow because of reporting.
+    token = os.getenv("GITHUB_TOKEN", "")
+    repo  = os.getenv("GITHUB_REPOSITORY", "")
+    if not token or not repo:
+        print("[report_to_issue] skip: missing GITHUB_TOKEN or GITHUB_REPOSITORY")
+        return 0
 
-def try_read_json(path: str):
- if not os.path.exists(path):
- return None
- try:
- with open(path, "r", encoding="utf-8") as f:
- return json.load(f)
- except Exception:
- return None
+    run_id   = os.getenv("GITHUB_RUN_ID", "")
+    server   = os.getenv("GITHUB_SERVER_URL", "https://github.com")
+    sha      = os.getenv("GITHUB_SHA", "")
+    wf_name  = os.getenv("GITHUB_WORKFLOW", "workflow")
+    run_url  = f"{server}/{repo}/actions/runs/{run_id}" if run_id else "(no run url)"
 
-def main():
- token = os.environ.get("GITHUB_TOKEN", "")
- repo = os.environ.get("GITHUB_REPOSITORY", "")
- run_id = os.environ.get("GITHUB_RUN_ID", "")
- server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    title = f"Goliath Report: {now}"
 
- if not token or not repo or not run_id:
- raise SystemExit("Missing GITHUB_TOKEN/GITHUB_REPOSITORY/GITHUB_RUN_ID")
+    log_tail = _read_tail("run_log.txt")
+    body = "\n".join([
+        f"Workflow: {wf_name}",
+        f"Run: {run_url}",
+        f"SHA: {sha}",
+        "",
+        "---- run_log.txt (tail) ----",
+        "```",
+        log_tail,
+        "```",
+    ])
 
- run_url = f"{server}/{repo}/actions/runs/{run_id}"
- log = read_file("run_log.txt")
+    payload = {"title": title, "body": body}
 
- stats = try_read_json("run_stats.json") or {}
- src_counts = stats.get("source_counts", {})
- leads_count = stats.get("leads_count", 0)
- aff_check = stats.get("affiliates_check", {})
+    url = f"https://api.github.com/repos/{repo}/issues"
+    data = json.dumps(payload).encode("utf-8")
 
- title = f"[Goliath] Run report #{run_id} (exit-unknown)"
- body = (
- f"Run: {run_url}\n\n"
- f"## Counts\n"
- f"- leads (manual reply candidates): {leads_count}\n"
- f"- sources: {json.dumps(src_counts, ensure_ascii=False)}\n"
- f"- affiliates_check: {json.dumps(aff_check, ensure_ascii=False)}\n\n"
- f"## run_log.txt (excerpt)\n"
- f"```txt\n{log}\n```\n"
- )
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "goliath-auto-tool",
+        },
+    )
 
- api = f"https://api.github.com/repos/{repo}/issues"
- payload = {"title": title, "body": body}
- code, res = gh_api("POST", api, token, payload)
- if code not in (200, 201):
- raise SystemExit(f"Failed to create issue: HTTP {code} {res}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            status = getattr(resp, "status", 200)
+            resp_text = resp.read().decode("utf-8", errors="replace")
+            print(f"[report_to_issue] created issue: HTTP {status}")
+            # 失敗しても落とさない設計だけど、目安で出す
+            if status >= 300:
+                print(resp_text[:2000])
+    except Exception as e:
+        # 報告失敗してもここで workflow を落とさない
+        print(f"[report_to_issue] failed (non-fatal): {e}")
+
+    return 0
 
 if __name__ == "__main__":
- main()
+    raise SystemExit(main())
