@@ -6,21 +6,31 @@ import glob
 import random
 import hashlib
 import datetime
+import math
 from pathlib import Path
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Tuple, Optional
-# ===== model lock (cheapest only) =====
-MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # デフォルトを mini に固定
-if MODEL != "gpt-4o-mini":
-    raise RuntimeError(f"MODEL LOCK: only gpt-4o-mini allowed, got {MODEL}")
-
-MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "300"))  # 出力上限を固定
 
 import requests
 from openai import OpenAI
-from collectors import collect_bluesky as collect_bluesky_ext
 
-# Optional SNS libs (missing secretsなら黙ってスキップ)
+# ============================================================
+# COST LOCK: cheapest only
+# ============================================================
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+if MODEL != "gpt-4o-mini":
+    raise RuntimeError(f"MODEL LOCK: only gpt-4o-mini allowed, got {MODEL}")
+
+# Reply output cap (short)
+MAX_OUTPUT_TOKENS_REPLY = int(os.getenv("MAX_OUTPUT_TOKENS_REPLY", "300"))
+# Build output cap (needs to be larger than reply, but still bounded)
+MAX_OUTPUT_TOKENS_BUILD = int(os.getenv("MAX_OUTPUT_TOKENS_BUILD", "2400"))
+if MAX_OUTPUT_TOKENS_BUILD > 3200:
+    raise RuntimeError("MAX_OUTPUT_TOKENS_BUILD too large; cap at <= 3200 to control cost")
+
+# ============================================================
+# Optional SNS libs
+# ============================================================
 try:
     from atproto import Client as BskyClient  # type: ignore
 except Exception:
@@ -31,10 +41,15 @@ try:
 except Exception:
     Mastodon = None
 
+# External collector (your existing module)
+try:
+    from collectors import collect_bluesky as collect_bluesky_ext  # type: ignore
+except Exception:
+    collect_bluesky_ext = None
 
-# =========================
-# Constants / Paths
-# =========================
+# ============================================================
+# Paths / Constants
+# ============================================================
 ROOT = "goliath"
 PAGES_DIR = f"{ROOT}/pages"
 DB_PATH = f"{ROOT}/db.json"
@@ -47,36 +62,59 @@ STATE_DIR = Path(ROOT) / "state"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 TOOL_HISTORY_PATH = STATE_DIR / "tool_history.json"
 
-# ---- Model choices ----
-MODEL_BUILD = os.getenv("MODEL_BUILD", "gpt-4.1-2025-04-14")
-MODEL_REPLY = os.getenv("MODEL_REPLY", "gpt-4.1-nano-2025-04-14")
+AFFILIATES_PATH = f"{ROOT}/affiliates.json"
 
-# ---- Lead count ----
-LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "100"))          # Issuesに出す「返信候補」件数
-LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "60"))  # 収集は多め→スコアで上位化
+ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "1") == "1"
 
-# ---- Collect limits ----
+LEADS_TOTAL = int(os.getenv("LEADS_TOTAL", "100"))
+LEADS_PER_SOURCE = int(os.getenv("LEADS_PER_SOURCE", "60"))
+
 COLLECT_HN = int(os.getenv("COLLECT_HN", "50"))
 COLLECT_BSKY = int(os.getenv("COLLECT_BSKY", "50"))
 COLLECT_MASTODON = int(os.getenv("COLLECT_MASTODON", "50"))
 
-# ---- Post announce ----
-ENABLE_AUTO_POST = os.getenv("ENABLE_AUTO_POST", "1") == "1"
+# Click log endpoint (Cloudflare Worker / GAS)
+CLICK_LOG_ENDPOINT = os.getenv("CLICK_LOG_ENDPOINT", "").strip()
 
+# Unsplash
+UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "").strip()
+UNSPLASH_QUERIES = [
+    "abstract gradient",
+    "minimalist background",
+    "soft colors",
+    "modern texture",
+]
 
-# =========================
-# Helpers
-# =========================
+# ============================================================
+# Keywords / Scoring
+# ============================================================
 KEYWORDS = [
     "help", "need help", "anyone know", "any idea", "how do i", "how to", "can't", "cannot", "won't",
     "stuck", "blocked", "error", "bug", "issue", "problem", "failed", "failure", "broken", "crash",
     "exception", "traceback", "deploy", "build failed", "github actions", "workflow", "docker", "npm", "pip",
     "api", "oauth", "convert", "converter", "calculator", "template", "compare", "timezone"
 ]
-
 BAN_WORDS = ["template", "boilerplate", "starter", "scaffold"]
 
+# Fixed 12 genres (must match exactly)
+GENRES = [
+    "Web/Hosting",
+    "Dev/Tools",
+    "AI/Automation",
+    "Security/Privacy",
+    "Media: Video/Audio",
+    "PDF/Docs",
+    "Images/Design",
+    "Data/Spreadsheets",
+    "Business/Accounting/Tax",
+    "Marketing/Social",
+    "Productivity",
+    "Education/Language",
+]
 
+# ============================================================
+# Utilities
+# ============================================================
 def now_utc_iso() -> str:
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -119,9 +157,6 @@ def write_text(path: str, text: str) -> None:
 
 
 def extract_html_only(raw: str) -> str:
-    """
-    余計な挨拶/markdown/``` を排除して <!DOCTYPE html>..</html> のみ切り出す
-    """
     raw = raw or ""
     m = re.search(r"(<!DOCTYPE\s+html.*?</html\s*>)", raw, flags=re.IGNORECASE | re.DOTALL)
     if m:
@@ -134,11 +169,6 @@ def extract_html_only(raw: str) -> str:
 def stable_id(*parts: str) -> str:
     h = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return h[:16]
-
-
-def hit_keywords(text: str) -> bool:
-    t = (text or "").lower()
-    return any(k in t for k in KEYWORDS)
 
 
 def _norm(s: str) -> str:
@@ -154,7 +184,6 @@ def _fingerprint(theme: str, tags: List[str]) -> str:
 
 
 def _too_similar(a: str, b: str) -> bool:
-    # ゆるい類似判定（単語Jaccard）
     A = set(_norm(a).split())
     B = set(_norm(b).split())
     if not A or not B:
@@ -165,7 +194,7 @@ def _too_similar(a: str, b: str) -> bool:
 
 def _normalize_text(s: str) -> str:
     s = (s or "").lower()
-    s = re.sub(r"\d{10,}", "TS", s)     # timestamps
+    s = re.sub(r"\d{10,}", "TS", s)
     s = re.sub(r"https?://\S+", "URL", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
@@ -184,9 +213,6 @@ def _read_existing_page_signatures() -> List[str]:
 
 
 def duplication_penalty(new_index_html: str, threshold: float = 0.88) -> Tuple[int, float]:
-    """
-    Returns (penalty, best_similarity). If too similar: -200.
-    """
     new_sig = _normalize_text(new_index_html)
     best = 0.0
     for old in _read_existing_page_signatures():
@@ -198,9 +224,9 @@ def duplication_penalty(new_index_html: str, threshold: float = 0.88) -> Tuple[i
     return (0, best)
 
 
-# =========================
-# Tool history / existing slugs
-# =========================
+# ============================================================
+# Tool history
+# ============================================================
 def _load_tool_history() -> List[Dict[str, Any]]:
     try:
         if TOOL_HISTORY_PATH.exists():
@@ -213,7 +239,6 @@ def _load_tool_history() -> List[Dict[str, Any]]:
 
 
 def _save_tool_history(hist: List[Dict[str, Any]]) -> None:
-    # 最新200件だけ保持
     hist = hist[-200:]
     TOOL_HISTORY_PATH.write_text(json.dumps(hist, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -231,13 +256,8 @@ def _existing_slugs_from_pages_dir(pages_dir: Path) -> set:
 
 def existing_tool_slugs() -> set:
     slugs = set()
-    # 1) goliath/pages に既にあるslug
     slugs |= _existing_slugs_from_pages_dir(Path(PAGES_DIR))
-
-    # 2) もし legacy "pages/" が同階層に存在する構成でも拾う（壊さない）
     slugs |= _existing_slugs_from_pages_dir(Path(__file__).resolve().parent / "pages")
-
-    # 3) tool_history に既にあるslug
     hist = _load_tool_history()
     for it in hist:
         s = it.get("tool_slug") or it.get("slug")
@@ -255,21 +275,16 @@ def ensure_unique_slug(base: str, seen: set) -> str:
     return f"{base}-{i}"
 
 
-# =========================
-# Titles (検索寄せの最低限)
-# =========================
+# ============================================================
+# Title / Tags / Genre
+# ============================================================
 def make_search_title(theme: str, tags: List[str]) -> str:
-    """
-    SNS文っぽいテーマを「検索語に寄せたタイトル」にする最低限。
-    """
     t = (theme or "").strip()
     tl = t.lower()
 
-    # ノイズ除去
     t = re.sub(r"\s+", " ", t)
     t = re.sub(r"^(show hn:\s*)", "", t, flags=re.IGNORECASE)
 
-    # タグから型を決める
     suffix = "tool"
     if "calculator" in (tags or []) or "finance" in (tags or []):
         suffix = "calculator"
@@ -280,13 +295,12 @@ def make_search_title(theme: str, tags: List[str]) -> str:
     elif "pricing" in (tags or []):
         suffix = "pricing tool"
     elif "productivity" in (tags or []):
-        suffix = "template tool"
+        suffix = "tool"
 
-    # できれば英語っぽい核を拾う
     kws = []
-    for k in ["tax", "pta", "subscription", "pricing", "timezone", "time zone", "template", "convert", "calculator"]:
+    for k in ["tax", "subscription", "pricing", "timezone", "time zone", "convert", "calculator", "pdf", "image", "video", "dns", "ssl", "oauth", "api"]:
         if k in tl:
-            kws.append(k.upper() if k == "pta" else k)
+            kws.append(k)
     core = kws[0] if kws else t[:60]
 
     title = f"{core} {suffix}".strip()
@@ -294,13 +308,91 @@ def make_search_title(theme: str, tags: List[str]) -> str:
     return title[:80]
 
 
-# =========================
+def infer_tags_simple(theme: str) -> List[str]:
+    t = (theme or "").lower()
+    tags: List[str] = []
+    rules = {
+        "convert": "convert",
+        "converter": "convert",
+        "calculator": "calculator",
+        "compare": "compare",
+        "tax": "finance",
+        "timezone": "time",
+        "time zone": "time",
+        "subscription": "pricing",
+        "pricing": "pricing",
+        "plan": "pricing",
+        "checklist": "productivity",
+        "notes": "productivity",
+        "pdf": "pdf",
+        "ocr": "pdf",
+        "ffmpeg": "media",
+        "video": "media",
+        "audio": "media",
+        "image": "images",
+        "resize": "images",
+        "dns": "web",
+        "ssl": "web",
+        "cloudflare": "web",
+        "github": "dev",
+        "ci": "dev",
+        "api": "dev",
+        "oauth": "security",
+        "vpn": "security",
+        "password": "security",
+        "2fa": "security",
+        "seo": "marketing",
+        "analytics": "marketing",
+        "email": "marketing",
+        "english": "education",
+        "toeic": "education",
+        "eiken": "education",
+    }
+    for k, v in rules.items():
+        if k in t and v not in tags:
+            tags.append(v)
+    if not tags:
+        tags = ["tools"]
+    return tags[:8]
+
+
+def infer_genre(theme: str, tags: List[str]) -> str:
+    t = (theme or "").lower()
+    tagset = set([x.lower() for x in (tags or [])])
+
+    if any(k in t for k in ["dns", "ssl", "cloudflare", "vercel", "uptime", "github pages"]) or "web" in tagset:
+        return "Web/Hosting"
+    if any(k in t for k in ["ide", "git", "ci", "cd", "logging", "api", "sdk"]) or "dev" in tagset:
+        return "Dev/Tools"
+    if any(k in t for k in ["llm", "agent", "automation", "workflow", "openai", "chatgpt"]) or "ai" in tagset:
+        return "AI/Automation"
+    if any(k in t for k in ["vpn", "password", "2fa", "malware", "privacy", "oauth"]) or "security" in tagset:
+        return "Security/Privacy"
+    if any(k in t for k in ["ffmpeg", "video", "audio", "subtitle", "compress"]) or "media" in tagset:
+        return "Media: Video/Audio"
+    if any(k in t for k in ["pdf", "ocr", "merge", "sign", "doc"]) or "pdf" in tagset:
+        return "PDF/Docs"
+    if any(k in t for k in ["image", "resize", "optimize", "remove bg", "design"]) or "images" in tagset:
+        return "Images/Design"
+    if any(k in t for k in ["csv", "excel", "spreadsheet", "google sheets", "finance template"]) or "data" in tagset:
+        return "Data/Spreadsheets"
+    if any(k in t for k in ["invoice", "bookkeeping", "tax", "accounting"]) or "finance" in tagset:
+        return "Business/Accounting/Tax"
+    if any(k in t for k in ["seo", "analytics", "scheduling", "email", "social"]) or "marketing" in tagset:
+        return "Marketing/Social"
+    if any(k in t for k in ["notes", "task", "calendar", "focus", "template", "checklist"]) or "productivity" in tagset:
+        return "Productivity"
+    if any(k in t for k in ["english", "language", "toeic", "eiken", "exam", "study"]) or "education" in tagset:
+        return "Education/Language"
+
+    # default
+    return "Dev/Tools"
+
+
+# ============================================================
 # Scoring
-# =========================
+# ============================================================
 def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str, int]]:
-    """
-    ポイント表（見える形）
-    """
     t = (text or "").lower()
 
     table: Dict[str, int] = {
@@ -339,7 +431,7 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
     if hn_points > 0:
         table["tool_request"] += min(10, hn_points // 30)
 
-    # ===== anti-duplicate penalty =====
+    # anti-duplicate penalty
     hist = _load_tool_history()
     theme_now = (meta.get("theme") or text or "")
     tags_now = meta.get("tags") or []
@@ -357,18 +449,68 @@ def score_item(text: str, url: str, meta: Dict[str, Any]) -> Tuple[int, Dict[str
             break
 
     table["duplicate_penalty"] = dup_penalty
-
     score = int(sum(table.values()))
     return score, table
 
 
-# =========================
-# Collector (HN / Bluesky / Mastodon / Reddit / X limited)
-# =========================
+# ============================================================
+# GitHub Issue
+# ============================================================
+def create_github_issue(title: str, body: str) -> None:
+    pat = os.getenv("GH_PAT", "") or os.getenv("GITHUB_TOKEN", "")
+    repo = os.getenv("GITHUB_REPOSITORY", "")
+    if not pat or not repo:
+        print("[issue] skip: missing token or repo", {"has_token": bool(pat), "repo": repo})
+        return
+
+    url = f"https://api.github.com/repos/{repo}/issues"
+    headers = {
+        "Authorization": f"Bearer {pat}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    payload = {"title": title, "body": body}
+
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        print("[issue] status", r.status_code)
+        if r.status_code >= 300:
+            print("[issue] error body:", r.text[:500])
+        else:
+            data = r.json()
+            print("[issue] created:", data.get("html_url"))
+    except Exception as e:
+        print("[issue] exception:", repr(e))
+
+
+def chunk_and_create_issues(title_prefix: str, body: str, max_chars: int = 60000) -> None:
+    if len(body) <= max_chars:
+        create_github_issue(title_prefix, body)
+        return
+
+    parts: List[str] = []
+    cur: List[str] = []
+    cur_len = 0
+    for block in body.split("\n----\n"):
+        blk = block + "\n----\n"
+        if cur_len + len(blk) > max_chars and cur:
+            parts.append("".join(cur))
+            cur = [blk]
+            cur_len = len(blk)
+        else:
+            cur.append(blk)
+            cur_len += len(blk)
+    if cur:
+        parts.append("".join(cur))
+
+    for idx, p in enumerate(parts, 1):
+        create_github_issue(f"{title_prefix} (part {idx}/{len(parts)})", p)
+
+
+# ============================================================
+# HN Collector
+# ============================================================
 def hn_search(query: str, limit: int = 30, ask_only: bool = False) -> List[Dict[str, Any]]:
-    """
-    HN (Algolia) から検索。
-    """
     try:
         url = "https://hn.algolia.com/api/v1/search_by_date"
         params = {"query": query, "tags": "story", "hitsPerPage": min(100, max(1, limit))}
@@ -394,19 +536,13 @@ def hn_search(query: str, limit: int = 30, ask_only: bool = False) -> List[Dict[
                 "meta": {"hn_points": points, "hn_discuss": hn_url}
             })
         return out
-    except Exception:
+    except Exception as e:
+        print("[hn] exc", repr(e))
         return []
 
 
 def collect_hn(limit: int) -> List[Dict[str, Any]]:
-    queries = [
-        "tool for",
-        "is there a tool",
-        "convert",
-        "calculator",
-        "compare pricing",
-        "timezone",
-    ]
+    queries = ["tool for", "is there a tool", "convert", "calculator", "compare pricing", "timezone"]
     all_items: List[Dict[str, Any]] = []
     per = max(5, limit // max(1, len(queries)))
     for q in queries:
@@ -428,149 +564,160 @@ def collect_hn(limit: int) -> List[Dict[str, Any]]:
         uniq.append(it)
         if len(uniq) >= limit:
             break
-
     return uniq
 
 
-def bsky_uri_to_url(uri: str, did: str = "") -> str:
-    # at://did:plc:xxxx/app.bsky.feed.post/3k... -> https://bsky.app/profile/did:plc:xxxx/post/3k...
-    try:
-        if uri.startswith("at://"):
-            parts = uri[5:].split("/")
-            _did = parts[0]
-            rkey = parts[-1]
-            return f"https://bsky.app/profile/{_did}/post/{rkey}"
-        if did and uri:
-            m = re.search(r"/app\.bsky\.feed\.post/([^/]+)$", uri)
-            if m:
-                return f"https://bsky.app/profile/{did}/post/{m.group(1)}"
-        return ""
-    except Exception:
-        return ""
+# ============================================================
+# Bluesky Collector (DEBUG: reasons visible in Actions logs)
+# ============================================================
+def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
+    """
+    Blueskyは「0の理由」を確実にログに出す:
+    - atproto libの有無
+    - secretsの有無
+    - collectors.collect_bluesky(ext)の有無
+    - 実行例外
+    """
+    h = os.getenv("BSKY_HANDLE", "").strip()
+    p = os.getenv("BSKY_PASSWORD", "").strip()
 
-# --- add: atproto return normalization ---
-def _to_dict(x):
-    if x is None:
-        return {}
-    if isinstance(x, dict):
-        return x
-    try:
-        if hasattr(x, "model_dump"):
-            return x.model_dump()
-    except Exception:
-        pass
-    try:
-        if hasattr(x, "dict"):
-            return x.dict()
-    except Exception:
-        pass
-    return {}
+    print("[bsky] preflight",
+          json.dumps({
+              "has_handle": bool(h),
+              "has_password": bool(p),
+              "has_atproto": (BskyClient is not None),
+              "has_ext_collector": bool(collect_bluesky_ext),
+              "limit": limit
+          }, ensure_ascii=False))
 
-def _to_list(x):
-    if x is None:
+    # Prefer your external collector if present (it might do search/timeline efficiently)
+    if collect_bluesky_ext:
+        try:
+            # Expected signature: collect_bluesky_ext(KEYWORDS, limit_per_query=25) etc.
+            # We'll call it in a safe way and normalize output.
+            out = collect_bluesky_ext(KEYWORDS, limit_per_query=25)  # type: ignore
+            if not isinstance(out, list):
+                print("[bsky] ext_collector returned non-list")
+                return []
+            norm: List[Dict[str, Any]] = []
+            for it in out:
+                if not isinstance(it, dict):
+                    continue
+                url = (it.get("url") or "").strip()
+                txt = (it.get("text") or "").strip()
+                if not url or not txt:
+                    continue
+                norm.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": it.get("meta") or {}})
+            print("[bsky] ext_collector ok", {"count": len(norm)})
+            return norm[:limit]
+        except Exception as e:
+            print("[bsky] ext_collector EXC", repr(e))
+            # fallthrough to direct atproto if possible
+
+    # If no atproto or no secrets -> impossible
+    if BskyClient is None:
+        print("[bsky] skip: atproto not installed")
         return []
-    if isinstance(x, list):
-        return x
-    return []
+    if not (h and p):
+        print("[bsky] skip: missing BSKY_HANDLE/BSKY_PASSWORD")
+        return []
 
-    # ===== [bsky] DEBUG BLOCK: replace whole "login + search + timeline fallback" section =====
+    # Direct atproto minimal (search posts)
+    out: List[Dict[str, Any]] = []
+    queries = [
+        "need a tool",
+        "is there a tool",
+        "converter",
+        "calculator",
+        "timezone",
+        "pricing",
+        "subscription",
+        "pdf",
+        "image resize",
+        "ffmpeg",
+    ]
+
+    def bsky_uri_to_url(uri: str, did: str = "") -> str:
+        try:
+            if uri.startswith("at://"):
+                parts = uri[5:].split("/")
+                _did = parts[0]
+                rkey = parts[-1]
+                return f"https://bsky.app/profile/{_did}/post/{rkey}"
+            if did and uri:
+                m = re.search(r"/app\.bsky\.feed\.post/([^/]+)$", uri)
+                if m:
+                    return f"https://bsky.app/profile/{did}/post/{m.group(1)}"
+            return ""
+        except Exception:
+            return ""
+
+    def _to_dict(x):
+        if x is None:
+            return {}
+        if isinstance(x, dict):
+            return x
+        try:
+            if hasattr(x, "model_dump"):
+                return x.model_dump()
+        except Exception:
+            pass
+        try:
+            if hasattr(x, "dict"):
+                return x.dict()
+        except Exception:
+            pass
+        return {}
+
+    def _to_list(x):
+        if x is None:
+            return []
+        if isinstance(x, list):
+            return x
+        return []
+
     try:
         c = BskyClient()
         c.login(h, p)
         print("[bsky] login ok")
     except Exception as e:
-        print(f"[bsky] login EXC err={e!r}")
+        print("[bsky] login EXC", repr(e))
         return []
 
-    # 1) search
     for q in queries:
         try:
             res = c.app.bsky.feed.search_posts({"q": q, "limit": 25})
             resd = _to_dict(res)
             posts = _to_list(resd.get("posts"))
-            print(f"[bsky] q='{q}' posts={len(posts)} res_keys={list(resd.keys())}")
+            print("[bsky] search", {"q": q, "posts": len(posts), "keys": list(resd.keys())})
 
-            if posts:
-                p0 = _to_dict(posts[0])
-                print(f"[bsky] sample_post_keys={list(p0.keys())}")
-                if isinstance(p0.get("post"), dict):
-                    print(f"[bsky] sample_post.post_keys={list(p0['post'].keys())}")
+            for raw in posts:
+                post = _to_dict(raw)
+                base = post.get("post") if isinstance(post.get("post"), dict) else post
 
-        except Exception as e:
-            print(f"[bsky] search EXC q='{q}' err={e!r}")
-            continue
-
-        for raw in posts:
-            post = _to_dict(raw)
-
-            # APIによっては {"post": {...}} の形が混ざるので吸収
-            base = post.get("post") if isinstance(post.get("post"), dict) else post
-
-            rec = _to_dict(base.get("record"))
-            txt = (rec.get("text") or "").strip()
-
-            uri = base.get("uri") or ""
-            author = _to_dict(base.get("author"))
-            did = author.get("did") or ""
-
-            url = bsky_uri_to_url(uri, did) or uri
-            if not url:
-                print(f"[bsky] drop(no url) uri={uri!r} did={did!r}")
-                continue
-
-            out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"q": q}})
-            if len(out) >= limit:
-                break
-
-        if len(out) >= limit:
-            break
-
-    # 2) timeline fallback
-    if len(out) < limit:
-        try:
-            tl = c.app.bsky.feed.get_timeline({"limit": 200})
-            tld = _to_dict(tl)
-            feed = _to_list(tld.get("feed"))
-            print(f"[bsky] timeline feed={len(feed)} tl_keys={list(tld.keys())}")
-
-            matched = 0
-            for item_raw in feed:
-                item = _to_dict(item_raw)
-                postwrap = _to_dict(item.get("post"))
-                if not postwrap:
+                rec = _to_dict(base.get("record"))
+                txt = (rec.get("text") or "").strip()
+                if not txt:
                     continue
 
-                record = _to_dict(postwrap.get("record"))
-                txt = (record.get("text") or "")
-                t = txt.lower()
-
-                if any((k.lower() in t) for k in keywords if isinstance(k, str)):
-                    matched += 1
-                else:
-                    continue
-
-                uri = postwrap.get("uri") or ""
-                author = _to_dict(postwrap.get("author"))
-                did = author.get("did") or ""
-
+                uri = (base.get("uri") or "").strip()
+                author = _to_dict(base.get("author"))
+                did = (author.get("did") or "").strip()
                 url = bsky_uri_to_url(uri, did) or uri
                 if not url:
                     continue
 
-                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"from": "timeline"}})
+                out.append({"source": "Bluesky", "text": txt[:300], "url": url, "meta": {"q": q}})
                 if len(out) >= limit:
                     break
-
-            print(f"[bsky] timeline matched={matched}")
+            if len(out) >= limit:
+                break
 
         except Exception as e:
-            print(f"[bsky] timeline EXC err={e!r}")
+            print("[bsky] search EXC", {"q": q, "err": repr(e)})
+            continue
 
-    print(f"[bsky] out_total={len(out)} limit={limit}")
-    # ===== [/bsky] DEBUG BLOCK =====
-
-
-            # 3) dedupe
+    # dedupe
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in out:
@@ -580,11 +727,85 @@ def _to_list(x):
         seen.add(u)
         uniq.append(it)
 
+    print("[bsky] out_total", len(uniq))
     return uniq[:limit]
 
 
+# ============================================================
+# Mastodon Collector
+# ============================================================
+def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
+    base = os.getenv("MASTODON_API_BASE", "").strip()
+    tok = os.getenv("MASTODON_ACCESS_TOKEN", "").strip()
+    print("[mastodon] preflight", {"has_base": bool(base), "has_token": bool(tok), "has_lib": (Mastodon is not None), "limit": limit})
+
+    if not base or Mastodon is None:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    try:
+        m = Mastodon(access_token=tok if tok else None, api_base_url=base)
+
+        queries = [
+            "help", "need help", "anyone know", "how do i", "how to", "please help",
+            "error", "bug", "issue", "problem", "failed", "broken", "crash", "traceback",
+            "github actions", "docker", "npm", "pip", "api", "oauth",
+            "need a tool", "is there a tool", "tool for",
+            "convert", "converter", "calculator", "template", "compare", "timezone",
+        ]
+
+        if tok:
+            for q in queries:
+                try:
+                    res = m.search_v2(q=q, result_type="statuses", limit=25)
+                    statuses = (res or {}).get("statuses", []) or []
+                    for st in statuses:
+                        txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
+                        url = st.get("url", "") or ""
+                        if txt and url:
+                            out.append({"source": "Mastodon", "text": txt[:300], "url": url, "meta": {"q": q}})
+                        if len(out) >= limit:
+                            break
+                    if len(out) >= limit:
+                        break
+                except Exception as e:
+                    print("[mastodon] search EXC", {"q": q, "err": repr(e)})
+
+        if len(out) < limit:
+            try:
+                statuses = m.timeline_public(limit=80)
+                for st in statuses:
+                    txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
+                    t = txt.lower()
+                    if not any(k in t for k in KEYWORDS):
+                        continue
+                    url = st.get("url", "") or ""
+                    if txt and url:
+                        out.append({"source": "Mastodon", "text": txt[:300], "url": url, "meta": {"from": "timeline"}})
+                    if len(out) >= limit:
+                        break
+            except Exception as e:
+                print("[mastodon] timeline EXC", repr(e))
+
+        seen = set()
+        uniq: List[Dict[str, Any]] = []
+        for it in out:
+            u = it.get("url", "")
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            uniq.append(it)
+
+        print("[mastodon] out_total", len(uniq))
+        return uniq[:limit]
+    except Exception as e:
+        print("[mastodon] top EXC", repr(e))
+        return out[:limit]
 
 
+# ============================================================
+# Reddit Collector (optional)
+# ============================================================
 def collect_reddit(limit: int) -> List[Dict[str, Any]]:
     cid = os.getenv("REDDIT_CLIENT_ID", "")
     csec = os.getenv("REDDIT_CLIENT_SECRET", "")
@@ -593,11 +814,13 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
     ua = os.getenv("REDDIT_USER_AGENT", "")
 
     if not (cid and csec and user and pw and ua):
+        print("[reddit] skip: missing secrets")
         return []
 
     try:
         import praw  # type: ignore
     except Exception:
+        print("[reddit] skip: praw not installed")
         return []
 
     queries = [
@@ -619,97 +842,26 @@ def collect_reddit(limit: int) -> List[Dict[str, Any]]:
             for s in r.subreddit("all").search(q, sort="new", time_filter="day", limit=80):
                 txt = (getattr(s, "title", "") or "") + "\n" + (getattr(s, "selftext", "") or "")
                 url = getattr(s, "url", "") or ""
-                out.append({"source": "Reddit", "text": txt[:300], "url": url, "meta": {}})
+                if url and txt:
+                    out.append({"source": "Reddit", "text": txt[:300], "url": url, "meta": {"q": q}})
                 if len(out) >= limit:
-                    return out[:limit]
-    except Exception:
-        pass
+                    break
+            if len(out) >= limit:
+                break
+    except Exception as e:
+        print("[reddit] exc", repr(e))
 
+    print("[reddit] out_total", len(out))
     return out[:limit]
 
 
-def collect_mastodon(limit: int) -> List[Dict[str, Any]]:
-    """
-    Mastodon:
-    - MASTODON_API_BASE があれば public timeline は読める
-    - トークンがあれば search を使う
-    """
-    base = os.getenv("MASTODON_API_BASE", "")
-    tok = os.getenv("MASTODON_ACCESS_TOKEN", "")
-    if not base or Mastodon is None:
-        return []
-
-    out: List[Dict[str, Any]] = []
-    try:
-        m = Mastodon(access_token=tok if tok else None, api_base_url=base)
-
-        queries = [
-            "help", "need help", "anyone know", "how do i", "how to", "what should i do", "can someone", "please help",
-            "stuck", "blocked",
-            "error", "bug", "issue", "problem", "failed", "broken", "crash", "exception", "traceback", "stack trace",
-            "deploy", "build failed", "github actions", "workflow", "docker", "npm", "pip", "python", "javascript",
-            "typescript", "api", "oauth",
-            "need a tool", "is there a tool", "looking for a tool", "tool for",
-            "convert", "converter", "calculator", "template", "compare", "timezone",
-        ]
-
-        # tokenがある時だけ検索
-        if tok:
-            for q in queries:
-                try:
-                    res = m.search_v2(q=q, result_type="statuses", limit=25)
-                    statuses = (res or {}).get("statuses", []) or []
-                    for st in statuses:
-                        txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
-                        url = st.get("url", "") or ""
-                        out.append({"source": "Mastodon", "text": txt[:300], "url": url, "meta": {}})
-                        if len(out) >= limit:
-                            break
-                    if len(out) >= limit:
-                        break
-                except Exception:
-                    pass
-
-        # timeline fallback
-        if len(out) < limit:
-            try:
-                statuses = m.timeline_public(limit=80)
-                keywords = KEYWORDS[:]  # reuse
-                for st in statuses:
-                    txt = re.sub(r"<[^>]+>", "", st.get("content", "") or "")
-                    t = txt.lower()
-                    if not any(k in t for k in keywords):
-                        continue
-                    url = st.get("url", "") or ""
-                    out.append({"source": "Mastodon", "text": txt[:300], "url": url, "meta": {}})
-                    if len(out) >= limit:
-                        break
-            except Exception:
-                pass
-
-        # dedupe
-        seen = set()
-        uniq: List[Dict[str, Any]] = []
-        for it in out:
-            u = it.get("url", "")
-            if not u or u in seen:
-                continue
-            seen.add(u)
-            uniq.append(it)
-
-        return uniq[:limit]
-    except Exception:
-        return out[:limit]
-
-
+# ============================================================
+# X limited (optional)
+# ============================================================
 def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
-    """
-    X Free枠想定: readsが厳しいので1 run あたり reads<=1 くらいに抑える設計。
-    認証情報が揃っていない/権限不足なら空で返す（壊れないこと優先）。
-    """
     runs_per_month = int(os.getenv("RUNS_PER_MONTH", "90"))
     max_reads_month = int(os.getenv("X_READS_PER_MONTH", "100"))
-    max_reads_run = max(1, max_reads_month // max(1, runs_per_month))  # だいたい1
+    max_reads_run = max(1, max_reads_month // max(1, runs_per_month))
 
     api_key = os.getenv("X_API_KEY", "")
     api_secret = os.getenv("X_API_SECRET", "")
@@ -717,11 +869,13 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
     access_secret = os.getenv("X_ACCESS_SECRET", "")
 
     if not (api_key and api_secret and access_token and access_secret):
+        print("[x] skip: missing secrets")
         return []
 
     try:
         import tweepy  # type: ignore
     except Exception:
+        print("[x] skip: tweepy not installed")
         return []
 
     out: List[Dict[str, Any]] = []
@@ -736,6 +890,7 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
 
         me = client.get_me(user_auth=True)
         if not me or not getattr(me, "data", None):
+            print("[x] skip: get_me failed")
             return []
         user_id = me.data.id
 
@@ -747,14 +902,17 @@ def collect_x_limited(theme: str) -> List[Dict[str, Any]]:
             txt = (tw.text or "")[:300]
             url = f"https://x.com/i/web/status/{tw.id}"
             out.append({"source": "X", "text": txt, "url": url, "meta": {}})
-    except Exception:
+    except Exception as e:
+        print("[x] exc", repr(e))
         return []
 
+    print("[x] out_total", len(out))
     return out
 
-def collect_bluesky(limit: int) -> List[Dict[str, Any]]:
-    ...
 
+# ============================================================
+# Collector orchestration
+# ============================================================
 def report_source_counts(counts: Dict[str, int], notes: str = "") -> None:
     msg = ["Source counts (collector/leads):"]
     for k, v in counts.items():
@@ -768,10 +926,9 @@ def report_source_counts(counts: Dict[str, int], notes: str = "") -> None:
 def collector_real() -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
 
-    b = collect_bluesky_ext(KEYWORDS, limit_per_query=25)
+    b = collect_bluesky(COLLECT_BSKY)
     m = collect_mastodon(COLLECT_MASTODON)
     h = collect_hn(COLLECT_HN)
-
 
     items.extend(b)
     items.extend(m)
@@ -798,9 +955,9 @@ def collector_real() -> List[Dict[str, Any]]:
     return items
 
 
-# =========================
-# Cluster / Theme
-# =========================
+# ============================================================
+# Cluster / Pick theme
+# ============================================================
 def pick_best_theme(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     scored: List[Tuple[int, Dict[str, Any], Dict[str, int]]] = []
     for it in items:
@@ -814,17 +971,14 @@ def pick_best_theme(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "best_item": best_item,
         "best_score": best_score,
         "best_table": best_table,
-        "scored": scored
+        "scored": scored,
     }
 
 
 def cluster_20_around_theme(theme: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    近いものを雑に集める最小実装（キーワード一致ベース）
-    """
     t = (theme or "").lower()
     keys: List[str] = []
-    for k in ["convert", "calculator", "compare", "timezone", "template", "subscription", "pricing", "tax", "checklist"]:
+    for k in ["convert", "calculator", "compare", "timezone", "template", "subscription", "pricing", "tax", "checklist", "pdf", "image", "video"]:
         if k in t:
             keys.append(k)
     if not keys:
@@ -845,13 +999,10 @@ def cluster_20_around_theme(theme: str, items: List[Dict[str, Any]]) -> Dict[str
     }
 
 
-# =========================
-# Related Sites Logic
-# =========================
+# ============================================================
+# Related sites
+# ============================================================
 def load_seed_sites() -> List[Dict[str, Any]]:
-    """
-    既存資産（hubや既存サイト）を「関連サイト候補」として入れておける。
-    """
     if os.path.exists(SEED_SITES_PATH):
         data = read_json(SEED_SITES_PATH, [])
         if isinstance(data, list):
@@ -904,10 +1055,6 @@ def _seed_map(seed_sites: Any) -> Dict[str, Dict[str, Any]]:
 
 
 def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 8) -> List[Dict[str, str]]:
-    """
-    - DB内の過去ページ(all_entries) と seed_sites から「タグが近い」ものを最大k件返す
-    - 型が崩れても落とさない
-    """
     tags = _norm_tags(current_tags)
     seed_map = _seed_map(seed_sites)
 
@@ -964,7 +1111,7 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
         if len(related) >= k:
             return related
 
-    # 0件回避: 新着から埋める
+    # fallback fill
     for e in normalized_entries:
         u = (e.get("public_url") or "").strip()
         if not u or u in seen:
@@ -986,10 +1133,319 @@ def pick_related(current_tags: Any, all_entries: Any, seed_sites: Any, k: int = 
     return related[:k]
 
 
-# =========================
-# Builder / Validator / Auto-fix
-# =========================
-def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str) -> str:
+def inject_related_json(html: str, related: List[Dict[str, str]]) -> str:
+    rel_json = json.dumps(related, ensure_ascii=False)
+    new = re.sub(
+        r"window\.__RELATED__\s*=\s*\[[\s\S]*?\]\s*;",
+        f"window.__RELATED__ = {rel_json};",
+        html
+    )
+    if new == html:
+        new = re.sub(
+            r"</body>",
+            f"<script>window.__RELATED__ = {rel_json};</script>\n</body>",
+            html,
+            flags=re.IGNORECASE
+        )
+    return new
+
+
+# ============================================================
+# Unsplash background (server-side pick + inject)
+# ============================================================
+def unsplash_pick_image_url() -> str:
+    """
+    Prefer Unsplash API random photo with fixed queries.
+    Fallback to source.unsplash.com (no key).
+    """
+    q = random.choice(UNSPLASH_QUERIES)
+    if UNSPLASH_ACCESS_KEY:
+        try:
+            url = "https://api.unsplash.com/photos/random"
+            params = {
+                "query": q,
+                "orientation": "landscape",
+                "content_filter": "high",
+            }
+            headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+            r = requests.get(url, params=params, headers=headers, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            # prefer regular
+            u = (((data or {}).get("urls") or {}).get("regular") or "").strip()
+            if u:
+                print("[unsplash] picked via api", {"q": q})
+                return u
+        except Exception as e:
+            print("[unsplash] api EXC", repr(e))
+
+    # fallback
+    print("[unsplash] fallback via source", {"q": q})
+    return f"https://source.unsplash.com/featured/1600x900/?{requests.utils.quote(q)}"
+
+
+def inject_unsplash_bg(html: str, bg_url: str) -> str:
+    """
+    Adds:
+    - CSS background image on body
+    - overlay div for readability
+    """
+    if not bg_url:
+        return html
+
+    style = f"""
+<style id="goliath-bg-style">
+  body {{
+    background-image: url('{bg_url}');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }}
+  .goliath-bg-overlay {{
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.60);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    pointer-events: none;
+    z-index: -1;
+  }}
+  .dark .goliath-bg-overlay {{
+    background: rgba(2,6,23,0.55);
+  }}
+</style>
+""".strip()
+
+    # inject overlay after <body ...>
+    out = html
+    if "goliath-bg-style" in html:
+        return html
+
+    out = re.sub(r"</head>", style + "\n</head>", out, flags=re.IGNORECASE)
+    out = re.sub(r"<body([^>]*)>", r"<body\1>\n<div class=\"goliath-bg-overlay\"></div>", out, flags=re.IGNORECASE)
+    return out
+
+
+# ============================================================
+# Affiliates (sanitize + select + inject + click logging)
+# ============================================================
+def load_affiliates() -> Dict[str, List[Dict[str, Any]]]:
+    data = read_json(AFFILIATES_PATH, {})
+    if not isinstance(data, dict):
+        return {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for k, v in data.items():
+        if k not in GENRES:
+            continue
+        if isinstance(v, list):
+            out[k] = [x for x in v if isinstance(x, dict)]
+    return out
+
+
+def _has_script(html: str) -> bool:
+    return bool(re.search(r"<\s*script\b", html or "", flags=re.IGNORECASE))
+
+
+def _ensure_a_attrs(html: str) -> str:
+    """
+    - add target="_blank"
+    - add rel="nofollow sponsored noopener" (merge if exists)
+    """
+    if not html:
+        return html
+
+    def repl_a(m: re.Match) -> str:
+        tag = m.group(0)
+        # target
+        if re.search(r"\btarget\s*=", tag, flags=re.IGNORECASE) is None:
+            tag = tag[:-1] + ' target="_blank">'
+        # rel
+        rel_m = re.search(r'\brel\s*=\s*(".*?"|\'.*?\'|[^\s>]+)', tag, flags=re.IGNORECASE)
+        need = ["nofollow", "sponsored", "noopener"]
+        if rel_m:
+            raw = rel_m.group(1)
+            val = raw.strip("\"'").strip()
+            parts = set([p for p in re.split(r"\s+", val) if p])
+            for n in need:
+                parts.add(n)
+            new_rel = 'rel="' + " ".join(sorted(parts)) + '"'
+            tag = re.sub(r'\brel\s*=\s*(".*?"|\'.*?\'|[^\s>]+)', new_rel, tag, flags=re.IGNORECASE)
+        else:
+            tag = tag[:-1] + ' rel="nofollow sponsored noopener">'
+        return tag
+
+    return re.sub(r"<\s*a\b[^>]*>", repl_a, html, flags=re.IGNORECASE)
+
+
+def sanitize_affiliate_html(html: str) -> Optional[str]:
+    if not html:
+        return None
+    if _has_script(html):
+        return None
+    html = _ensure_a_attrs(html)
+    return html
+
+
+def pick_top_ads(aff: Dict[str, List[Dict[str, Any]]], genre: str, n: int = 2) -> List[Dict[str, Any]]:
+    arr = aff.get(genre, []) or []
+    clean: List[Dict[str, Any]] = []
+    for it in arr:
+        aid = (it.get("id") or "").strip()
+        title = (it.get("title") or "").strip()
+        raw_html = (it.get("html") or "")
+        pr = int(it.get("priority", 50) or 50)
+
+        if not aid or not raw_html:
+            continue
+        s = sanitize_affiliate_html(raw_html)
+        if not s:
+            continue
+        clean.append({"id": aid, "title": title, "html": s, "priority": pr})
+
+    clean.sort(key=lambda x: int(x.get("priority", 0)), reverse=True)
+    return clean[:max(1, min(3, n))]
+
+
+def inject_affiliate_slots(html: str, page_id: str, page_url: str, genre: str, ads: List[Dict[str, Any]]) -> str:
+    """
+    Requires placeholders in HTML. If missing, inject near top of main content.
+    Adds JS to:
+      - decorate affiliate links with data-ad-id
+      - send click logs to endpoint (if configured)
+    """
+    if not ads:
+        return html
+
+    # Render block HTML
+    cards = []
+    for ad in ads:
+        aid = ad["id"]
+        title = (ad.get("title") or "").strip()
+        # wrap inside container so we can attach dataset
+        cards.append(
+            f"""
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-4">
+  <div class="text-sm font-semibold mb-2">{title if title else "Recommended"}</div>
+  <div class="goliath-ad" data-ad-id="{aid}">
+    {ad["html"]}
+  </div>
+</div>
+""".strip()
+        )
+
+    block = f"""
+<section id="aff-section" class="mt-6">
+  <div class="text-sm font-semibold opacity-80 mb-2" data-i18n="ads.title"></div>
+  <div class="grid gap-3">
+    {'\n'.join(cards)}
+  </div>
+</section>
+""".strip()
+
+    out = html
+
+    # Placeholder marker preferred
+    if "AFF_SLOT" in out:
+        out = out.replace("<!-- AFF_SLOT -->", block)
+    else:
+        # Inject after first <main> or after body start if main missing
+        out2 = re.sub(r"(<main[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
+        if out2 == out:
+            out2 = re.sub(r"(<body[^>]*>)", r"\1\n" + block, out, flags=re.IGNORECASE)
+        out = out2
+
+    # Inject click logger script
+    js = f"""
+<script id="goliath-ads-js">
+(function() {{
+  const endpoint = {json.dumps(CLICK_LOG_ENDPOINT)};
+  const payloadBase = {{
+    page_id: {json.dumps(page_id)},
+    page_url: {json.dumps(page_url)},
+    genre: {json.dumps(genre)}
+  }};
+
+  function send(ad_id) {{
+    if (!endpoint) return;
+    const data = Object.assign({{}}, payloadBase, {{ ad_id: ad_id, ts: new Date().toISOString() }});
+    try {{
+      // Prefer sendBeacon when available
+      if (navigator.sendBeacon) {{
+        const blob = new Blob([JSON.stringify(data)], {{ type: "application/json" }});
+        navigator.sendBeacon(endpoint, blob);
+        return;
+      }}
+    }} catch(e) {{}}
+    try {{
+      fetch(endpoint, {{
+        method: "POST",
+        headers: {{ "content-type": "application/json" }},
+        body: JSON.stringify(data),
+        keepalive: true
+      }}).catch(()=>{{}});
+    }} catch(e) {{}}
+  }}
+
+  // Attach click handler to any link inside .goliath-ad
+  document.querySelectorAll(".goliath-ad").forEach(function(box) {{
+    const adId = box.getAttribute("data-ad-id") || "";
+    if (!adId) return;
+    box.querySelectorAll("a").forEach(function(a) {{
+      a.addEventListener("click", function() {{
+        send(adId);
+      }}, {{ passive: true }});
+    }});
+  }});
+}})();
+</script>
+""".strip()
+
+    if "goliath-ads-js" not in out:
+        out = re.sub(r"</body>", js + "\n</body>", out, flags=re.IGNORECASE)
+
+    # Also add i18n key for ads title (if missing)
+    out = ensure_i18n_key(out, "ads.title", {
+        "en": "Sponsored / Recommended",
+        "ja": "おすすめ（広告）",
+        "fr": "Sponsorisé / Recommandé",
+        "de": "Gesponsert / Empfohlen",
+    })
+
+    return out
+
+
+def ensure_i18n_key(html: str, key: str, vals: Dict[str, str]) -> str:
+    """
+    If window.__I18N__ exists, inject missing key into each locale dict (best-effort string replace).
+    This is a safe additive patch—if it fails, page still works.
+    """
+    if "__I18N__" not in html:
+        return html
+
+    out = html
+    for lang, v in vals.items():
+        # naive insertion: find "lang":{ ... } and add if key missing
+        # We'll only add if key isn't already present.
+        if re.search(rf"{re.escape(key)}\s*:", out):
+            break
+
+    # best-effort: insert near start of each lang dict
+    for lang, v in vals.items():
+        pat = rf"({lang}\s*:\s*\{{)"
+        if re.search(pat, out):
+            # only insert if that lang block does not already contain the key
+            # (rough but prevents dup)
+            lang_block_m = re.search(rf"{lang}\s*:\s*\{{([\s\S]*?)\}}\s*,", out)
+            if lang_block_m and (key in lang_block_m.group(1)):
+                continue
+            out = re.sub(pat, rf"\1\n  {json.dumps(key)}: {json.dumps(v)},", out, count=1)
+    return out
+
+
+# ============================================================
+# Builder prompt (adds AFF_SLOT placeholder + genre + unsplash hint)
+# ============================================================
+def build_prompt(theme: str, cluster: Dict[str, Any], canonical_url: str, genre: str) -> str:
     return f"""
 You are generating a production-grade single-file HTML tool site.
 
@@ -1003,10 +1459,9 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 [Design]
 - Use Tailwind CSS via CDN (no build step)
 - Clean SaaS UI: top nav + hero section + centered tool card + sections
-- Use white background + trusted blue/indigo accents + neutral grays
-- Use generous spacing (padding/margin), professional typography (Inter / Noto Sans JP via CDN)
-- Add subtle glassmorphism for the tool card (backdrop-blur, translucent)
-- Dark/Light mode toggle (CSS class switch) and respect saved theme in localStorage.
+- Use generous spacing, professional typography (Inter / Noto Sans JP via CDN)
+- Include a dedicated placeholder comment exactly: <!-- AFF_SLOT --> near top of main content area.
+- Include a subtle translucent white overlay style on content containers to improve readability over photo background.
 
 [Navigation]
 - Add a top nav link back to the hub: href="../../index.html" (label must be translated via i18n)
@@ -1024,55 +1479,39 @@ Create a modern SaaS-style tool page to solve: "{theme}"
 
 [Multi-language - VERY STRICT]
 - Default language MUST be English ("en").
-- Provide a WORKING language switcher for JA/EN/FR/DE (must work on mobile).
+- Provide a WORKING language switcher for JA/EN/FR/DE (mobile-friendly).
 - The switcher MUST be a <select> with id="langSelect" and options: en,ja,fr,de (in that order).
-- EVERY visible text on the page MUST be translatable via i18n keys:
-  - All UI labels, buttons, nav, footer, headings, paragraphs, checklist items, FAQ questions & answers,
-    policy sections text, and any notices.
-- Do NOT hardcode visible strings directly in HTML outside i18n keys.
-- Any translatable UI text MUST use data-i18n keys. Example: <span data-i18n="hero.title"></span>
-- For placeholders use data-i18n-placeholder.
-- For title attributes use data-i18n-title.
-- For aria-label use data-i18n-aria.
-- Provide a JS dictionary exactly as: window.__I18N__ = {{ en:{{...}}, ja:{{...}}, fr:{{...}}, de:{{...}} }}
-- Provide a JS initializer that:
-  - reads saved language from localStorage key "goliath_lang" (fallback to "en")
-  - sets <html lang="..">
-  - fills all [data-i18n] elements from window.__I18N__[lang][key]
-  - also applies placeholder/title/aria-label using data-i18n-placeholder/data-i18n-title/data-i18n-aria
-  - wires change event on #langSelect to re-render
-- Ensure the article section headings and ALL article paragraphs/bullets/FAQ are also i18n-driven.
+- EVERY visible text on the page MUST be translatable via i18n keys (data-i18n, data-i18n-placeholder, data-i18n-title, data-i18n-aria).
+- Provide a JS dictionary: window.__I18N__ = {{ en:{{...}}, ja:{{...}}, fr:{{...}}, de:{{...}} }}
+- Save language in localStorage key "goliath_lang" (fallback "en"), set <html lang=".."> and re-render on change.
 
 [Compliance / Footer]
-- Auto-generate in-page sections for:
-  - Privacy Policy (cookie/ads explanation)
-  - Terms of Service
-  - Disclaimer
-  - About / Operator info
-  - Contact
-- These must be accessible via footer links using in-page anchors.
-- All text in these sections MUST be i18n-driven.
+- Auto-generate in-page sections for: Privacy Policy, Terms of Service, Disclaimer, About, Contact
+- These must be accessible via footer links using anchors. All text i18n-driven.
 
 [Related Sites]
-- Include a "Related sites" section near bottom as a list:
-  - It must be filled from a JSON embedded in the page: window.__RELATED__ = [];
-  - Render it into the list on load.
-  - If empty, hide the section.
+- Include a "Related sites" section near bottom:
+  - window.__RELATED__ = [];
+  - Render it into the list on load. If empty, hide the section.
 
-[SEO]
-- Include title/meta description/canonical.
+[Ads / Affiliate]
+- Keep the placeholder <!-- AFF_SLOT --> where sponsored blocks can be injected later.
+- DO NOT include any third-party scripts.
+
+[Metadata]
+- Include meta description/canonical.
 - Canonical must be: {canonical_url}
-- Title should be "search-friendly" (not SNS-like). Use a concise keyword-style title.
+- Add a meta tag: <meta name="goliath-genre" content="{genre}">
 
 Return ONLY the final HTML.
 """.strip()
 
 
-
 def openai_generate_html(client: OpenAI, prompt: str) -> str:
     res = client.chat.completions.create(
-        model=MODEL_BUILD,
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
+        max_tokens=MAX_OUTPUT_TOKENS_BUILD,
     )
     raw = res.choices[0].message.content or ""
     return extract_html_only(raw)
@@ -1092,34 +1531,20 @@ def validate_html(html: str) -> Tuple[bool, str]:
     missing = [m for m in must if m not in low]
     if missing:
         return False, f"missing policy sections: {missing}"
-
-    # language switcher
     if 'id="langselect"' not in low:
         return False, "missing #langSelect"
-            # ---- i18n coverage guard (prevents "only major text translates") ----
-    # Require enough i18n bindings so most of the page is covered.
     if low.count("data-i18n=") < 80:
         return False, "i18n coverage too small (data-i18n < 80)"
     if "data-i18n-placeholder" not in low:
         return False, "missing data-i18n-placeholder"
-    if "goliath_lang" not in low:
-        return False, "missing localStorage key goliath_lang handling"
-    # Default must be English fallback
-    if 'fallback to "en"' not in low and 'fallback to \\"en\\"' not in low and '"en"' not in low:
-        # loose check (generator varies). still helps catch wrong default.
-        pass
-
     if "__i18n__" not in low:
         return False, "missing window.__I18N__"
-    if "data-i18n" not in low:
-        return False, "missing data-i18n bindings"
     if "goliath_lang" not in low:
         return False, "missing localStorage key goliath_lang handling"
-
-    # hub link
     if "../../index.html" not in low and "../index.html" not in low:
         return False, "missing link back to hub (../../index.html)"
-        
+    if "aff_slot" not in low and "<!-- aff_slot -->" not in low:
+        return False, "missing affiliate placeholder <!-- AFF_SLOT -->"
     return True, "ok"
 
 
@@ -1128,10 +1553,10 @@ def prompt_for_fix(error: str, html: str) -> str:
 Return ONLY a unified diff patch for a single file named index.html.
 
 Rules:
-- Output ONLY the diff. No markdown. No explanations.
+- Output ONLY the diff. No explanations.
 - The patch MUST fix this validation error: {error}
 - Do not remove required features: Tailwind CDN, SaaS layout, dark/light toggle, language switcher,
-  footer policy sections, window.__RELATED__ rendering, link back to hub.
+  footer policy sections, window.__RELATED__ rendering, link back to hub, <!-- AFF_SLOT --> placeholder.
 
 Current index.html:
 {html}
@@ -1139,7 +1564,6 @@ Current index.html:
 
 
 def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
-    # unified diff must start with "---"
     if not diff_text.startswith("---"):
         return None
     lines = diff_text.splitlines()
@@ -1162,7 +1586,6 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
                 return None
             old_start = int(m.group(1)) - 1
 
-            # copy unchanged up to hunk start
             while oidx < old_start and oidx < len(orig_lines):
                 result.append(orig_lines[oidx])
                 oidx += 1
@@ -1181,7 +1604,6 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
                     return None
                 i += 1
 
-        # copy rest
         while oidx < len(orig_lines):
             result.append(orig_lines[oidx])
             oidx += 1
@@ -1191,51 +1613,9 @@ def apply_unified_diff_to_text(original: str, diff_text: str) -> Optional[str]:
         return None
 
 
-def infer_tags_simple(theme: str) -> List[str]:
-    t = (theme or "").lower()
-    tags: List[str] = []
-    rules = {
-        "convert": "convert",
-        "converter": "convert",
-        "calculator": "calculator",
-        "compare": "compare",
-        "tax": "finance",
-        "timezone": "time",
-        "time zone": "time",
-        "subscription": "pricing",
-        "pricing": "pricing",
-        "plan": "pricing",
-        "checklist": "productivity",
-        "template": "productivity",
-    }
-    for k, v in rules.items():
-        if k in t and v not in tags:
-            tags.append(v)
-    if not tags:
-        tags = ["tools"]
-    return tags[:6]
-
-
-def inject_related_json(html: str, related: List[Dict[str, str]]) -> str:
-    rel_json = json.dumps(related, ensure_ascii=False)
-    new = re.sub(
-        r"window\.__RELATED__\s*=\s*\[[\s\S]*?\]\s*;",
-        f"window.__RELATED__ = {rel_json};",
-        html
-    )
-    if new == html:
-        new = re.sub(
-            r"</body>",
-            f"<script>window.__RELATED__ = {rel_json};</script>\n</body>",
-            html,
-            flags=re.IGNORECASE
-        )
-    return new
-
-
-# =========================
-# Publishing / Index(Hub) / Sitemap / Notify / SNS
-# =========================
+# ============================================================
+# Publishing / Hub / Sitemap
+# ============================================================
 def get_repo_pages_base() -> str:
     repo = os.getenv("GITHUB_REPOSITORY", "mikann20041029/goliath-auto-tool")
     owner, name = repo.split("/", 1)
@@ -1325,10 +1705,10 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     def card(e: Dict[str, Any]) -> str:
         href = f"{e.get('path', '')}/"
         title = (e.get("search_title") or e.get("title") or "").strip()
-        meta = f"{e.get('created_at','')} • {', '.join(safe_tags(e))}"
+        meta = f"{e.get('created_at','')} • {', '.join(safe_tags(e))} • {e.get('genre','')}"
         return (
             '<a class="block p-4 rounded-xl border border-slate-200 dark:border-slate-800 '
-            'hover:bg-slate-50 dark:hover:bg-slate-900 transition" '
+            'bg-white/70 dark:bg-slate-900/60 hover:bg-white/90 dark:hover:bg-slate-900/80 transition" '
             f'href="{href}">'
             f'<div class="font-semibold">{title}</div>'
             f'<div class="text-sm opacity-70 mt-1">{meta}</div>'
@@ -1341,7 +1721,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     cat_links = []
     for c, lst in cats[:16]:
         cat_links.append(
-            f'<button class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sm" '
+            f'<button class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sm bg-white/70 dark:bg-slate-900/60" '
             f'onclick="filterByTag(\'{c}\')">{c} <span class="opacity-60">({len(lst)})</span></button>'
         )
     cat_links_html = "\n".join(cat_links)
@@ -1364,7 +1744,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
         <div class="text-xl font-bold">Goliath Tools Hub</div>
         <div class="text-sm opacity-70 mt-1">発見（SEO）と回遊（内部リンク）を強化するための上位ページ</div>
       </div>
-      <button id="themeBtn" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800">Dark/Light</button>
+      <button id="themeBtn" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60">Dark/Light</button>
     </div>
 
     <div class="mt-6">
@@ -1392,7 +1772,7 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
     <div class="mt-10">
       <div class="flex items-center justify-between gap-3">
         <div class="text-sm font-semibold opacity-80">全ツール（フィルタ/検索）</div>
-        <input id="q" class="w-56 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm"
+        <input id="q" class="w-56 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 text-sm"
                placeholder="search..." />
       </div>
       <div id="allList" class="mt-3 grid gap-3">
@@ -1405,7 +1785,6 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
   </div>
 
   <script>
-    // theme
     const root = document.documentElement;
     const k = "goliath_theme";
     const saved = localStorage.getItem(k);
@@ -1415,7 +1794,6 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
       localStorage.setItem(k, root.classList.contains("dark") ? "dark" : "light");
     }};
 
-    // filter/search
     const allCards = Array.from(document.querySelectorAll("#allList > a"));
     function applyFilter(tag, q) {{
       const qq = (q || "").toLowerCase().trim();
@@ -1439,38 +1817,12 @@ def update_db_and_index(entry: Dict[str, Any], all_entries: List[Dict[str, Any]]
 </html>
 """
     write_text(INDEX_PATH, html)
-
-    # sitemap/robots 更新
     build_sitemap_and_robots(all_entries, pages_base)
 
 
-def create_github_issue(title: str, body: str) -> None:
-    pat = os.getenv("GH_PAT", "") or os.getenv("GITHUB_TOKEN", "")
-    repo = os.getenv("GITHUB_REPOSITORY", "")
-    if not pat or not repo:
-        print("[issue] skip: missing token or repo", {"has_token": bool(pat), "repo": repo})
-        return
-
-    url = f"https://api.github.com/repos/{repo}/issues"
-    headers = {
-        "Authorization": f"Bearer {pat}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    payload = {"title": title, "body": body}
-
-    try:
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
-        print("[issue] status", r.status_code)
-        if r.status_code >= 300:
-            print("[issue] error body:", r.text[:500])
-        else:
-            data = r.json()
-            print("[issue] created:", data.get("html_url"))
-    except Exception as e:
-        print("[issue] exception:", repr(e))
-
-
+# ============================================================
+# Posting (announce) - keep safe / optional
+# ============================================================
 def post_bluesky(text: str) -> None:
     h = os.getenv("BSKY_HANDLE", "")
     p = os.getenv("BSKY_PASSWORD", "")
@@ -1480,8 +1832,8 @@ def post_bluesky(text: str) -> None:
         c = BskyClient()
         c.login(h, p)
         c.send_post(text=text)
-    except Exception:
-        pass
+    except Exception as e:
+        print("[bsky] post EXC", repr(e))
 
 
 def post_mastodon(text: str) -> None:
@@ -1492,14 +1844,12 @@ def post_mastodon(text: str) -> None:
     try:
         m = Mastodon(access_token=tok, api_base_url=base)
         m.status_post(text)
-    except Exception:
-        pass
+    except Exception as e:
+        print("[mastodon] post EXC", repr(e))
 
 
 def post_x(text: str) -> None:
-    """
-    Xは無料枠/権限/認証が可変なので、壊れないこと優先でこの版はIssueに通知だけ。
-    """
+    # safer: skip actual X posting here
     if not (os.getenv("X_API_KEY") and os.getenv("X_API_SECRET") and os.getenv("X_ACCESS_TOKEN") and os.getenv("X_ACCESS_TOKEN_SECRET")):
         return
     create_github_issue(
@@ -1508,41 +1858,40 @@ def post_x(text: str) -> None:
     )
 
 
-# =========================
-# Leads + Reply drafts
-# =========================
+# ============================================================
+# Leads + Reply drafts (cheapest model only)
+# ============================================================
 def collect_leads(theme: str) -> List[Dict[str, Any]]:
-    """
-    Issuesに出す「悩みURL」は SNS優先で集める。
-    """
     leads: List[Dict[str, Any]] = []
 
     try:
-        _tmp_bsky = collect_bluesky(min(LEADS_PER_SOURCE, LEADS_TOTAL))
-        print(f"[counts] bluesky={len(_tmp_bsky)}")
-        leads.extend(_tmp_bsky)
-
+        b = collect_bluesky(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        print(f"[counts] bluesky={len(b)}")
+        leads.extend(b)
     except Exception as e:
-        print(f"[counts] bluesky error: {type(e).__name__}: {e}")
-
-
-    try:
-        leads.extend(collect_mastodon(min(LEADS_PER_SOURCE, LEADS_TOTAL)))
-    except Exception:
-        pass
+        print("[counts] bluesky error:", repr(e))
 
     try:
-        leads.extend(collect_reddit(min(LEADS_PER_SOURCE, LEADS_TOTAL)))
-    except Exception:
-        pass
+        m = collect_mastodon(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        print(f"[counts] mastodon={len(m)}")
+        leads.extend(m)
+    except Exception as e:
+        print("[counts] mastodon error:", repr(e))
 
-    # Xはreadsが厳しいので軽く
     try:
-        leads.extend(collect_x_limited(theme))
-    except Exception:
-        pass
+        r = collect_reddit(min(LEADS_PER_SOURCE, LEADS_TOTAL))
+        print(f"[counts] reddit={len(r)}")
+        leads.extend(r)
+    except Exception as e:
+        print("[counts] reddit error:", repr(e))
 
-    # URL重複除去
+    try:
+        x = collect_x_limited(theme)
+        print(f"[counts] x={len(x)}")
+        leads.extend(x)
+    except Exception as e:
+        print("[counts] x error:", repr(e))
+
     seen = set()
     uniq: List[Dict[str, Any]] = []
     for it in leads:
@@ -1571,8 +1920,9 @@ def openai_generate_reply(client: OpenAI, post_text: str, tool_url: str) -> str:
     ).strip()
 
     res = client.chat.completions.create(
-        model=MODEL_REPLY,
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
+        max_tokens=MAX_OUTPUT_TOKENS_REPLY,
     )
     txt = (res.choices[0].message.content or "").strip()
     if tool_url and tool_url not in txt:
@@ -1598,33 +1948,75 @@ def build_leads_issue_body(leads: List[Dict[str, Any]], tool_url: str) -> str:
     return "\n".join(lines)
 
 
-def chunk_and_create_issues(title_prefix: str, body: str, max_chars: int = 60000) -> None:
-    if len(body) <= max_chars:
-        create_github_issue(title_prefix, body)
+# ============================================================
+# Priority auto-update (reads click logs) — OPTIONAL
+# ============================================================
+def update_affiliate_priorities_from_log(log_summary: Dict[str, int]) -> None:
+    """
+    log_summary: {ad_id: clicks} in window (last 7d/30d)
+    priority = clamp(30, 90, 30 + log(1+clicks)*20)
+    """
+    if not log_summary:
+        print("[aff] no log summary, skip priority update")
         return
 
-    parts: List[str] = []
-    cur: List[str] = []
-    cur_len = 0
-    for block in body.split("\n----\n"):
-        blk = block + "\n----\n"
-        if cur_len + len(blk) > max_chars and cur:
-            parts.append("".join(cur))
-            cur = [blk]
-            cur_len = len(blk)
-        else:
-            cur.append(blk)
-            cur_len += len(blk)
-    if cur:
-        parts.append("".join(cur))
+    aff = read_json(AFFILIATES_PATH, {})
+    if not isinstance(aff, dict):
+        print("[aff] affiliates.json missing or invalid")
+        return
 
-    for idx, p in enumerate(parts, 1):
-        create_github_issue(f"{title_prefix} (part {idx}/{len(parts)})", p)
+    changed = 0
+    for genre, items in aff.items():
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            aid = (it.get("id") or "").strip()
+            if not aid:
+                continue
+            clicks = int(log_summary.get(aid, 0) or 0)
+            score = math.log(1 + max(0, clicks))
+            pr = int(30 + score * 20)
+            pr = max(30, min(90, pr))
+            old = int(it.get("priority", 50) or 50)
+            if pr != old:
+                it["priority"] = pr
+                changed += 1
+
+    if changed:
+        write_json(AFFILIATES_PATH, aff)
+        print("[aff] priority updated", changed)
+    else:
+        print("[aff] no changes")
 
 
-# =========================
+# ============================================================
+# Build prompt and auto-fix loop
+# ============================================================
+def openai_fix_with_diff(client: OpenAI, error: str, html: str) -> str:
+    fix_prompt = prompt_for_fix(error, html)
+    diff = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": fix_prompt}],
+        max_tokens=min(1200, MAX_OUTPUT_TOKENS_BUILD),
+    ).choices[0].message.content or ""
+    patched = apply_unified_diff_to_text(html, diff.strip())
+    if patched is not None:
+        return patched
+
+    regen_prompt = "Fix validation error: " + error + "\nReturn ONLY corrected HTML.\n\n" + html
+    res = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": regen_prompt}],
+        max_tokens=MAX_OUTPUT_TOKENS_BUILD,
+    )
+    return extract_html_only(res.choices[0].message.content or "")
+
+
+# ============================================================
 # Main
-# =========================
+# ============================================================
 def main() -> None:
     ensure_dirs()
 
@@ -1636,7 +2028,7 @@ def main() -> None:
 
     pages_base = get_repo_pages_base()
 
-    # 1) Collector -> pick best theme
+    # 1) Collect -> pick theme
     items = collector_real()
     best = pick_best_theme(items)
     theme = best["theme"]
@@ -1649,11 +2041,10 @@ def main() -> None:
 
     created_at = now_utc_iso()
     tags = infer_tags_simple(theme)
+    genre = infer_genre(theme, tags)
 
-    # タイトル（検索寄せ）
+    # title
     search_title = make_search_title(theme, tags)
-
-    # BAN_WORDSはslug生成前に弾く（壊れない保険）
     if any(w in (search_title or "").lower() for w in BAN_WORDS):
         search_title = re.sub("|".join([re.escape(w) for w in BAN_WORDS]), "tool", search_title, flags=re.IGNORECASE).strip()
         if not search_title:
@@ -1670,27 +2061,15 @@ def main() -> None:
     public_url = f"{pages_base}{ROOT}/pages/{folder}/"
     canonical = public_url.rstrip("/")
 
-    # 3) Build with Auto-fix loop (max 5)
-    prompt = build_prompt(theme, cluster, canonical)
+    # 3) Build (bounded) + auto-fix (max 5)
+    prompt = build_prompt(theme, cluster, canonical, genre)
     html = openai_generate_html(client, prompt)
 
     ok, msg = validate_html(html)
     attempts = 0
     while not ok and attempts < 5:
         attempts += 1
-        fix_prompt = prompt_for_fix(msg, html)
-        diff = client.chat.completions.create(
-            model=MODEL_BUILD,
-            messages=[{"role": "user", "content": fix_prompt}],
-        ).choices[0].message.content or ""
-
-        patched = apply_unified_diff_to_text(html, diff.strip())
-        if patched is None:
-            regen_prompt = build_prompt(theme, cluster, canonical) + f"\n\nFix validation error: {msg}\nReturn ONLY corrected HTML.\n"
-            html = openai_generate_html(client, regen_prompt)
-        else:
-            html = patched
-
+        html = openai_fix_with_diff(client, msg, html)
         ok, msg = validate_html(html)
 
     if not ok:
@@ -1708,26 +2087,37 @@ def main() -> None:
         )
         return
 
-    # 4) Related sites and inject
+    # 4) Related sites
     raw_db = read_json(DB_PATH, [])
     all_entries = normalize_db(raw_db)
     seed_sites = load_seed_sites()
     related = pick_related(tags, all_entries, seed_sites, k=8)
     html = inject_related_json(html, related)
 
-    # 5) Save page
+    # 5) Unsplash background (server-side pick + inject)
+    bg_url = unsplash_pick_image_url()
+    html = inject_unsplash_bg(html, bg_url)
+
+    # 6) Affiliate inject (genre-based)
+    aff = load_affiliates()
+    top_ads = pick_top_ads(aff, genre, n=2)
+    page_id = stable_id(created_at, slug)
+    html = inject_affiliate_slots(html, page_id=page_id, page_url=public_url, genre=genre, ads=top_ads)
+
+    # 7) Save page
     page_path = f"{page_dir}/index.html"
     write_text(page_path, html)
 
-    # 6) Update DB + hub index + sitemap/robots
+    # 8) Update DB + hub
     entry = {
-        "id": stable_id(created_at, slug),
+        "id": page_id,
         "title": (theme or "")[:80],
         "search_title": search_title,
         "created_at": created_at,
         "path": f"./pages/{folder}",
         "public_url": public_url,
         "tags": tags,
+        "genre": genre,
         "source_urls": (cluster.get("urls", []) or [])[:20],
         "related": related,
         "best_source": best_item.get("source"),
@@ -1735,10 +2125,12 @@ def main() -> None:
         "best_score": best_score,
         "best_score_breakdown": best_table,
         "score_keys": cluster.get("keys", []),
+        "unsplash_bg": bg_url,
+        "ads_injected": [a.get("id") for a in top_ads],
     }
     update_db_and_index(entry, all_entries, pages_base)
 
-    # tool_history（重複回避用）に追記：機能追加だけで既存を壊さない
+    # 9) tool_history
     try:
         hist = _load_tool_history()
         hist.append({
@@ -1750,10 +2142,10 @@ def main() -> None:
             "public_url": public_url,
         })
         _save_tool_history(hist)
-    except Exception:
-        pass
+    except Exception as e:
+        print("[history] exc", repr(e))
 
-    # 7) Auto-post (announce)
+    # 10) Auto-post (announce)
     if ENABLE_AUTO_POST:
         short_value = (search_title or "New tool").strip()[:80]
         post_text = f"{short_value}\n{public_url}"
@@ -1761,7 +2153,7 @@ def main() -> None:
         post_mastodon(post_text)
         post_x(post_text)
 
-    # 8) Lead collection + draft replies
+    # 11) Leads + replies (cheapest model only)
     leads = collect_leads(theme)
 
     scored: List[Tuple[int, Dict[str, Any]]] = []
@@ -1783,10 +2175,16 @@ def main() -> None:
     header.append(f"Tool URL: {public_url}")
     header.append(f"Theme: {theme}")
     header.append(f"Search title: {search_title}")
+    header.append(f"Genre: {genre}")
     header.append(f"Picked from: {best_item.get('source')} / {best_item.get('url')}")
     header.append(f"Best score: {best_score} / breakdown: {json.dumps(best_table, ensure_ascii=False)}")
     header.append(f"Tags: {', '.join(tags)}")
     header.append(f"Related sites count: {len(related)}")
+    header.append(f"Unsplash bg: {bg_url}")
+    header.append(f"Ads injected: {', '.join([a.get('id','') for a in top_ads]) if top_ads else '(none)'}")
+    header.append("")
+    header.append("Bluesky debug hint:")
+    header.append("- In Actions logs, search '[bsky] preflight' and '[bsky] search' to see exact reason for 0.")
     header.append("")
     header.append("")
 
