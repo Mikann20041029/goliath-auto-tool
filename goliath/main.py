@@ -1500,8 +1500,9 @@ def collect_leads(theme: str) -> List[Dict[str, Any]]:
     print(f"[counts] bluesky={len(_tmp_bsky)}")
     leads.extend(_tmp_bsky)
 
-    except Exception:
-        pass
+    except Exception as e:
+    print(f"[counts] bluesky error: {type(e).__name__}: {e}")
+
 
     try:
         leads.extend(collect_mastodon(min(LEADS_PER_SOURCE, LEADS_TOTAL)))
