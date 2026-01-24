@@ -81,7 +81,7 @@ if "/@mikann20041029/" in url_l:
 
     out.append({"text": text, "url": hn_url, "platform": "hn"})
 
-        time.sleep(0.2)
+    time.sleep(0.2)
 
     return _dedup(out)
 
