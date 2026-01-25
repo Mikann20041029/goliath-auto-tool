@@ -41,6 +41,41 @@ from urllib.request import Request, urlopen
 # =============================================================================
 # Config (ENV)
 # =============================================================================
+def env_first(*names: str, default: str = "") -> str:
+    for n in names:
+        v = os.environ.get(n, "").strip()
+        if v:
+            return v
+    return default
+
+# ---- Public base (link生成はここ基準) ----
+# 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
+# 例: https://mikann20041029.github.io
+PUBLIC_BASE_URL = env_first("PUBLIC_BASE_URL", "PUBLIC_SITE_BASE", default=os.environ.get("SITE_DOMAIN", "").strip() or "https://mikann20041029.github.io")
+
+# ---- Bluesky ----
+BLUESKY_HANDLE = env_first("BLUESKY_HANDLE", "BSKY_HANDLE", "BLUESKY_ID")
+BLUESKY_APP_PASSWORD = env_first("BLUESKY_APP_PASSWORD", "BSKY_APP_PASSWORD", "BLUESKY_PASSWORD")
+
+# ---- Mastodon ----
+MASTODON_BASE = env_first("MASTODON_BASE", "MASTODON_INSTANCE", "MASTODON_URL")
+MASTODON_TOKEN = env_first("MASTODON_TOKEN", "MASTODON_ACCESS_TOKEN")
+
+# ---- Reddit ----
+REDDIT_CLIENT_ID = env_first("REDDIT_CLIENT_ID", "REDDIT_ID")
+REDDIT_CLIENT_SECRET = env_first("REDDIT_CLIENT_SECRET", "REDDIT_SECRET")
+REDDIT_REFRESH_TOKEN = env_first("REDDIT_REFRESH_TOKEN", "REDDIT_REFRESH")
+REDDIT_USER_AGENT = env_first("REDDIT_USER_AGENT", default="goliath-tool/1.0 (read-only)")
+
+# ---- X (Free: 月100 Reads 想定 / 1実行=1リクエスト運用) ----
+X_BEARER_TOKEN = env_first("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN", "X_TOKEN", "TW_BEARER_TOKEN")
+X_SEARCH_QUERY = os.environ.get("X_SEARCH_QUERY", '("how to" OR help OR error OR fix) lang:en -is:retweet').strip()
+X_MAX = int(os.environ.get("X_MAX", "1"))
+
+# ---- State file (重複返信防止) ----
+STATE_DIR = os.path.join(REPO_ROOT, "state")
+LAST_SEEN_JSON = os.path.join(STATE_DIR, "last_seen.json")
+
 REPO_ROOT = os.environ.get("REPO_ROOT", os.getcwd())
 
 GOLIATH_DIR = os.path.join(REPO_ROOT, "goliath")
