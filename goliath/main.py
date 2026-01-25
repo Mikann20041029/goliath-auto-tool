@@ -2151,7 +2151,8 @@ def build_tool_ui(theme: Theme) -> str:
   }}
 
   function headerBlock() {{
-    return `# ${PAGE_TITLE}\\n# Generated: ${nowStamp()}\\n# Category: ${CAT}\\n`;
+    return "`# ${PAGE_TITLE}\n# Generated: ${nowStamp()}\n# Category: ${CAT}\n`"
+
   }}
 
   function genTravel(t) {{
