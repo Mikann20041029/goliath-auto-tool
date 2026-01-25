@@ -2214,41 +2214,25 @@ __tool_card_html = f"""
 </div>
 
 <script>
-(function(){
-  const btn = document.getElementById("copyShortBtn");
-  const inp = document.getElementById("shortUrlInput");
-  if(!btn || !inp) return;
+(() => {{
+  const btn = document.getElementById("copyBtn");
+  if (!btn) return;
 
-  function currentLang(){
-    const saved = localStorage.getItem("lang");
-    return saved || document.documentElement.getAttribute("lang") || "en";
-  }
+  btn.addEventListener("click", async () => {{
+    const text = btn.getAttribute("data-copy") || "";
+    if (!text) return;
 
-  btn.addEventListener("click", async () => {
-    const lang = currentLang();
-    const labelCopy = (window.I18N && I18N[lang] && I18N[lang].copy) ? I18N[lang].copy : "Copy";
-    const labelCopied = (window.I18N && I18N[lang] && I18N[lang].copied) ? I18N[lang].copied : "Copied";
-
-    const text = (inp.value && inp.value.trim()) ? inp.value.trim() : window.location.href;
-    try{
+    try {{
       await navigator.clipboard.writeText(text);
-      btn.querySelector("[data-i18n='copy']")?.replaceWith(document.createTextNode(labelCopied));
-      setTimeout(() => {
-        btn.textContent = labelCopy;
-        const span = document.createElement("span");
-        span.setAttribute("data-i18n","copy");
-        span.textContent = labelCopy;
-        btn.innerHTML = "";
-        btn.appendChild(span);
-      }, 1200);
-    }catch(e){
-      // fallback
-      inp.focus(); inp.select();
-      document.execCommand("copy");
-    }
-  });
-})();
+      btn.setAttribute("data-copied", "1");
+      setTimeout(() => btn.removeAttribute("data-copied"), 900);
+    }} catch (e) {{
+      console.warn(e);
+    }}
+  }});
+}})();
 </script>
+
 """
 
 # Try to append to whatever buffer this file uses (parts/html_parts/page_html)
