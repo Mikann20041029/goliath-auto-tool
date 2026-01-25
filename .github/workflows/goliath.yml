@@ -40,6 +40,18 @@ jobs:
             pip install -r requirements.txt
           fi
 
+      - name: Ensure state files exist
+        run: |
+          set -euo pipefail
+          mkdir -p state
+          if [ ! -f state/last_seen.json ]; then
+            cat > state/last_seen.json <<'JSON'
+          {
+            "x_seen": []
+          }
+          JSON
+          fi
+
       - name: Run Goliath System (capture exit)
         id: goliath_run
         continue-on-error: true
@@ -49,26 +61,31 @@ jobs:
           # ここが今回の事故ポイント：未設定でも必ず"100"
           LEADS_TOTAL: ${{ vars.LEADS_TOTAL || '100' }}
 
-          # Bluesky
+          # Bluesky（旧名 + 新名の両方を渡す：main.py側がどっちでも拾える）
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
           BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
+          BLUESKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
 
-          # Mastodon
+          # Mastodon（旧名 + 新名の両方を渡す）
           MASTODON_API_BASE: ${{ secrets.MASTODON_API_BASE }}
           MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          MASTODON_BASE: ${{ secrets.MASTODON_API_BASE }}
+          MASTODON_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
 
           # Unsplash
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
 
-          # X (あなたのスクショにあるやつを渡す)
+          # X（旧OAuth1.0a一式：将来使うなら残す）
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
 
-          # X (もし将来追加したら自動で使えるように “任意” で残す)
+          # X（Bearer / 検索モード用：入れてあれば自動で使える）
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_USER_ID: ${{ secrets.X_USER_ID }}
+          X_QUERY: ${{ vars.X_QUERY }}
 
           # optional
           CLICK_LOG_ENDPOINT: ${{ secrets.CLICK_LOG_ENDPOINT }}
@@ -99,6 +116,9 @@ jobs:
           # ログはコミットしない（artifactで持つ）
           git add -A ":!run_log.txt" || true
 
+          # state が .gitignore されてても強制で追加（重複防止のために永続化が必要）
+          git add -f state/last_seen.json || true
+
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
@@ -120,6 +140,7 @@ jobs:
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_USER_ID: ${{ secrets.X_USER_ID }}
+          X_QUERY: ${{ vars.X_QUERY }}
         run: |
           python tools/report_to_issue.py
 
@@ -129,4 +150,3 @@ jobs:
         with:
           name: goliath-run-log
           path: run_log.txt
-
