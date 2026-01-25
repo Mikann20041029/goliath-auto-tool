@@ -82,6 +82,8 @@ def getenv_any(names: Iterable[str], default: str = "") -> str:
     return default
 
 HN_QUERY = getenv_any(["HN_QUERY", "HACKER_NEWS_QUERY", "HN_SEARCH_QUERY"], "how to fix error OR help OR cannot OR failed OR bug")
+# ---- Hacker News ----
+HN_MAX = int(os.environ.get("HN_MAX", os.environ.get("HACKER_NEWS_MAX", "70")))
 
 # ---- State file (重複返信防止) ----
 
