@@ -16,11 +16,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # GH_PATがあればそれを使う（pushが安定する）
+          token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,16 +36,45 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
       - name: Run Goliath System (capture exit)
         id: goliath_run
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LEADS_TOTAL: ${{ vars.LEADS_TOTAL }}
+
+          # ここが今回の事故ポイント：未設定でも必ず"100"
+          LEADS_TOTAL: ${{ vars.LEADS_TOTAL || '100' }}
+
+          # Bluesky
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
+
+          # Mastodon
+          MASTODON_API_BASE: ${{ secrets.MASTODON_API_BASE }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+
+          # Unsplash
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+
+          # X (あなたのスクショにあるやつを渡す)
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+
+          # X (もし将来追加したら自動で使えるように “任意” で残す)
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_USER_ID: ${{ secrets.X_USER_ID }}
+
+          # optional
+          CLICK_LOG_ENDPOINT: ${{ secrets.CLICK_LOG_ENDPOINT }}
+
+          # ログが遅延しないように
+          PYTHONUNBUFFERED: "1"
         run: |
           set +e
           python main.py 2>&1 | tee run_log.txt
@@ -47,20 +82,23 @@ jobs:
 
           echo "REAL_EXITCODE=$realcode" >> run_log.txt
 
-          # ↓ Fail判定に使う exitcode は常に 0 に固定（＝絶対赤にしない）
+          # workflowを赤くしない（あなたの仕様どおり）
           echo "exitcode=0" >> "$GITHUB_OUTPUT"
-          # ↓ ただし本当の終了コードは別名で残す（調査用）
+          # ただし実際の終了コードは保持
           echo "real_exitcode=$realcode" >> "$GITHUB_OUTPUT"
 
           exit 0
 
-      - name: Commit and Push Changes (ALL files)
+      - name: Commit and Push Changes (exclude run_log)
         if: always()
         run: |
           set -euo pipefail
-          git config --global user.name "Goliath-Bot"
-          git config --global user.email "bot@mikanntool.com"
-          git add -A
+          git config user.name "Goliath-Bot"
+          git config user.email "bot@mikanntool.com"
+
+          # ログはコミットしない（artifactで持つ）
+          git add -A ":!run_log.txt" || true
+
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
@@ -71,8 +109,15 @@ jobs:
       - name: Create Issue Report (ALWAYS)
         if: always()
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_PATがあるなら優先。無ければ標準トークン。
+          GITHUB_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
           REAL_EXITCODE: ${{ steps.goliath_run.outputs.real_exitcode }}
+
+          # report側でも必要なら渡す（mainと同じ）
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_USER_ID: ${{ secrets.X_USER_ID }}
         run: |
@@ -85,10 +130,3 @@ jobs:
           name: goliath-run-log
           path: run_log.txt
 
-      - name: Fail job if Goliath failed
-        if: always()
-        run: |
-          # このstepは残してもOK（exitcodeは常に0だから落ちない）
-          code="${{ steps.goliath_run.outputs.exitcode }}"
-          echo "Guard exitcode=$code (forced to 0 to keep workflow green)"
-          exit 0
