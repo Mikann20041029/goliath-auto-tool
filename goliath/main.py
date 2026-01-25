@@ -2251,19 +2251,7 @@ except Exception:
                 pass
 # --- /FIX ---
 
-function copyToolText() {{
-  const src = document.getElementById("toolCopySrc");
-  const label = document.getElementById("copyBtnLabel");
-  if (!src) return;
-  const txt = src.value || src.textContent || "";
-  const copiedText = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copied) || "Copied";
-  const origText = label ? label.textContent : "";
-  navigator.clipboard.writeText(txt).then(() => {{
-    if (label) label.textContent = copiedText;
-    setTimeout(() => {{ if (label) label.textContent = origText; }}, 1200);
-  }}).catch(() => {{}});
-}}
-</script>
+
 """.strip()
 
 
