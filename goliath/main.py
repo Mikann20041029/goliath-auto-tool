@@ -3748,10 +3748,10 @@ write_text(sitemap_out_path, sitemap_xml)
 
     # Default sitemap URL depends on where you place it. For search engines, root is best.
     # We will write to root only if ALLOW_ROOT_UPDATE=1.
-    sitemap_public_url = SITE_DOMAIN.rstrip("/") + "/sitemap.xml"
-    robots_text = build_robots(sitemap_public_url)
-    robots_out_path = os.path.join(OUT_DIR, "robots.txt")
-    write_text(robots_out_path, robots_text)
+sitemap_public_url = SITE_DOMAIN.rstrip("/") + "/sitemap.xml"
+robots_text = build_robots(sitemap_public_url)
+robots_out_path = os.path.join(OUT_DIR, "robots.txt")
+write_text(robots_out_path, robots_text)
 
     if ALLOW_ROOT_UPDATE:
         write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
