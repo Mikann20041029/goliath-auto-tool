@@ -8,7 +8,7 @@ Traceback (most recent call last):
     _run_code(code, mod_globals, init_globals,
   File "/opt/hostedtoolcache/Python/3.10.19/x64/lib/python3.10/runpy.py", line 86, in _run_code
     exec(code, run_globals)
-  File "goliath/main.py", line 143, in <module>
-    LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))
+  File "goliath/main.py", line 105, in <module>
+    LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))  # IMPORTANT: default 100 per your requirement
 ValueError: invalid literal for int() with base 10: ''
 REAL_EXITCODE=0
