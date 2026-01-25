@@ -3753,25 +3753,25 @@ robots_text = build_robots(sitemap_public_url)
 robots_out_path = os.path.join(OUT_DIR, "robots.txt")
 write_text(robots_out_path, robots_text)
 
-    if ALLOW_ROOT_UPDATE:
-        write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
-        write_text(os.path.join(REPO_ROOT, "robots.txt"), robots_text)
-        logging.info("Root sitemap/robots updated.")
-        if PING_SITEMAP:
-            ping_search_engines(sitemap_public_url)
-    else:
-        logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
+if ALLOW_ROOT_UPDATE:
+    write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
+    write_text(os.path.join(REPO_ROOT, "robots.txt"), robots_text)
+    logging.info("Root sitemap/robots updated.")
+    if PING_SITEMAP:
+        ping_search_engines(sitemap_public_url)
+else:
+    logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
 
     # self-check summary
-    write_run_summary(
-        counts=counts,
-        reply_count=len(issue_items),
-        aff_audit=aff_audit,
-        post_drafts=drafts,
-        sitemap_url_written=(sitemap_public_url if ALLOW_ROOT_UPDATE else (SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml")),
-    )
+write_run_summary(
+    counts=counts,
+    reply_count=len(issue_items),
+    aff_audit=aff_audit,
+    post_drafts=drafts,
+    sitemap_url_written=(sitemap_public_url if ALLOW_ROOT_UPDATE else (SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml")),
+)
 
-    return 0
+return 0
 
 
 if __name__ == "__main__":
