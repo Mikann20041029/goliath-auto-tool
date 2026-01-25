@@ -2158,6 +2158,15 @@ problems = theme.problem_list or []
     problems_html_items = []
     for x in (problems or [])[:10]:
         problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+            problems_html_items = []
+    for item in (theme.problem_list or [])[:20]:
+        if item is None:
+            continue
+        problems_html_items.append(f"<li>{html.escape(str(item))}</li>")
+    if not problems_html_items:
+        problems_html_items.append("<li>—</li>")
+    problems_html = "\n".join(problems_html_items)
+
     problems_html = "\n".join(problems_html_items) if problems_html_items else "<li>(no items)</li>"
 
 
