@@ -792,25 +792,54 @@ def collect_hn(max_items: int = 70) -> List[Post]:
     return out
 
 
-def collect_x_mentions(max_items: int = 5) -> List[Post]:
+# =============================================================================
+# X state (duplicate prevention)
+# =============================================================================
+STATE_DIR = os.path.join(REPO_ROOT, "state")
+LAST_SEEN_PATH = os.path.join(STATE_DIR, "last_seen.json")
+
+def load_last_seen() -> Dict[str, Any]:
+    d = read_json(LAST_SEEN_PATH, default={})
+    if not isinstance(d, dict):
+        d = {}
+    if "x_seen" not in d or not isinstance(d.get("x_seen"), list):
+        d["x_seen"] = []
+    return d
+
+def save_last_seen(d: Dict[str, Any]) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    # keep small (latest 200 ids)
+    seen = d.get("x_seen") or []
+    if isinstance(seen, list):
+        d["x_seen"] = seen[-200:]
+    write_json(LAST_SEEN_PATH, d)
+
+def collect_x_mentions(max_items: int = 1) -> List[Post]:
     """
-    X/Twitter v2 mentions timeline requires:
-      - X_BEARER_TOKEN
-      - X_USER_ID
+    X v2: Keyword Search -> pick 1 tweet -> avoid duplicates via state/last_seen.json
+    - 1回の実行で「採用は1件」に固定（read節約）
+    - 検索だけで本文(text)は取れるので、追加のtweet取得はしない（= 実質1リクエスト前提）
     """
-    if not (X_BEARER_TOKEN and X_USER_ID):
-        logging.info("X: skipped (missing X_BEARER_TOKEN/X_USER_ID)")
+    if not X_BEARER_TOKEN:
+        logging.info("X: skipped (missing X_BEARER_TOKEN or aliases)")
         return []
 
-    max_items = clamp(max_items, 1, 20)
+    max_items = 1  # 強制：1件だけ採用
     headers = {"Authorization": f"Bearer {X_BEARER_TOKEN}", "Accept": "application/json"}
-    url = f"https://api.x.com/2/users/{quote(X_USER_ID)}/mentions?" + urlencode({
-        "max_results": str(max_items),
-        "tweet.fields": "created_at,author_id,lang",
+
+    # クエリ（未指定なら省エネの固定クエリ）
+    q = (X_QUERY or '("how to" OR help OR error OR failed OR bug OR fix) -is:retweet -is:reply').strip()
+
+    # recent search
+    url = f"{X_API_BASE.rstrip('/')}/2/tweets/search/recent?" + urlencode({
+        "query": q,
+        "max_results": "10",
+        "tweet.fields": "created_at,lang,author_id",
     })
+
     st, body = http_get(url, headers=headers, timeout=20)
     if st != 200:
-        logging.warning("X: mentions failed status=%s body=%s", st, (body or "")[:200])
+        logging.warning("X: search failed status=%s body=%s", st, (body or "")[:200])
         return []
 
     try:
@@ -818,29 +847,57 @@ def collect_x_mentions(max_items: int = 5) -> List[Post]:
     except Exception:
         return []
 
-    out: List[Post] = []
-    for t in (data.get("data") or []):
-        tid = t.get("id") or ""
-        text = (t.get("text") or "").strip()
-        if not text or adult_or_sensitive(text):
-            continue
-        created_at = t.get("created_at") or now_iso()
-        author = t.get("author_id") or "unknown"
-        url = f"https://x.com/i/web/status/{tid}"
-        pid = sha1(f"x:{tid}:{url}")
-        out.append(Post(
-            source="x",
-            id=pid,
-            url=url,
-            text=text,
-            author=author,
-            created_at=created_at,
-            lang_hint=t.get("lang") or "",
-            meta={"author_id": author},
-        ))
+    tweets = data.get("data") or []
+    if not tweets:
+        logging.info("X: collected 0")
+        return []
 
-    logging.info("X: collected %d", len(out))
+    state = load_last_seen()
+    seen = set(state.get("x_seen") or [])
+
+    picked = None
+    for t in tweets:
+        tid = (t.get("id") or "").strip()
+        if not tid:
+            continue
+        if tid in seen:
+            continue
+        picked = t
+        break
+
+    if not picked:
+        logging.info("X: collected 0 (all duplicates)")
+        return []
+
+    tid = picked.get("id") or ""
+    text = (picked.get("text") or "").strip()
+    if not text or adult_or_sensitive(text):
+        logging.info("X: collected 0 (filtered)")
+        return []
+
+    created_at = picked.get("created_at") or now_iso()
+    author = picked.get("author_id") or "unknown"
+    post_url = f"https://x.com/i/web/status/{tid}"
+    pid = sha1(f"x:{tid}:{post_url}")
+
+    # save state (commit will persist)
+    state["x_seen"] = (state.get("x_seen") or []) + [tid]
+    save_last_seen(state)
+
+    out = [Post(
+        source="x",
+        id=pid,
+        url=post_url,
+        text=text,
+        author=str(author),
+        created_at=created_at,
+        lang_hint=picked.get("lang") or "",
+        meta={"query": q, "author_id": author},
+    )]
+
+    logging.info("X: collected %d (picked 1)", len(out))
     return out
+
 
 
 # =============================================================================
