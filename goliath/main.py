@@ -73,10 +73,12 @@ X_SEARCH_QUERY = os.environ.get("X_SEARCH_QUERY", '("how to" OR help OR error OR
 X_MAX = int(os.environ.get("X_MAX", "1"))
 
 # ---- State file (重複返信防止) ----
-STATE_DIR = os.path.join(REPO_ROOT, "state")
-LAST_SEEN_JSON = os.path.join(STATE_DIR, "last_seen.json")
+
 
 REPO_ROOT = os.environ.get("REPO_ROOT", os.getcwd())
+
+STATE_DIR = os.path.join(REPO_ROOT, "state")
+LAST_SEEN_JSON = os.path.join(STATE_DIR, "last_seen.json")
 def getenv_any(names: List[str], default: str = "") -> str:
     for n in names:
         v = os.environ.get(n)
