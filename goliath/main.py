@@ -2874,8 +2874,41 @@ function copyTextFrom(id, btnId){
     </section>
 
     <section class="mt-6">
-      {tool_ui}
-    </section>
+  {tool_ui}
+</section>
+
+<script>
+function copyTextFrom(inputId, btnId) {{
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!input) return;
+
+  const text = String(input.value ?? "");
+
+  const done = () => {{
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(() => {{ btn.textContent = prev; }}, 1200);
+  }};
+
+  if (navigator.clipboard && window.isSecureContext) {{
+    navigator.clipboard.writeText(text).then(done).catch(() => {{
+      input.focus();
+      input.select();
+      try {{ document.execCommand("copy"); }} catch (e) {{}}
+      done();
+    }});
+    return;
+  }}
+
+  input.focus();
+  input.select();
+  try {{ document.execCommand("copy"); }} catch (e) {{}}
+  done();
+}}
+</script>
+
 
     <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
