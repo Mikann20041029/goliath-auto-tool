@@ -2156,8 +2156,11 @@ cat = html.escape(theme.category or "Dev/Tools")
 
 problems = theme.problem_list or []
     problems_html_items = []
-    for x in (problems or [])[:10]:
-        problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+for x in (theme.problem_list or []):
+    if x is None:
+        continue
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+
             problems_html_items = []
     for item in (theme.problem_list or [])[:20]:
         if item is None:
