@@ -2765,7 +2765,7 @@ def build_page_html(
     canonical = tool_url if tool_url.startswith("http") else (SITE_DOMAIN.rstrip("/") + "/" + theme.slug + "/")
 
     article_html = "<p class='leading-relaxed whitespace-pre-wrap text-white/85'>" + html_escape(article_ja) + "</p>"
-        try:
+    try:
         tool_ui = build_tool_ui(theme)
     except Exception as e:
         logging.exception("build_tool_ui failed: %s", e)
