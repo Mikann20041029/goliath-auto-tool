@@ -3715,7 +3715,13 @@ if not default_tool_slug:
 
     issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
     logging.info("Wrote issues payload: %s", issues_path)
-    tool_url = f"{PUBLIC_BASE_URL.rstrip('/')}/goliath/pages/{theme.slug}/"
+    slug = ""
+if theme is not None:
+    slug = getattr(theme, "slug", "") or ""
+if not slug:
+    slug = default_tool_slug
+tool_url = f"{PUBLIC_BASE_URL.rstrip('/')}/goliath/pages/{slug}/"
+
 
 
     # post drafts (short URL + one-line value)
