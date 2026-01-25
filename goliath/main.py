@@ -2151,7 +2151,79 @@ def build_tool_ui(theme: Theme) -> str:
   }}
 
   function headerBlock() {{
-    return "`# ${PAGE_TITLE}\n# Generated: ${nowStamp()}\n# Category: ${CAT}\n`"
+    page_title = html.escape(theme.search_title or theme.title or "Tool")
+cat = html.escape(theme.category or "Dev/Tools")
+
+problems = theme.problem_list or []
+problems_html = "\n".join([f"<li>{html.escape(x)}</li>" for x in problems[:10]]) or "<li>(no items)</li>"
+
+# “チェックリスト”は既存の build_steps があればそれを使う。無ければ保険で固定文。
+if "build_steps" in globals():
+    steps = build_steps(theme.category) or []
+else:
+    steps = [
+        "Reproduce the issue with the same inputs",
+        "Capture logs/screenshots with timestamps",
+        "Try smallest change first, then verify",
+        "Record the fix to prevent recurrence",
+    ]
+steps_html = "\n".join([f"<li>{html.escape(x)}</li>" for x in steps[:10]]) or "<li>(no steps)</li>"
+
+copy_text = "TITLE: " + (theme.search_title or theme.title or "Tool") + "\n" \
+          + "CATEGORY: " + (theme.category or "Dev/Tools") + "\n\n" \
+          + "PROBLEMS:\n- " + "\n- ".join(problems[:10]) + "\n\n" \
+          + "CHECKLIST:\n- " + "\n- ".join(steps[:10])
+
+copy_text_escaped = html.escape(copy_text)
+
+return f"""
+<div class="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white/70 dark:bg-slate-900/60 backdrop-blur p-4 shadow-sm">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <div class="text-xs opacity-70"><span data-i18n="tool">Tool</span></div>
+      <div class="text-lg font-semibold">{page_title}</div>
+      <div class="text-xs opacity-70 mt-1">Category: {cat}</div>
+    </div>
+    <button type="button" class="px-3 py-2 rounded-xl border border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-50 dark:hover:bg-slate-800"
+            onclick="copyToolText()">
+      <span id="copyBtnLabel" data-i18n="copy">Copy</span>
+    </button>
+  </div>
+
+  <div class="mt-4 grid md:grid-cols-2 gap-4">
+    <div class="rounded-xl border border-slate-200/70 dark:border-slate-700/70 p-3">
+      <div class="text-sm font-semibold mb-2" data-i18n="problems">Problems this tool can help with</div>
+      <ul class="list-disc pl-5 text-sm leading-6">
+        {problems_html}
+      </ul>
+    </div>
+    <div class="rounded-xl border border-slate-200/70 dark:border-slate-700/70 p-3">
+      <div class="text-sm font-semibold mb-2" data-i18n="steps">Step-by-step checklist</div>
+      <ol class="list-decimal pl-5 text-sm leading-6">
+        {steps_html}
+      </ol>
+    </div>
+  </div>
+
+  <textarea id="toolCopySrc" class="hidden">{copy_text_escaped}</textarea>
+</div>
+
+<script>
+function copyToolText() {{
+  const src = document.getElementById("toolCopySrc");
+  const label = document.getElementById("copyBtnLabel");
+  if (!src) return;
+  const txt = src.value || src.textContent || "";
+  const copiedText = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copied) || "Copied";
+  const origText = label ? label.textContent : "";
+  navigator.clipboard.writeText(txt).then(() => {{
+    if (label) label.textContent = copiedText;
+    setTimeout(() => {{ if (label) label.textContent = origText; }}, 1200);
+  }}).catch(() => {{}});
+}}
+</script>
+""".strip()
+
 
   }}
 
