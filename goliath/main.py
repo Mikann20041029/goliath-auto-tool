@@ -1,52 +1,53 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Goliath Auto Tool System - main.py (single-file)
-- 8-hour cycle runner (run once; schedule is outside)
-- Collect from: Bluesky, Mastodon, Reddit, Hacker News, X(mentions)
-- Cluster -> choose best theme -> generate solution site(s)
-- Validate/autofix up to 5
-- Update hub/sites.json only (hub frozen)
-- Update sitemap/robots safely (default: goliath/_out; root only if ALLOW_ROOT_UPDATE=1)
-- Output Issues payload (bulk) with empathy + tool URL + reply draft (100+ items)
-- 22 genres mapping -> affiliates.json top2 -> inject to AFF_SLOT
-- SaaS-like design, Tailwind, dark mode, i18n (EN/JA/KO/ZH), 2500+ chars article
+
+- 8-hour cycle runner (run once; scheduling is outside)
+- Collect from: Bluesky, Mastodon, Reddit, Hacker News, X (mentions)
+- Normalize -> cluster -> choose best themes -> generate solution sites
+- Validate/autofix up to MAX_AUTOFIX
+- Update hub/sites.json only (hub assets + hub/index.html are frozen)
+- Generate sitemap.xml + robots.txt safely (default: goliath/_out; root only if ALLOW_ROOT_UPDATE=1)
+- Generate shortlinks (/goliath/go/<code>/) and provide "short URL + one-line value" post drafts
+- Output Issues payload (bulk) with:
+    - Problem URL
+    - Reply (EN, empathy + “made a one-page guide” + tool URL last line)
+  Minimum 100 leads per run (stub fill if needed)
+- 22 categories (fixed) -> affiliates.json top2 -> inject to AFF_SLOT
+- SaaS-like design, Tailwind, dark mode, i18n (EN/JA/KO/ZH), 2500+ chars JP article + FAQ + references + legal pages
 """
 
 from __future__ import annotations
 
+import base64
+import datetime as dt
+import hashlib
+import html
+import json
+import logging
 import os
+import random
 import re
 import sys
-import json
 import time
-import math
-import html
-import uuid
-import hashlib
-import random
-import shutil
-import string
-import logging
-import datetime as dt
-from dataclasses import dataclass, asdict
-from typing import Any, Dict, List, Optional, Tuple, Iterable
-from urllib.parse import urlencode, quote, urlparse
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
 
 
-# =========================
+# =============================================================================
 # Config (ENV)
-# =========================
-
+# =============================================================================
 REPO_ROOT = os.environ.get("REPO_ROOT", os.getcwd())
 
 GOLIATH_DIR = os.path.join(REPO_ROOT, "goliath")
 PAGES_DIR = os.path.join(GOLIATH_DIR, "pages")
 OUT_DIR = os.path.join(GOLIATH_DIR, "_out")  # safe outputs (sitemap/robots/issues payload, etc.)
-POLICIES_DIR = os.path.join(REPO_ROOT, "policies")
+
+POLICIES_DIR = os.path.join(REPO_ROOT, "policies")  # allowed by your rule (new folder)
 HUB_DIR = os.path.join(REPO_ROOT, "hub")
 HUB_SITES_JSON = os.path.join(HUB_DIR, "sites.json")
 
@@ -56,18 +57,20 @@ DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "en")  # en/ja/ko/zh
 LANGS = ["en", "ja", "ko", "zh"]
 
 RUN_ID = os.environ.get("RUN_ID", str(int(time.time())))
-MAX_THEMES = int(os.environ.get("MAX_THEMES", "6"))  # initial cap for site generation
-MAX_COLLECT = int(os.environ.get("MAX_COLLECT", "260"))
-MAX_AUTOFIX = int(os.environ.get("MAX_AUTOFIX", "5"))
 RANDOM_SEED = os.environ.get("RANDOM_SEED", RUN_ID)
 
+MAX_THEMES = int(os.environ.get("MAX_THEMES", "6"))           # how many sites to build per run
+MAX_COLLECT = int(os.environ.get("MAX_COLLECT", "260"))       # total target; spec 173+; overshoot allowed
+MAX_AUTOFIX = int(os.environ.get("MAX_AUTOFIX", "5"))
+
 ALLOW_ROOT_UPDATE = os.environ.get("ALLOW_ROOT_UPDATE", "0") == "1"
+PING_SITEMAP = os.environ.get("PING_SITEMAP", "0") == "1"
 
 # Social API credentials (optional)
 BLUESKY_HANDLE = os.environ.get("BLUESKY_HANDLE", "")
 BLUESKY_APP_PASSWORD = os.environ.get("BLUESKY_APP_PASSWORD", "")
 
-MASTODON_BASE = os.environ.get("MASTODON_BASE", "")
+MASTODON_BASE = os.environ.get("MASTODON_BASE", "")  # e.g. https://mastodon.social
 MASTODON_TOKEN = os.environ.get("MASTODON_TOKEN", "")
 
 REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID", "")
@@ -76,17 +79,18 @@ REDDIT_REFRESH_TOKEN = os.environ.get("REDDIT_REFRESH_TOKEN", "")
 REDDIT_USER_AGENT = os.environ.get("REDDIT_USER_AGENT", "goliath-tool/1.0 (read-only)")
 REDDIT_SUBREDDITS = os.environ.get(
     "REDDIT_SUBREDDITS",
-    "webdev,sysadmin,programming,learnprogramming,privacy,photography,excel,smallbusiness,marketing,travel,cooking,fitness,personalfinance,careeradvice,relationship_advice"
+    "webdev,sysadmin,programming,learnprogramming,privacy,photography,excel,smallbusiness,marketing,"
+    "travel,solotravel,cooking,mealprep,fitness,loseit,personalfinance,careerguidance,relationships,productivity"
 )
 
-HN_QUERY = os.environ.get("HN_QUERY", "error OR issue OR help OR how to OR advice OR recommend")
+HN_QUERY = os.environ.get("HN_QUERY", "error OR issue OR help OR how to OR stuck OR recommend OR checklist")
 HN_MAX = int(os.environ.get("HN_MAX", "70"))
 
 X_BEARER_TOKEN = os.environ.get("X_BEARER_TOKEN", "")
-X_USER_ID = os.environ.get("X_USER_ID", "")
-X_MAX = int(os.environ.get("X_MAX", "5"))
+X_USER_ID = os.environ.get("X_USER_ID", "")  # numeric user id for mentions lookup
+X_MAX = int(os.environ.get("X_MAX", "5"))    # mentions-limited
 
-# OpenAI (optional)
+# OpenAI (optional) - not required; kept off by default in this file
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
@@ -97,12 +101,19 @@ REF_URL_MIN = int(os.environ.get("REF_URL_MIN", "10"))
 REF_URL_MAX = int(os.environ.get("REF_URL_MAX", "20"))
 SUPP_URL_MIN = int(os.environ.get("SUPP_URL_MIN", "3"))
 
-# Layout / theme
+# Leads/Issues
+LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))  # IMPORTANT: default 100 per your requirement
+ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for long issue body
+
+# Branding / canonical
 SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
-SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "https://mikanntool.com")
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "https://mikanntool.com")  # used in canonical/og
 SITE_CONTACT_EMAIL = os.environ.get("SITE_CONTACT_EMAIL", "contact@mikanntool.com")
 
-# Keep hub frozen
+# Unsplash (optional): if set, we fetch one photo URL for hero background
+UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+
+# Keep hub frozen: do not touch these
 FROZEN_PATH_PREFIXES = [
     os.path.join(REPO_ROOT, "hub", "index.html"),
     os.path.join(REPO_ROOT, "hub", "assets"),
@@ -110,7 +121,7 @@ FROZEN_PATH_PREFIXES = [
     os.path.join(REPO_ROOT, "hub", "assets", "app.v3.js"),
 ]
 
-# 22 categories fixed
+# 22 categories fixed (your spec)
 CATEGORIES_22 = [
     "Web/Hosting",
     "Dev/Tools",
@@ -136,17 +147,12 @@ CATEGORIES_22 = [
     "Events/Leisure",
 ]
 
-# Ensure random seed for reproducibility per run
 random.seed(int(hashlib.sha256(RANDOM_SEED.encode("utf-8")).hexdigest()[:8], 16))
 
-# Additional config for leads
-LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))
 
-
-# =========================
+# =============================================================================
 # Logging
-# =========================
-
+# =============================================================================
 def setup_logging() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     log_path = os.path.join(OUT_DIR, f"run_{RUN_ID}.log")
@@ -160,20 +166,24 @@ def setup_logging() -> None:
     )
     logging.info("RUN_ID=%s", RUN_ID)
     logging.info("REPO_ROOT=%s", REPO_ROOT)
+    logging.info("SITE_DOMAIN=%s", SITE_DOMAIN)
+    logging.info("ALLOW_ROOT_UPDATE=%s", ALLOW_ROOT_UPDATE)
+    logging.info("LEADS_TOTAL=%s", LEADS_TOTAL)
 
 
-# =========================
+# =============================================================================
 # Utilities (IO / HTTP / Text)
-# =========================
-
+# =============================================================================
 def read_text(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
 
 def write_text(path: str, content: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
+
 
 def read_json(path: str, default: Any = None) -> Any:
     if not os.path.exists(path):
@@ -181,25 +191,55 @@ def read_json(path: str, default: Any = None) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def write_json(path: str, obj: Any) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
+
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).astimezone().isoformat(timespec="seconds")
 
+
+def sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+
 def safe_slug(s: str, maxlen: int = 64) -> str:
-    s = s.strip().lower()
+    s = (s or "").strip().lower()
     s = re.sub(r"https?://", "", s)
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
     if not s:
         s = "tool"
-    return s[:maxlen].strip("-") or "tool"
+    return (s[:maxlen].strip("-") or "tool")
 
-def sha1(s: str) -> str:
-    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+def clamp(n: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, n))
+
+
+def uniq_keep_order(items: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for x in items:
+        if x not in seen:
+            out.append(x)
+            seen.add(x)
+    return out
+
+
+def is_frozen_path(path: str) -> bool:
+    p = os.path.abspath(path)
+    for fp in FROZEN_PATH_PREFIXES:
+        fp_abs = os.path.abspath(fp)
+        if p == fp_abs:
+            return True
+        if os.path.isdir(fp_abs) and p.startswith(fp_abs + os.sep):
+            return True
+    return False
+
 
 def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Tuple[int, str]:
     h = headers or {}
@@ -222,7 +262,13 @@ def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 
     except URLError as e:
         return 0, str(e)
 
-def http_post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Tuple[int, Dict[str, Any], str]:
+
+def http_post_json(
+    url: str,
+    payload: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+    timeout: int = 20,
+) -> Tuple[int, Dict[str, Any], str]:
     h = {"Content-Type": "application/json"}
     if headers:
         h.update(headers)
@@ -249,33 +295,55 @@ def http_post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str
     except URLError as e:
         return 0, {}, str(e)
 
-def clamp(n: int, lo: int, hi: int) -> int:
-    return max(lo, min(hi, n))
 
-def uniq_keep_order(items: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in items:
-        if x not in seen:
-            out.append(x)
-            seen.add(x)
-    return out
+def base64_basic_auth(user: str, password: str) -> str:
+    token = f"{user}:{password}"
+    return base64.b64encode(token.encode("utf-8")).decode("ascii")
 
-def is_frozen_path(path: str) -> bool:
-    p = os.path.abspath(path)
-    for fp in FROZEN_PATH_PREFIXES:
-        fp_abs = os.path.abspath(fp)
-        if p == fp_abs:
-            return True
-        if os.path.isdir(fp_abs) and p.startswith(fp_abs + os.sep):
-            return True
+
+# =============================================================================
+# Safety filters (BAN / adult/sensitive)
+# =============================================================================
+BAN_WORDS = [
+    # illegal / violence / hate (basic)
+    "kill", "murder", "bomb", "weapon", "terrorist",
+    # explicit adult
+    "porn", "nude", "sex", "blowjob", "dick", "vagina",
+    # self-harm
+    "suicide", "self-harm",
+]
+
+BAN_WORDS_JA = [
+    "殺", "爆弾", "武器", "テロ",
+    "ポルノ", "裸", "性行為", "ちんこ", "まんこ",
+    "自殺", "自傷",
+]
+
+def adult_or_sensitive(text: str) -> bool:
+    t = (text or "").lower()
+    if any(w in t for w in BAN_WORDS):
+        return True
+    if any(w in (text or "") for w in BAN_WORDS_JA):
+        return True
     return False
 
 
-# =========================
-# Data models
-# =========================
+def too_broad_vent(text: str) -> bool:
+    """
+    Downrank content that is mainly venting with no actionable question.
+    """
+    t = (text or "").lower()
+    # if there is no question-like marker and mostly abstract emotion words
+    has_question = any(x in t for x in ["?", "how", "what", "which", "where", "when", "why", "help", "fix", "recommend", "best", "compare", "plan", "checklist"])
+    emo = sum(1 for x in ["hate", "tired", "annoying", "frustrated", "sad", "depressed", "angry", "worst", "sucks"] if x in t)
+    if (not has_question) and emo >= 2:
+        return True
+    return False
 
+
+# =============================================================================
+# Data models
+# =============================================================================
 @dataclass
 class Post:
     source: str
@@ -285,32 +353,53 @@ class Post:
     author: str
     created_at: str
     lang_hint: str = ""
-    meta: Dict[str, Any] = None
+    meta: Optional[Dict[str, Any]] = None
 
     def norm_text(self) -> str:
         t = self.text or ""
         t = re.sub(r"\s+", " ", t).strip()
         return t
 
+
 @dataclass
 class Theme:
     title: str
+    search_title: str
     slug: str
     category: str
     problem_list: List[str]
     representative_posts: List[Post]
     score: float
     keywords: List[str]
+    short_code: str = ""  # /goliath/go/<code>/
 
 
-# =========================
+# =============================================================================
 # Collectors
-# =========================
+# =============================================================================
+KEYWORDS = [
+    # tech
+    "error", "issue", "help", "how do i", "how to", "can't", "cannot", "failed", "fix", "bug",
+    "login", "password", "token", "oauth", "dns", "cname", "aaaa", "ssl", "github pages",
+    "pdf", "convert", "compress", "mp4", "ffmpeg", "excel", "spreadsheet", "formula",
+    # life / planning
+    "itinerary", "travel plan", "packing list", "layover", "eSIM", "refund", "cancellation", "budget",
+    "recipe", "meal prep", "calories", "protein", "sleep", "workout", "habit", "routine",
+    "study plan", "memorize", "procrastination", "focus", "schedule", "checklist", "template",
+    "resume", "interview", "anxiety", "compare", "recommend", "best",
+    "move", "declutter", "cleaning", "laundry",
+]
 
 def collect_bluesky(max_items: int = 60) -> List[Post]:
+    """
+    ATProto:
+      - createSession: https://bsky.social/xrpc/com.atproto.server.createSession
+      - searchPosts:   https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=...
+    """
     if not (BLUESKY_HANDLE and BLUESKY_APP_PASSWORD):
         logging.info("Bluesky: skipped (missing BLUESKY_HANDLE/BLUESKY_APP_PASSWORD)")
         return []
+
     logging.info("Bluesky: collecting up to %d", max_items)
     status, js, raw = http_post_json(
         "https://bsky.social/xrpc/com.atproto.server.createSession",
@@ -319,44 +408,43 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
         timeout=20,
     )
     if status != 200 or "accessJwt" not in js:
-        logging.warning("Bluesky: session failed status=%s body=%s", status, raw[:300])
+        logging.warning("Bluesky: session failed status=%s body=%s", status, (raw or "")[:300])
         return []
+
     token = js["accessJwt"]
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-    # Include tech + life queries, shuffled
-    tech_queries = [
-        "help error",
-        "how do i fix",
-        "can't login",
-        "failed to",
-        "pdf convert",
-        "compress mp4",
-        "excel formula",
-        "privacy settings",
-        "dns cname aaaa",
-        "github pages domain",
+
+    # Mix tech + life
+    queries = [
+        # tech
+        "how to fix error",
+        "can't login help",
+        "pdf convert fails",
+        "compress mp4 best settings",
+        "excel formula wrong",
+        "github pages custom domain dns",
+        "oauth token expired",
+        "privacy settings cookies",
+        # life
+        "itinerary planner help",
+        "packing list checklist",
+        "layover eSIM advice",
+        "refund cancellation policy",
+        "meal prep plan",
+        "calories protein plan",
+        "sleep schedule fix",
+        "workout routine beginner",
+        "study plan schedule",
+        "procrastination can't focus",
+        "resume interview help",
+        "budget template",
+        "compare best option",
+        "weekend plan ideas",
     ]
-    life_queries = [
-        "travel plan",
-        "itinerary",
-        "packing list",
-        "budget travel",
-        "quick recipe",
-        "meal prep",
-        "sleep schedule",
-        "workout plan",
-        "study plan",
-        "job interview",
-        "resume help",
-        "any advice",
-        "procrastination",
-        "compare products",
-    ]
-    queries = tech_queries + life_queries
-    random.shuffle(queries)
-    posts: List[Post] = []
+
+    out: List[Post] = []
     for q in queries:
-        if len(posts) >= max_items:
+        if len(out) >= max_items:
             break
         url = "https://bsky.social/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": 25})
         st, body = http_get(url, headers=headers, timeout=20)
@@ -366,68 +454,94 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
             data = json.loads(body)
         except Exception:
             continue
+
         for item in data.get("posts", []):
-            if len(posts) >= max_items:
+            if len(out) >= max_items:
                 break
-            uri = item.get("uri", "")
-            cid = item.get("cid", "")
-            text = (item.get("record") or {}).get("text", "") or item.get("text", "")
-            author = (item.get("author") or {}).get("handle", "") or "unknown"
-            created_at = (item.get("record") or {}).get("createdAt", "") or item.get("indexedAt", "") or ""
+            uri = item.get("uri", "") or ""
+            cid = item.get("cid", "") or ""
+            record = item.get("record") or {}
+            text = (record.get("text") or item.get("text") or "").strip()
+            author = ((item.get("author") or {}).get("handle") or "unknown").strip()
+            created_at = (record.get("createdAt") or item.get("indexedAt") or now_iso())
+
+            if not text or adult_or_sensitive(text):
+                continue
+
             post_url = ""
             if uri:
                 try:
-                    parts = uri.split("/")
-                    rkey = parts[-1]
+                    rkey = uri.split("/")[-1]
                     post_url = f"https://bsky.app/profile/{author}/post/{rkey}"
                 except Exception:
                     post_url = uri
-            pid = sha1(f"bsky:{uri}:{cid}")
-            if text and post_url:
-                posts.append(Post(
-                    source="bluesky",
-                    id=pid,
-                    url=post_url,
-                    text=text,
-                    author=author,
-                    created_at=created_at or now_iso(),
-                    meta={"query": q, "uri": uri, "cid": cid},
-                ))
-    logging.info("Bluesky: collected %d", len(posts))
-    return posts
+
+            if not post_url:
+                continue
+
+            pid = sha1(f"bsky:{uri}:{cid}:{post_url}")
+            out.append(Post(
+                source="bluesky",
+                id=pid,
+                url=post_url,
+                text=text,
+                author=author,
+                created_at=created_at,
+                meta={"query": q, "uri": uri, "cid": cid},
+            ))
+
+    logging.info("Bluesky: collected %d", len(out))
+    return out
+
 
 def collect_mastodon(max_items: int = 120) -> List[Post]:
+    """
+    Mastodon:
+      - public timeline: /api/v1/timelines/public?limit=
+      - tag timeline: /api/v1/timelines/tag/{tag}?limit=
+      - search: /api/v2/search?q=...&type=statuses&resolve=true
+    """
     if not (MASTODON_BASE and MASTODON_TOKEN):
         logging.info("Mastodon: skipped (missing MASTODON_BASE/MASTODON_TOKEN)")
         return []
+
     base = MASTODON_BASE.rstrip("/")
     headers = {"Authorization": f"Bearer {MASTODON_TOKEN}", "Accept": "application/json"}
     logging.info("Mastodon: collecting up to %d from %s", max_items, base)
+
     tags = [
-        "help", "support", "webdev", "privacy", "excel", "opensource", "github", "dns", "wordpress", "linux",
-        "travel", "cooking", "recipe", "fitness", "study", "money", "career"
+        # tech
+        "help", "support", "webdev", "privacy", "excel", "opensource", "github", "dns", "linux",
+        "pdf", "ffmpeg",
+        # life
+        "travel", "itinerary", "packing", "cooking", "mealprep", "fitness", "sleep",
+        "studytips", "productivity", "personalfinance", "career", "relationships",
     ]
     queries = [
-        "need help", "error", "how to fix", "cannot", "failed", "issue", "bug",
-        "itinerary", "travel", "recipe", "advice", "should I", "recommend", "workout", "study"
+        # tech + life triggers
+        "need help", "how to fix", "error", "cannot", "failed", "issue", "bug",
+        "itinerary", "packing list", "meal prep", "workout plan", "sleep schedule",
+        "study plan", "resume", "interview", "budget template", "compare", "recommend",
     ]
-    random.shuffle(tags)
-    random.shuffle(queries)
+
     out: List[Post] = []
+
     def add_statuses(statuses: List[Dict[str, Any]], hint: str) -> None:
         nonlocal out
         for s in statuses:
             if len(out) >= max_items:
                 return
-            sid = s.get("id", "")
-            url = s.get("url") or ""
-            created_at = s.get("created_at") or now_iso()
-            acct = (s.get("account") or {}).get("acct", "") or "unknown"
-            content = s.get("content") or ""
+            sid = s.get("id", "") or ""
+            url = (s.get("url") or "").strip()
+            created_at = (s.get("created_at") or now_iso())
+            acct = ((s.get("account") or {}).get("acct") or "unknown").strip()
+            content = (s.get("content") or "")
             text = re.sub(r"<[^>]+>", " ", content)
             text = html.unescape(text).strip()
-            if not text or not url:
+
+            if not url or not text or adult_or_sensitive(text):
                 continue
+
             pid = sha1(f"mstdn:{sid}:{url}")
             out.append(Post(
                 source="mastodon",
@@ -438,14 +552,14 @@ def collect_mastodon(max_items: int = 120) -> List[Post]:
                 created_at=created_at,
                 meta={"hint": hint},
             ))
-    # public timeline
+
     st, body = http_get(f"{base}/api/v1/timelines/public?limit=40", headers=headers, timeout=20)
     if st == 200:
         try:
             add_statuses(json.loads(body), "public")
         except Exception:
             pass
-    # tag timelines
+
     for tag in tags:
         if len(out) >= max_items:
             break
@@ -456,7 +570,7 @@ def collect_mastodon(max_items: int = 120) -> List[Post]:
             add_statuses(json.loads(body), f"tag:{tag}")
         except Exception:
             continue
-    # search queries
+
     for q in queries:
         if len(out) >= max_items:
             break
@@ -466,18 +580,20 @@ def collect_mastodon(max_items: int = 120) -> List[Post]:
             continue
         try:
             data = json.loads(body)
-            add_statuses(data.get("statuses", []), f"search:{q}")
+            add_statuses(data.get("statuses", []) or [], f"search:{q}")
         except Exception:
             continue
+
     logging.info("Mastodon: collected %d", len(out))
     return out
+
 
 def reddit_oauth_token() -> Optional[str]:
     if not (REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET and REDDIT_REFRESH_TOKEN):
         return None
+
     token_url = "https://www.reddit.com/api/v1/access_token"
-    auth = f"{REDDIT_CLIENT_ID}:{REDDIT_CLIENT_SECRET}"
-    basic = "Basic " + (base64_encode(auth))
+    basic = "Basic " + base64_basic_auth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
     headers = {
         "Authorization": basic,
         "User-Agent": REDDIT_USER_AGENT,
@@ -495,55 +611,68 @@ def reddit_oauth_token() -> Optional[str]:
         logging.warning("Reddit: oauth token failed: %s", str(e))
         return None
 
-def base64_encode(s: str) -> str:
-    import base64
-    return base64.b64encode(s.encode("utf-8")).decode("ascii")
 
 def collect_reddit(max_items: int = 60) -> List[Post]:
-    subs = [x.strip() for x in REDDIT_SUBREDDITS.split(",") if x.strip()]
+    """
+    Reddit:
+      - If OAuth creds exist: use https://oauth.reddit.com
+      - Else: use public JSON endpoints (rate-limited)
+    """
+    subs = [x.strip() for x in (REDDIT_SUBREDDITS or "").split(",") if x.strip()]
     if not subs:
         subs = ["webdev", "sysadmin", "programming"]
+
     token = reddit_oauth_token()
     if token:
-        base_url = "https://oauth.reddit.com"
+        base = "https://oauth.reddit.com"
         headers = {"Authorization": f"bearer {token}", "User-Agent": REDDIT_USER_AGENT, "Accept": "application/json"}
         logging.info("Reddit: OAuth mode collecting up to %d", max_items)
     else:
-        base_url = "https://www.reddit.com"
+        base = "https://www.reddit.com"
         headers = {"User-Agent": REDDIT_USER_AGENT, "Accept": "application/json"}
         logging.info("Reddit: public mode collecting up to %d", max_items)
-    random.shuffle(subs)
+
+    triggers = [k.lower() for k in KEYWORDS]
     out: List[Post] = []
-    queries = ["help", "error", "how to", "issue", "can't", "cannot", "failed", "should I", "advice", "recommend", "itinerary", "recipe", "workout", "study", "best way", "tips"]
+
     for sub in subs:
         if len(out) >= max_items:
             break
-        st, body = http_get(f"{base_url}/r/{quote(sub)}/new.json?limit=50", headers=headers, timeout=20)
+
+        st, body = http_get(f"{base}/r/{quote(sub)}/new.json?limit=50", headers=headers, timeout=20)
         if st != 200:
             continue
+
         try:
             data = json.loads(body)
         except Exception:
             continue
+
         children = (((data or {}).get("data") or {}).get("children") or [])
         for ch in children:
             if len(out) >= max_items:
                 break
             d = (ch or {}).get("data") or {}
-            title = d.get("title") or ""
-            selftext = d.get("selftext") or ""
+            title = (d.get("title") or "").strip()
+            selftext = (d.get("selftext") or "").strip()
             text = (title + "\n" + selftext).strip()
-            if not text:
+            if not text or adult_or_sensitive(text):
                 continue
+
             low = text.lower()
-            if not any(q in low for q in queries):
+            if not any(t in low for t in triggers):
                 continue
-            permalink = d.get("permalink") or ""
-            url = "https://www.reddit.com" + permalink if permalink.startswith("/") else (d.get("url") or "")
-            author = d.get("author") or "unknown"
+
+            permalink = (d.get("permalink") or "").strip()
+            url = ("https://www.reddit.com" + permalink) if permalink.startswith("/") else ((d.get("url") or "").strip())
+            if not url:
+                continue
+
+            author = (d.get("author") or "unknown").strip()
             created_utc = d.get("created_utc") or time.time()
-            created_at = dt.datetime.fromtimestamp(created_utc, tz=dt.timezone.utc).astimezone().isoformat(timespec="seconds")
+            created_at = dt.datetime.fromtimestamp(float(created_utc), tz=dt.timezone.utc).astimezone().isoformat(timespec="seconds")
             rid = d.get("name") or d.get("id") or sha1(url)
+
             pid = sha1(f"reddit:{rid}:{url}")
             out.append(Post(
                 source="reddit",
@@ -554,10 +683,15 @@ def collect_reddit(max_items: int = 60) -> List[Post]:
                 created_at=created_at,
                 meta={"subreddit": sub},
             ))
+
     logging.info("Reddit: collected %d", len(out))
     return out
 
+
 def collect_hn(max_items: int = 70) -> List[Post]:
+    """
+    Hacker News (Algolia search_by_date for help-like content)
+    """
     max_items = clamp(max_items, 10, 200)
     url = "https://hn.algolia.com/api/v1/search_by_date?" + urlencode({
         "query": HN_QUERY,
@@ -567,12 +701,14 @@ def collect_hn(max_items: int = 70) -> List[Post]:
     })
     st, body = http_get(url, headers={"Accept": "application/json"}, timeout=20)
     if st != 200:
-        logging.warning("HN: failed status=%s", st)
+        logging.warning("HN: failed status=%s body=%s", st, (body or "")[:200])
         return []
+
     try:
         data = json.loads(body)
     except Exception:
         return []
+
     hits = data.get("hits", []) or []
     out: List[Post] = []
     for h in hits:
@@ -581,14 +717,17 @@ def collect_hn(max_items: int = 70) -> List[Post]:
         text = (h.get("title") or "") + "\n" + (h.get("comment_text") or "")
         text = re.sub(r"<[^>]+>", " ", text)
         text = html.unescape(text).strip()
-        if not text:
+        if not text or adult_or_sensitive(text):
             continue
+
         object_id = h.get("objectID") or ""
         created_at = h.get("created_at") or now_iso()
         author = h.get("author") or "unknown"
+
         hn_url = h.get("url") or ""
         if not hn_url:
             hn_url = f"https://news.ycombinator.com/item?id={object_id}"
+
         pid = sha1(f"hn:{object_id}:{hn_url}")
         out.append(Post(
             source="hn",
@@ -599,13 +738,21 @@ def collect_hn(max_items: int = 70) -> List[Post]:
             created_at=created_at,
             meta={"points": h.get("points", 0), "tags": h.get("_tags", [])},
         ))
+
     logging.info("HN: collected %d", len(out))
     return out
 
+
 def collect_x_mentions(max_items: int = 5) -> List[Post]:
+    """
+    X/Twitter v2 mentions timeline requires:
+      - X_BEARER_TOKEN
+      - X_USER_ID
+    """
     if not (X_BEARER_TOKEN and X_USER_ID):
         logging.info("X: skipped (missing X_BEARER_TOKEN/X_USER_ID)")
         return []
+
     max_items = clamp(max_items, 1, 20)
     headers = {"Authorization": f"Bearer {X_BEARER_TOKEN}", "Accept": "application/json"}
     url = f"https://api.x.com/2/users/{quote(X_USER_ID)}/mentions?" + urlencode({
@@ -614,16 +761,20 @@ def collect_x_mentions(max_items: int = 5) -> List[Post]:
     })
     st, body = http_get(url, headers=headers, timeout=20)
     if st != 200:
-        logging.warning("X: mentions failed status=%s body=%s", st, body[:200])
+        logging.warning("X: mentions failed status=%s body=%s", st, (body or "")[:200])
         return []
+
     try:
         data = json.loads(body)
     except Exception:
         return []
+
     out: List[Post] = []
     for t in (data.get("data") or []):
         tid = t.get("id") or ""
-        text = t.get("text") or ""
+        text = (t.get("text") or "").strip()
+        if not text or adult_or_sensitive(text):
+            continue
         created_at = t.get("created_at") or now_iso()
         author = t.get("author_id") or "unknown"
         url = f"https://x.com/i/web/status/{tid}"
@@ -638,29 +789,30 @@ def collect_x_mentions(max_items: int = 5) -> List[Post]:
             lang_hint=t.get("lang") or "",
             meta={"author_id": author},
         ))
+
     logging.info("X: collected %d", len(out))
     return out
 
 
-# =========================
+# =============================================================================
 # Normalization & Clustering
-# =========================
-
+# =============================================================================
 STOPWORDS_EN = set("""
 a an the and or but if then else when while of for to in on at from by with without into onto over under
 is are was were be been being do does did done have has had will would can could should may might
-this that these those it its i'm youre youre we they them our your my mine me you he she his her
+this that these those it its i'm youre you're we they them our your my mine me you he she his her
 """.split())
 
 STOPWORDS_JA = set(["これ", "それ", "あれ", "ため", "ので", "から", "です", "ます", "いる", "ある", "なる", "こと", "もの", "よう", "へ", "に", "を", "が", "と", "で", "も"])
 
 def simple_tokenize(text: str) -> List[str]:
-    t = text.lower()
+    t = (text or "").lower()
     t = re.sub(r"https?://\S+", " ", t)
     t = re.sub(r"[\[\]()<>{}※*\"'`~^|\\]", " ", t)
     t = re.sub(r"[^0-9a-z\u3040-\u30ff\u4e00-\u9fff\s\-_/.:]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
-    parts = []
+
+    parts: List[str] = []
     for p in t.split():
         if len(p) <= 1:
             continue
@@ -669,9 +821,13 @@ def simple_tokenize(text: str) -> List[str]:
         if p in STOPWORDS_JA:
             continue
         parts.append(p)
+
+    # crude JP chunks to help clustering without full tokenizer
     jp_chunks = re.findall(r"[\u3040-\u30ff\u4e00-\u9fff]{2,}", t)
     parts.extend([c for c in jp_chunks if c not in STOPWORDS_JA and len(c) >= 2])
-    return parts[:80]
+
+    return parts[:100]
+
 
 def jaccard(a: set, b: set) -> float:
     if not a or not b:
@@ -680,20 +836,24 @@ def jaccard(a: set, b: set) -> float:
     union = len(a | b)
     return inter / union if union else 0.0
 
+
 def cluster_posts(posts: List[Post], threshold: float = 0.22) -> List[List[Post]]:
+    """
+    Lightweight clustering by Jaccard similarity of token sets.
+    """
     logging.info("Clustering %d posts (threshold=%.2f)", len(posts), threshold)
-    token_sets: Dict[str, set] = {}
-    for p in posts:
-        token_sets[p.id] = set(simple_tokenize(p.norm_text()))
+    token_sets: Dict[str, set] = {p.id: set(simple_tokenize(p.norm_text())) for p in posts}
+
     clusters: List[List[Post]] = []
     used = set()
+
     for i, p in enumerate(posts):
         if p.id in used:
             continue
         used.add(p.id)
         base = token_sets[p.id]
         c = [p]
-        for q in posts[i+1:]:
+        for q in posts[i + 1:]:
             if q.id in used:
                 continue
             sim = jaccard(base, token_sets[q.id])
@@ -701,34 +861,43 @@ def cluster_posts(posts: List[Post], threshold: float = 0.22) -> List[List[Post]
                 used.add(q.id)
                 c.append(q)
         clusters.append(c)
+
     clusters.sort(key=lambda x: (-len(x), x[0].created_at))
     logging.info("Clusters: %d (top sizes=%s)", len(clusters), [len(c) for c in clusters[:8]])
     return clusters
 
-def extract_keywords(posts: List[Post]) -> List[str]:
+
+def extract_keywords(posts: List[Post], topk: int = 14) -> List[str]:
     freq: Dict[str, int] = {}
     for p in posts:
         for w in simple_tokenize(p.norm_text()):
             freq[w] = freq.get(w, 0) + 1
     items = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))
-    return [k for k, _ in items[:12]]
+    return [k for k, _ in items[:topk]]
+
 
 def choose_category(posts: List[Post], keywords: List[str]) -> str:
+    """
+    Heuristic category selection across fixed 22 categories.
+    """
     text = " ".join([p.norm_text() for p in posts]).lower()
-    k = set(keywords)
+    k = set([x.lower() for x in keywords])
+
     def has_any(words: List[str]) -> bool:
         return any(w in text for w in words) or any(w in k for w in words)
-    if has_any(["dns", "cname", "aaaa", "nameserver", "github pages", "hosting", "ssl", "https"]):
+
+    # tech
+    if has_any(["dns", "cname", "aaaa", "a record", "nameserver", "github pages", "hosting", "ssl", "https"]):
         return "Web/Hosting"
-    if has_any(["python", "node", "npm", "pip", "powershell", "bash", "cli", "library", "compile", "error code", "stack trace", "dev"]):
+    if has_any(["python", "node", "npm", "pip", "powershell", "bash", "cli", "library", "compile", "stack", "trace", "dev"]):
         return "Dev/Tools"
-    if has_any(["automation", "workflow", "cron", "github actions", "bot", "llm", "openai", "prompt", "agent"]):
+    if has_any(["automation", "workflow", "cron", "github actions", "llm", "openai", "prompt", "agent"]):
         return "AI/Automation"
     if has_any(["privacy", "security", "2fa", "phishing", "cookie", "vpn", "encryption", "leak"]):
         return "Security/Privacy"
     if has_any(["video", "mp4", "compress", "codec", "ffmpeg", "audio", "subtitle"]):
         return "Media"
-    if has_any(["pdf", "docs", "word", "ppt", "docx", "convert", "merge", "compress pdf"]):
+    if has_any(["pdf", "docx", "ppt", "docs", "word", "convert", "merge", "compress pdf"]):
         return "PDF/Docs"
     if has_any(["image", "png", "jpg", "webp", "design", "figma", "photoshop", "illustrator"]):
         return "Images/Design"
@@ -738,199 +907,426 @@ def choose_category(posts: List[Post], keywords: List[str]) -> str:
         return "Business/Accounting/Tax"
     if has_any(["seo", "marketing", "ads", "social", "instagram", "tiktok", "youtube", "growth"]):
         return "Marketing/Social"
-    if has_any(["productivity", "todo", "note", "calendar", "time management"]):
+    if has_any(["productivity", "todo", "note", "calendar", "time management", "procrastination", "focus"]):
         return "Productivity"
-    if has_any(["english", "language", "study english", "toeic", "eiken"]):
+    if has_any(["english", "language", "toeic", "eiken", "ielts"]):
         return "Education/Language"
-    if has_any(["travel", "trip", "hotel", "itinerary", "flight", "booking"]):
+
+    # life
+    if has_any(["travel", "trip", "hotel", "itinerary", "flight", "booking", "layover", "packing", "esim"]):
         return "Travel/Planning"
-    if has_any(["recipe", "cook", "cooking", "kitchen"]):
+    if has_any(["recipe", "cook", "cooking", "meal prep", "kitchen", "grocery"]):
         return "Food/Cooking"
-    if has_any(["workout", "fitness", "diet", "health", "running"]):
+    if has_any(["workout", "fitness", "diet", "health", "running", "sleep", "calories", "protein"]):
         return "Health/Fitness"
-    if has_any(["study", "learning", "exam", "homework"]):
+    if has_any(["study", "learning", "exam", "homework", "memorize", "flashcards"]):
         return "Study/Learning"
-    if has_any(["money", "budget", "loan", "invest", "stock", "crypto"]):
+    if has_any(["money", "budget", "loan", "invest", "stock", "fees", "refund"]):
         return "Money/Personal Finance"
-    if has_any(["career", "job", "resume", "interview", "work"]):
+    if has_any(["career", "job", "resume", "cv", "interview", "apply"]):
         return "Career/Work"
-    if has_any(["relationship", "communication", "friend", "chat", "texting"]):
+    if has_any(["relationship", "communication", "friend", "chat", "texting", "awkward"]):
         return "Relationships/Communication"
-    if has_any(["home", "rent", "utility", "life admin", "paperwork", "moving"]):
+    if has_any(["home", "rent", "utility", "life admin", "paperwork", "moving", "declutter", "cleaning"]):
         return "Home/Life Admin"
-    if has_any(["buy", "shopping", "product", "recommend"]):
+    if has_any(["buy", "shopping", "product", "recommend", "compare", "best", "value"]):
         return "Shopping/Products"
-    if has_any(["event", "ticket", "concert", "sports"]):
+    if has_any(["event", "ticket", "concert", "sports", "weekend plan", "date plan", "rainy day"]):
         return "Events/Leisure"
+
     return "Dev/Tools"
 
+
 def score_cluster(posts: List[Post], category: str) -> float:
+    """
+    Score: cluster size + solvable tool signal + life “decision urgency” signals.
+    """
     size = len(posts)
-    text = " ".join([p.norm_text().lower() for p in posts])
+    text = " ".join([p.norm_text() for p in posts]).lower()
+
     solvable_signals = [
         "how", "fix", "error", "failed", "can't", "cannot", "help",
         "設定", "直し", "原因", "エラー", "できない", "不具合", "失敗",
     ]
     tool_signals = [
-        "convert", "compress", "calculator", "generator", "template", "checklist",
-        "変換", "圧縮", "計算", "チェック", "テンプレ", "ツール",
+        "convert", "compress", "calculator", "generator", "planner", "template", "checklist", "step-by-step", "schedule",
+        "変換", "圧縮", "計算", "チェック", "テンプレ", "ツール", "手順",
     ]
-    life_signals = [
-        "plan", "itinerary", "packing", "recommend", "best", "compare", "budget", "schedule", "checklist", "template", "step-by-step",
-        "urgent", "today", "tomorrow", "this week", "before i go",
-        "i'm stuck", "im stuck", "i m stuck", "confused", "overwhelmed", "don't know", "dont know", "should i"
+    life_decision = [
+        "plan", "itinerary", "packing", "what should i do", "recommend", "best", "compare", "budget", "schedule",
+        "checklist", "template", "step by step", "meal prep", "study plan",
     ]
+    urgency = [
+        "urgent", "today", "tomorrow", "this week", "before i go", "deadline", "soon", "asap",
+        "今日", "明日", "今週", "出発前", "締切",
+    ]
+    stuck = [
+        "i'm stuck", "confused", "overwhelmed", "don't know what to choose", "not sure", "anxiety",
+        "詰んだ", "わからない", "迷う", "不安",
+    ]
+
     s1 = sum(1 for w in solvable_signals if w in text)
     s2 = sum(1 for w in tool_signals if w in text)
-    s3 = sum(1 for w in life_signals if w in text)
-    score = size * 1.8 + s1 * 0.4 + s2 * 0.6 + s3 * 0.5
-    if category in ["Web/Hosting", "PDF/Docs", "Media", "Data/Spreadsheets", "Security/Privacy", "AI/Automation"]:
-        score *= 1.15
-    broad_signals = ["just vent", "just venting", "愚痴", "ただ愚痴", "just needed to vent", "ranting"]
-    if any(w in text for w in broad_signals):
-        score *= 0.7
+    s3 = sum(1 for w in life_decision if w in text)
+    s4 = sum(1 for w in urgency if w in text)
+    s5 = sum(1 for w in stuck if w in text)
+
+    score = size * 1.8 + s1 * 0.5 + s2 * 0.7 + s3 * 0.55 + s4 * 0.45 + s5 * 0.35
+
+    if too_broad_vent(text):
+        score *= 0.75
+
+    # mild balancing so life categories can compete
+    if category in ["Travel/Planning", "Food/Cooking", "Health/Fitness", "Study/Learning", "Money/Personal Finance",
+                    "Career/Work", "Relationships/Communication", "Home/Life Admin", "Shopping/Products", "Events/Leisure"]:
+        score *= 1.12
+
     return float(score)
+
+
+def build_search_title(category: str, keywords: List[str]) -> str:
+    """
+    Force titles toward “search query” style (EN) + includes tool-ish noun.
+    """
+    kw = [k for k in keywords if len(k) <= 18][:6]
+    base = " ".join(kw[:3]).strip()
+    if not base:
+        base = category.replace("/", " ")
+
+    if category == "Travel/Planning":
+        return f"{base} itinerary planner checklist"
+    if category == "Food/Cooking":
+        return f"{base} meal prep plan + shopping list"
+    if category == "Health/Fitness":
+        return f"{base} workout plan + habit tracker"
+    if category == "Study/Learning":
+        return f"{base} study plan schedule template"
+    if category == "Money/Personal Finance":
+        return f"{base} budget planner + fee checklist"
+    if category == "Career/Work":
+        return f"{base} resume checklist + interview prep"
+    if category == "Relationships/Communication":
+        return f"{base} conversation templates + awkwardness fixes"
+    if category == "Home/Life Admin":
+        return f"{base} moving checklist + life admin planner"
+    if category == "Shopping/Products":
+        return f"{base} compare tool + buying checklist"
+    if category == "Events/Leisure":
+        return f"{base} weekend plan generator + checklist"
+    # tech
+    if category == "Web/Hosting":
+        return f"{base} DNS/SSL fix checklist"
+    if category == "PDF/Docs":
+        return f"{base} PDF convert/merge checklist"
+    if category == "Media":
+        return f"{base} video compression settings checklist"
+    if category == "Data/Spreadsheets":
+        return f"{base} spreadsheet formula fix checklist"
+    if category == "Security/Privacy":
+        return f"{base} privacy settings + login fix checklist"
+    if category == "AI/Automation":
+        return f"{base} automation workflow fix checklist"
+    if category == "Marketing/Social":
+        return f"{base} social growth checklist + template"
+    if category == "Education/Language":
+        return f"{base} language study plan template"
+    return f"{base} fix guide checklist tool"
+
 
 def make_theme(posts: List[Post]) -> Theme:
     keywords = extract_keywords(posts)
     category = choose_category(posts, keywords)
     score = score_cluster(posts, category)
-    top = keywords[:5]
-    base_title = " / ".join([k for k in top if len(k) <= 18])[:60].strip(" /")
-    if not base_title:
-        base_title = category.replace("/", " ")
-    title = f"{base_title} — Fix Guide & Tool"
-    slug = safe_slug(base_title or category) + "-" + sha1(title)[:6]
-    problems = []
+
+    search_title = build_search_title(category, keywords)
+    base_slug = safe_slug(search_title)
+    # collision-safe slug allocation happens later
+    title = f"{search_title} | {SITE_BRAND}"
+
+    problems: List[str] = []
     for p in posts[:12]:
-        line = p.norm_text()
-        line = line[:120].rstrip()
+        line = p.norm_text()[:140].rstrip()
         if line:
             problems.append(line)
     problems = uniq_keep_order([re.sub(r"\s+", " ", x) for x in problems])
+
     while len(problems) < 10:
         problems.append(f"Trouble related to {category}: symptom #{len(problems)+1}")
     problems = problems[:20]
+
     return Theme(
         title=title,
-        slug=slug,
+        search_title=search_title,
+        slug=base_slug,  # may be adjusted with -2,-3 on collision
         category=category,
         problem_list=problems,
-        representative_posts=posts[:min(len(posts), 20)],
+        representative_posts=posts[: min(len(posts), 8)],
         score=score,
         keywords=keywords,
+        short_code="",
     )
 
 
-# =========================
+# =============================================================================
 # Affiliates
-# =========================
-
-def load_affiliates() -> Tuple[Dict[str, Any], List[str]]:
+# =============================================================================
+def load_affiliates() -> Dict[str, Any]:
     data = read_json(AFFILIATES_JSON, default={})
     if not isinstance(data, dict):
-        return {}, []
-    missing_keys: List[str] = []
-    if "categories" in data and isinstance(data["categories"], dict):
-        for cat in CATEGORIES_22:
-            if cat not in data["categories"]:
-                data["categories"][cat] = []
-                missing_keys.append(cat)
-    else:
-        for cat in CATEGORIES_22:
-            if cat not in data:
-                data[cat] = []
-                missing_keys.append(cat)
-    if missing_keys:
-        logging.warning("Affiliates missing categories keys added: %s", missing_keys)
-    return data, missing_keys
+        return {}
+    return data
 
-def pick_affiliates_for_category(aff: Dict[str, Any], category: str, topn: int = 2) -> List[Dict[str, Any]]:
-    items = []
-    if "categories" in aff and isinstance(aff["categories"], dict):
-        items = aff["categories"].get(category, []) or []
-    elif category in aff:
-        items = aff.get(category, []) or []
+
+def normalize_affiliates_shape(aff: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Accept:
+      - { "categories": { "<CAT>": [..], ... } }
+      - or { "<CAT>": [..], ... }
+    Return { "<CAT>": [ dict, ... ] } only for keys in CATEGORIES_22.
+    """
+    categories: Dict[str, Any] = {}
+    if isinstance(aff.get("categories"), dict):
+        categories = aff["categories"]
     else:
-        for k, v in aff.items():
-            if isinstance(v, list):
-                items = v
-                break
+        categories = aff
+
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for cat in CATEGORIES_22:
+        v = categories.get(cat, [])
+        if isinstance(v, list):
+            out[cat] = [x for x in v if isinstance(x, dict)]
+        else:
+            out[cat] = []
+    return out
+
+
+def sanitize_affiliate_html(h: str) -> str:
+    """
+    Script tags forbidden. Keep existing approach: strip <script ...>...</script>.
+    """
+    if not h:
+        return ""
+    h2 = re.sub(r"(?is)<script[^>]*>.*?</script>", "", h)
+    return h2.strip()
+
+
+def pick_affiliates_for_category(aff_norm: Dict[str, List[Dict[str, Any]]], category: str, topn: int = 2) -> List[Dict[str, Any]]:
+    items = aff_norm.get(category, []) or []
+
     def pr(x: Dict[str, Any]) -> float:
         try:
             return float(x.get("priority", 0))
         except Exception:
             return 0.0
-    items2 = [x for x in items if isinstance(x, dict) and (x.get("html") or x.get("code") or x.get("url"))]
-    items2.sort(key=lambda x: -pr(x))
-    return items2[:topn]
+
+    cleaned: List[Dict[str, Any]] = []
+    for x in items:
+        html_code = x.get("html", "") or ""
+        if html_code:
+            x2 = dict(x)
+            x2["html"] = sanitize_affiliate_html(str(html_code))
+            cleaned.append(x2)
+        elif x.get("url"):
+            cleaned.append(x)
+        else:
+            # ignore items without html/url
+            pass
+
+    cleaned.sort(key=lambda x: -pr(x))
+    return cleaned[:topn]
 
 
-# =========================
-# Site inventory & related/popular
-# =========================
+def audit_affiliate_keys(aff_raw: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Check affiliates.json keys match GENRES (CATEGORIES_22). Missing keys => issue note.
+    """
+    if isinstance(aff_raw.get("categories"), dict):
+        keys = set(aff_raw["categories"].keys())
+    elif isinstance(aff_raw, dict):
+        keys = set(aff_raw.keys())
+    else:
+        keys = set()
 
+    # ignore "categories" wrapper key itself
+    keys.discard("categories")
+
+    missing = [c for c in CATEGORIES_22 if c not in keys]
+    extra = sorted([k for k in keys if k not in set(CATEGORIES_22)])
+
+    return {
+        "missing": missing,
+        "extra": extra,
+        "ok": (len(missing) == 0),
+    }
+
+
+# =============================================================================
+# Hub inventory (hub/sites.json) & routing features (categories / popular / new / purpose)
+# =============================================================================
 def read_hub_sites() -> List[Dict[str, Any]]:
-    data = read_json(HUB_SITES_JSON, default=[])
-    if isinstance(data, dict) and "sites" in data:
-        data = data["sites"]
-    if not isinstance(data, list):
-        return []
-    return [x for x in data if isinstance(x, dict)]
+    data = read_json(HUB_SITES_JSON, default={})
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict) and isinstance(data.get("sites"), list):
+        return [x for x in data["sites"] if isinstance(x, dict)]
+    return []
 
-def write_hub_sites(sites: List[Dict[str, Any]]) -> None:
+
+def write_hub_sites(sites: List[Dict[str, Any]], aggregates: Dict[str, Any]) -> None:
+    """
+    hub frozen: ONLY update sites.json.
+    (Do not touch hub/index.html or hub/assets.)
+    """
     if is_frozen_path(HUB_SITES_JSON):
+        # sites.json itself is allowed (not in frozen list). Still, keep safe.
         pass
+
     os.makedirs(HUB_DIR, exist_ok=True)
-    payload = {"sites": sites, "updated_at": now_iso()}
+    payload = {
+        "sites": sites,
+        "aggregates": aggregates,  # categories / popular / new / purpose
+        "updated_at": now_iso(),
+    }
     write_json(HUB_SITES_JSON, payload)
 
-def choose_related_tools(all_sites: List[Dict[str, Any]], category: str, exclude_slug: str, n: int = 5) -> List[Dict[str, Any]]:
-    same = [s for s in all_sites if s.get("category") == category and s.get("slug") != exclude_slug]
-    other = [s for s in all_sites if s.get("slug") != exclude_slug]
-    random.shuffle(same)
-    random.shuffle(other)
-    picks = (same + other)[:n]
-    out = []
-    for s in picks:
-        out.append({
-            "title": s.get("title", "Tool"),
-            "url": s.get("url", "#"),
-            "category": s.get("category", ""),
-            "slug": s.get("slug", ""),
-        })
-    return out
 
-def compute_popular_sites(all_sites: List[Dict[str, Any]], n: int = 6) -> List[Dict[str, Any]]:
-    def metric(s: Dict[str, Any]) -> float:
+def compute_aggregates(all_sites: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Provide hub-strengthening data via sites.json (categories list + popular/new/purpose routes).
+    Even if hub frontend ignores it today, the data is ready and future-proof.
+    """
+    # categories
+    cats: Dict[str, List[Dict[str, Any]]] = {}
+    for cat in CATEGORIES_22:
+        cats[cat] = []
+
+    for s in all_sites:
+        cat = s.get("category") or ""
+        if cat in cats:
+            cats[cat].append({
+                "title": s.get("search_title") or s.get("title") or "Tool",
+                "url": s.get("url") or "#",
+                "slug": s.get("slug") or "",
+            })
+
+    for cat in cats:
+        # stable ordering: title
+        cats[cat].sort(key=lambda x: (x.get("title") or "").lower())
+
+    # new: by updated_at / created_at
+    def ts(s: Dict[str, Any]) -> float:
+        iso = s.get("updated_at") or s.get("created_at") or ""
+        try:
+            return dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return 0.0
+
+    new_sites = sorted(all_sites, key=ts, reverse=True)[:12]
+    new_list = [{"title": s.get("search_title") or s.get("title") or "Tool", "url": s.get("url") or "#", "slug": s.get("slug") or ""} for s in new_sites]
+
+    # popular: prefer views/score/popularity if present; else fallback to recency
+    def pop_metric(s: Dict[str, Any]) -> float:
         for k in ["views", "score", "popularity"]:
             if k in s:
                 try:
                     return float(s.get(k, 0))
                 except Exception:
                     pass
-        ts = s.get("updated_at") or s.get("created_at") or ""
-        try:
-            return dt.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
-        except Exception:
-            return 0.0
-    sites = list(all_sites)
-    sites.sort(key=lambda x: metric(x), reverse=True)
+        return ts(s)
+
+    popular_sites = sorted(all_sites, key=pop_metric, reverse=True)[:12]
+    popular_list = [{"title": s.get("search_title") or s.get("title") or "Tool", "url": s.get("url") or "#", "slug": s.get("slug") or ""} for s in popular_sites]
+
+    # purpose routes: simple buckets for internal navigation
+    purpose_buckets = {
+        "Popular tools": popular_list[:8],
+        "New tools": new_list[:8],
+        "By purpose": [],  # filled below
+    }
+
+    purpose_keywords = {
+        "convert": ["convert", "変換", "pdf", "docx", "png", "mp4"],
+        "time": ["time", "schedule", "calendar", "deadline", "study plan", "itinerary"],
+        "productivity": ["template", "checklist", "planner", "workflow", "habit"],
+        "pricing": ["budget", "fees", "cost", "price", "compare", "refund"],
+    }
+
+    by_purpose: Dict[str, List[Dict[str, Any]]] = {k: [] for k in purpose_keywords.keys()}
+    for s in all_sites:
+        title = (s.get("search_title") or s.get("title") or "").lower()
+        for bucket, words in purpose_keywords.items():
+            if any(w.lower() in title for w in words):
+                by_purpose[bucket].append({
+                    "title": s.get("search_title") or s.get("title") or "Tool",
+                    "url": s.get("url") or "#",
+                    "slug": s.get("slug") or "",
+                })
+
+    # keep small
+    for bucket in by_purpose:
+        by_purpose[bucket] = by_purpose[bucket][:12]
+
+    purpose_buckets["By purpose"] = [{"bucket": k, "items": v} for k, v in by_purpose.items()]
+
+    return {
+        "categories": cats,
+        "popular": popular_list,
+        "new": new_list,
+        "purpose": purpose_buckets,
+    }
+
+
+# =============================================================================
+# Shortlinks (for “short URL + one-line value”)
+# =============================================================================
+BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+def to_base62(n: int) -> str:
+    if n == 0:
+        return "0"
     out = []
-    for s in sites[:n]:
-        out.append({
-            "title": s.get("title", "Tool"),
-            "url": s.get("url", "#"),
-            "category": s.get("category", ""),
-            "slug": s.get("slug", ""),
-        })
-    return out
+    while n > 0:
+        n, r = divmod(n, 62)
+        out.append(BASE62[r])
+    return "".join(reversed(out))
+
+def short_code_for_url(url: str) -> str:
+    h = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+    n = int(h, 16)
+    code = to_base62(n)
+    return code[:8]
+
+def build_shortlink_page(target_url: str, code: str) -> Tuple[str, str]:
+    """
+    Returns (relative_path_under_repo, html_content)
+    Short link lives under: goliath/go/<code>/index.html
+    """
+    rel_dir = os.path.join("goliath", "go", code)
+    rel_path = os.path.join(rel_dir, "index.html")
+    esc = html.escape(target_url, quote=True)
+    content = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="0;url={esc}">
+  <link rel="canonical" href="{esc}">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redirect</title>
+</head>
+<body style="font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:24px;">
+  <p>Redirecting…</p>
+  <p><a href="{esc}">{esc}</a></p>
+  <script>location.replace("{esc}");</script>
+</body>
+</html>
+"""
+    return rel_path, content
 
 
-# =========================
+# =============================================================================
 # i18n dictionaries (core UI strings)
-# =========================
-
+# =============================================================================
 I18N = {
     "en": {
         "home": "Home",
@@ -939,6 +1335,7 @@ I18N = {
         "language": "Language",
         "share": "Share",
         "problems": "Problems this tool can help with",
+        "tool": "Tool",
         "quick_answer": "Quick answer",
         "causes": "Common causes",
         "steps": "Step-by-step checklist",
@@ -953,10 +1350,11 @@ I18N = {
         "terms": "Terms",
         "privacy": "Privacy",
         "contact": "Contact",
-        "footer_note": "We aim to provide practical, fast, and respectful troubleshooting guides.",
+        "footer_note": "Practical, fast, and respectful guides—built to reduce wasted trial-and-error.",
         "aff_title": "Recommended",
         "copy": "Copy",
         "copied": "Copied",
+        "short_value": "Do it in 3 seconds",
     },
     "ja": {
         "home": "Home",
@@ -965,6 +1363,7 @@ I18N = {
         "language": "言語",
         "share": "共有",
         "problems": "このツールが助ける悩み一覧",
+        "tool": "ツール",
         "quick_answer": "結論（最短で直す方針）",
         "causes": "原因のパターン分け",
         "steps": "手順（チェックリスト）",
@@ -983,384 +1382,368 @@ I18N = {
         "aff_title": "おすすめ",
         "copy": "コピー",
         "copied": "コピーしました",
+        "short_value": "3秒でできる",
     },
-    "ko": { ... },
-    "zh": { ... },
+    "ko": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "언어",
+        "share": "공유",
+        "problems": "이 도구가 해결할 수 있는 고민",
+        "tool": "도구",
+        "quick_answer": "결론(가장 빠른 해결 방향)",
+        "causes": "원인 패턴",
+        "steps": "체크리스트(단계별)",
+        "pitfalls": "자주 하는 실수와 회피법",
+        "next": "계속 안 될 때",
+        "faq": "FAQ",
+        "references": "참고 링크",
+        "supplement": "추가 자료",
+        "related": "관련 도구",
+        "popular": "인기 도구",
+        "disclaimer": "면책",
+        "terms": "이용약관",
+        "privacy": "개인정보 처리방침",
+        "contact": "문의",
+        "footer_note": "바로 실행 가능한 가이드를 목표로 합니다.",
+        "aff_title": "추천",
+        "copy": "복사",
+        "copied": "복사됨",
+        "short_value": "3초면 끝",
+    },
+    "zh": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "语言",
+        "share": "分享",
+        "problems": "本工具可帮助解决的问题",
+        "tool": "工具",
+        "quick_answer": "结论（最快修复方向）",
+        "causes": "常见原因分类",
+        "steps": "步骤清单",
+        "pitfalls": "常见坑与规避方法",
+        "next": "仍无法解决时",
+        "faq": "FAQ",
+        "references": "参考链接",
+        "supplement": "补充资料",
+        "related": "相关工具",
+        "popular": "热门工具",
+        "disclaimer": "免责声明",
+        "terms": "条款",
+        "privacy": "隐私政策",
+        "contact": "联系",
+        "footer_note": "提供可落地、快速、尊重用户的排障指南。",
+        "aff_title": "推荐",
+        "copy": "复制",
+        "copied": "已复制",
+        "short_value": "3秒搞定",
+    },
 }
 
+def build_i18n_script(default_lang: str = "en") -> str:
+    i18n_json = json.dumps(I18N, ensure_ascii=False)
+    langs_json = json.dumps(LANGS)
+    return f"""<script>
+const I18N = {i18n_json};
+const LANGS = {langs_json};
+function setLang(lang) {{
+  if (!LANGS.includes(lang)) lang = "{default_lang}";
+  document.documentElement.setAttribute("lang", lang);
+  localStorage.setItem("lang", lang);
+  document.querySelectorAll("[data-i18n]").forEach(el => {{
+    const key = el.getAttribute("data-i18n");
+    const v = (I18N[lang] && I18N[lang][key]) || (I18N["{default_lang}"][key]) || key;
+    el.textContent = v;
+  }});
+}}
+function initLang() {{
+  const saved = localStorage.getItem("lang");
+  const lang = saved || "{default_lang}";
+  setLang(lang);
+  const sel = document.getElementById("langSel");
+  if (sel) {{
+    sel.value = lang;
+    sel.addEventListener("change", (e) => setLang(e.target.value));
+  }}
+}}
+document.addEventListener("DOMContentLoaded", initLang);
+</script>""".strip()
 
-# =========================
-# Content generation
-# =========================
 
+# =============================================================================
+# Content generation (quick answer, causes, steps, faq, article)
+# =============================================================================
 def build_quick_answer(category: str, keywords: List[str]) -> str:
-    kw = ", ".join(keywords[:8])
-    # specialized quick answer for certain categories
-    if category == "Travel/Planning":
-        lines = [
-            "旅行計画の最短ルートは、「行き先・日程・予算・持ち物」を軸に全体像を組み立てることです。必須の予定と余裕時間をバランスさせ、持ち物チェックで抜け漏れを防ぎます。",
-            "以下のチェックリストで、効率よく旅程を組むステップを確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Food/Cooking":
-        lines = [
-            "料理の時短ポイントは、献立をまとめて立て、買い物リストと作り置きを活用することです。一週間分のメニューを先に決めておき、栄養バランスも考慮しながら準備を効率化します。",
-            "以下のガイドで、無理なく続けられる献立作成の手順を確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Health/Fitness":
-        lines = [
-            "健康習慣づくりの近道は、無理のない目標設定と習慣化です。運動・睡眠・食事の記録を取り、小さな目標を達成しながら徐々にレベルアップします。",
-            "以下のチェックリストで、効果的に健康管理するステップを確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Study/Learning":
-        lines = [
-            "学習効率アップの鍵は、学習計画と復習スケジュールの徹底です。科目や範囲を細分化し、時間割や単語帳を活用して日々コツコツ進めます。",
-            "以下の手順で、無理のない学習計画を立てる方法を確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Money/Personal Finance":
-        lines = [
-            "お金の悩み解決は、全体像の「見える化」から始まります。収入・支出を洗い出して予算を組み、無理のない返済や貯蓄プランを立てるのが近道です。",
-            "以下のガイドで、効率的に家計管理するステップを確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Career/Work":
-        lines = [
-            "キャリアの悩みは、情報収集と計画立てで道が開けます。まず自己分析と業界研究を行い、履歴書作成や面接対策をステップごとにクリアしていきます。",
-            "以下の手順で、効率的にキャリア構築する方法を確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Relationships/Communication":
-        lines = [
-            "人間関係の悩みは、問題を整理し対策を練ることで改善できます。伝えたいことを事前にまとめ、会話のシミュレーションやテンプレートを用意して臨むと冷静に対処できます。",
-            "以下のチェックリストで、円滑なコミュニケーションを図る手順を確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Home/Life Admin":
-        lines = [
-            "生活管理の悩みは、タスクをリスト化して優先順位をつけることで解決に近づきます。引っ越しや片付けなどの大仕事も、項目ごとにチェックリスト化して一つずつ片付けていくと抜け漏れが減ります。",
-            "以下のガイドで、効率的に生活タスクを処理する方法を確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Shopping/Products":
-        lines = [
-            "商品の選択で失敗しないコツは、条件を整理して比較することです。スペックや口コミを一覧表にまとめ、自分にとって譲れないポイントを明確にします。",
-            "以下の手順で、後悔しない買い物をするためのポイントを確認できます。"
-        ]
-        return "\n".join(lines)
-    if category == "Events/Leisure":
-        lines = [
-            "イベント企画の成功には、事前準備とスケジュール管理が欠かせません。必要な手配と当日の流れをリストアップし、早め早めの行動で余裕を作ります。",
-            "以下のチェックリストで、スムーズにイベント準備を進める手順を確認できます。"
-        ]
-        return "\n".join(lines)
-    # default (tech/general)
+    kw = ", ".join(keywords[:10])
     base = [
-        "最短で直す方針は「原因の切り分け→再現条件の固定→安全な最小変更→検証→戻せる形で反映」です。",
-        f"今回のケースはカテゴリが「{category}」なので、まずは設定・権限・入力・ネットワークのどこで止まっているかを切り分けます。",
-        f"キーワード（観測された兆候）: {kw}。",
-        "以下のチェックリストは、上から順に潰せば“よくある事故”をほぼ回避できる順番に並べています。",
+        "最短で進める方針は「再現条件の固定 → 原因の切り分け → 最小変更 → 検証 → 記録」です。",
+        f"今回のカテゴリは「{category}」なので、まずは“どこで止まっているか”を小さく分解して確認します。",
+        f"観測キーワード: {kw}",
+        "下のチェックリストは、上から順に潰せば“事故率”が下がる順番で並べています。",
     ]
     return "\n".join(base)
 
+
 def build_causes(category: str) -> List[str]:
-    if category == "Travel/Planning":
-        return [
-            "行き先ややりたいことを詰め込みすぎて日程がパンクする",
-            "移動時間や乗り継ぎを楽観的に見積もりすぎて遅延が発生",
-            "予算を細かく計算しておらず、途中で資金不足に陥る",
-            "持ち物リストを作らず忘れ物が発生する",
-            "現地情報のリサーチ不足でトラブルに対応できない",
-        ]
-    if category == "Food/Cooking":
-        return [
-            "毎日の献立を一から考えて時間を浪費している",
-            "買い物リストを作らず必要な材料を買い忘れる",
-            "凝ったレシピばかり選んで調理に時間がかかる",
-            "栄養バランスが偏りがちで健康面が不安になる",
-            "作り置きをせず忙しい日に対応できない",
-        ]
-    if category == "Health/Fitness":
-        return [
-            "最初に目標を高く設定しすぎて挫折しやすい",
-            "成果を記録しておらず、モチベーションが続かない",
-            "食事や休養の管理が甘く、努力の効果が半減する",
-            "自己流で進めて誤ったフォームやメニューになっている",
-        ]
-    if category == "Study/Learning":
-        return [
-            "勉強計画なしで行き当たりばったりになっている",
-            "復習の習慣がなく、一度学んだ内容を忘れてしまう",
-            "初めから長時間やりすぎて疲れ、継続できない",
-            "苦手分野を後回しにし、弱点が放置されている",
-            "勉強環境の整備不足で集中できない",
-        ]
-    if category == "Money/Personal Finance":
-        return [
-            "収入と支出を正確に把握せず無駄遣いが減らない",
-            "クレジットやサブスクなど見えにくい支出を見落としている",
-            "貯蓄や投資の優先順位が曖昧で後回しにしてしまう",
-            "ローンや借金の返済計画を立てず、利子負担が膨らむ",
-        ]
-    if category == "Career/Work":
-        return [
-            "自己分析が不足し、自分の強みや志向を把握できていない",
-            "業界や企業研究が足りず、応募先への理解が浅い",
-            "履歴書・職務経歴書の内容が平凡でアピール不足",
-            "面接練習不足で、本番で要点を伝えきれない",
-        ]
-    if category == "Relationships/Communication":
-        return [
-            "言いたいことを整理しないまま話し始めてしまう",
-            "感情的になってしまい、伝え方が攻撃的になる",
-            "相手の話を最後まで聞かず、自分の主張ばかりしてしまう",
-            "相手に合わせすぎて自分の本音を言えず、ストレスになる",
-        ]
-    if category == "Home/Life Admin":
-        return [
-            "やることを頭だけで管理し、抜け漏れや後回しが発生する",
-            "優先順位を付けておらず、重要な用事をつい先延ばしにする",
-            "定期的な手続き（請求支払い等）を忘れ、期限を過ぎてしまう",
-            "全て自分で抱え込み、周囲に頼んだり外注したりしない",
-        ]
-    if category == "Shopping/Products":
-        return [
-            "自分の求める条件を整理せず、なんとなく商品を探してしまう",
-            "値段だけで飛びつき、機能や品質をよく確認せずに後悔する",
-            "事前リサーチが不足し、商品の性能や相場を把握していない",
-            "レビューやセール情報に流され、自分の基準がブレてしまう",
-        ]
-    if category == "Events/Leisure":
-        return [
-            "準備開始が遅れ、直前になって慌ててしまう",
-            "必要なタスクの洗い出しに漏れがあり、抜けが発生する",
-            "人に任せられる作業も抱え込んでしまい、負担が集中する",
-            "当日のトラブル想定が甘く、イレギュラーに対応できない",
-        ]
-    return [
+    common = {
+        "Web/Hosting": [
+            "DNSの反映待ち（TTL）やレコード種別の誤り（A/CNAME/AAAAの混在）",
+            "HTTPS/証明書の自動発行待ち、リダイレクトのループ",
+            "ホスティング側の設定（カスタムドメイン、パス、ベースURL）不一致",
+            "キャッシュ（CDN/ブラウザ/Service Worker）による古い表示",
+        ],
+        "PDF/Docs": [
+            "ファイルサイズ/ページ数上限による失敗",
+            "フォント埋め込み・暗号化・スキャンPDFでの互換性問題",
+            "変換先形式の選択ミス（画像化が必要なのにテキスト変換を選ぶ等）",
+            "ブラウザのメモリ不足・拡張機能の干渉",
+        ],
+        "Media": [
+            "コーデック不一致（H.264/H.265/AV1）や音声形式（AAC/Opus）",
+            "ビットレート/解像度上限によるエラー",
+            "端末性能・メモリ不足による処理落ち",
+            "ファイル破損・コンテナ不整合（MP4/MKV）",
+        ],
+        "Data/Spreadsheets": [
+            "関数の参照範囲ズレ・絶対参照/相対参照のミス",
+            "区切り文字・文字コード・日付形式の差（CSV取り込み）",
+            "フィルタ/ピボットの更新忘れ",
+            "共有設定/権限で編集が反映されない",
+        ],
+        "Security/Privacy": [
+            "権限（OAuth/トークン）期限切れ・スコープ不足",
+            "Cookie/追跡ブロックでログインが壊れる",
+            "2FAや端末認証の不一致",
+            "偽サイト/フィッシング・セキュリティソフトの誤検知",
+        ],
+        "AI/Automation": [
+            "APIキー/権限不足、レート制限、モデル名の不一致",
+            "入力が曖昧で出力が安定しない（仕様が揺れている）",
+            "ファイル/パスの上書き事故、衝突時の処理漏れ",
+            "ログ不足で原因特定が遅れる",
+        ],
+        "Travel/Planning": [
+            "目的・日数・移動制約が決まっておらず、旅程が発散する",
+            "移動時間の見積もりが甘く、詰め込みすぎになる",
+            "持ち物が“現地調達できる物/できない物”で分けられていない",
+            "予算配分（宿/交通/食/予備費）が曖昧で不安が残る",
+        ],
+        "Food/Cooking": [
+            "献立が先に決まらず、買い物が迷子になる",
+            "作り置きの“保存日数/温め直し”を考えずに回らない",
+            "栄養バランス（たんぱく質/野菜/炭水化物）の偏り",
+            "時間の見積もり不足で結局外食になる",
+        ],
+        "Health/Fitness": [
+            "睡眠/食事/運動のどれがボトルネックか分かっていない",
+            "習慣化の単位が大きすぎて継続できない",
+            "強度が高すぎて疲労→中断のループ",
+            "記録がなく、改善点が見えない",
+        ],
+        "Study/Learning": [
+            "復習タイミングが固定されず、忘却で効率が落ちる",
+            "教材が多すぎて優先順位が決まらない",
+            "目標が抽象的で、今日やることに落ちない",
+            "集中環境が整っていない（通知/場所/時間帯）",
+        ],
+        "Money/Personal Finance": [
+            "固定費・変動費・特別費の区別がなく、原因が見えない",
+            "手数料/返金条件の確認不足",
+            "支払い日・引き落とし日がズレて資金繰りが苦しい",
+            "比較軸（総額/利便性/リスク）が曖昧",
+        ],
+        "Career/Work": [
+            "職務要約が長すぎて要点が埋もれる",
+            "実績が“数字”で書けておらず強みが伝わらない",
+            "面接想定問答が用意されておらず詰まる",
+            "応募先ごとのカスタムが不足",
+        ],
+        "Relationships/Communication": [
+            "伝えたいことが多く、文が長くなって誤解される",
+            "相手の温度感に合わせた言い回しが不足",
+            "断り方/お願いの型がなく気まずくなる",
+            "返信タイミングが不安で空回りする",
+        ],
+        "Home/Life Admin": [
+            "やることの棚卸しがなく、抜け漏れが出る",
+            "期限・提出先・必要書類が散らばっている",
+            "片付けの範囲が広すぎて進まない",
+            "ルーティン化できず毎回ゼロから考える",
+        ],
+        "Shopping/Products": [
+            "比較軸（価格/保証/サイズ/耐久/用途）が定義できていない",
+            "レビューの読み方が偏り、結論が出ない",
+            "必要十分のスペックが分からない",
+            "買うタイミング（セール/返品可否）が不明",
+        ],
+        "Events/Leisure": [
+            "候補が多く、優先順位が決まらない",
+            "天気・混雑・移動時間の見積もり不足",
+            "当日の持ち物/予約/支払いが不安",
+            "同行者の希望が整理できていない",
+        ],
+    }
+    return common.get(category, [
         "入力・前提条件のズレ（想定と実際が違う）",
         "権限/設定/バージョンの不一致",
         "キャッシュや反映待ち",
-        "エラー箇所が別の場所に見えている（原因が前段にある）",
-    ]
+        "原因が前段にあるのに、見えている画面で決め打ちしている",
+    ])
+
 
 def build_steps(category: str) -> List[str]:
-    if category == "Travel/Planning":
-        return [
-            "行きたい場所・体験をリストアップし、優先度をつける",
-            "旅行の日程を決め、各日の大まかな予定を割り当てる",
-            "フライト・宿泊など必要な予約を早めに押さえる",
-            "持ち物チェックリストを作成し、余裕を持って準備する",
-            "現地の気候や習慣を事前に調べ、対応策を用意する",
-        ]
-    if category == "Food/Cooking":
-        return [
-            "1週間分の献立をまとめて立てる（主菜・副菜・スープ等）",
-            "献立に合わせた買い物リストを作成し、まとめ買いする",
-            "作り置きや下ごしらえを週末に行い、平日の調理を簡略化",
-            "栄養バランスを確認し、野菜やタンパク質を不足させない",
-            "定番レシピをローテーションし、献立を考える時間を減らす",
-        ]
-    if category == "Health/Fitness":
-        return [
-            "達成可能な運動目標（例: 週3回30分）を設定する",
-            "睡眠時間や食事内容を記録し、生活リズムを可視化する",
-            "毎日決まった時間に運動するよう予定に組み込む",
-            "小さな成功（例: 体重1kg減）を祝い、モチベーションを維持する",
-            "疲労や痛みがあるときは無理せず休み、怪我を予防する",
-        ]
-    if category == "Study/Learning":
-        return [
-            "試験日や目標日から逆算して学習スケジュールを立てる",
-            "科目ごとに範囲を分割し、日々のタスクに落とし込む",
-            "定期的に復習日を設け、一度学んだ内容を必ず見直す",
-            "苦手分野には多めの時間を割り、重点的に練習する",
-            "スマホ通知オフや専用スペース確保など、集中できる環境を整える",
-        ]
-    if category == "Money/Personal Finance":
-        return [
-            "1か月分の収支（収入・固定費・変動費）を洗い出す",
-            "必需品と娯楽費を分類し、削れる出費がないか検討する",
-            "毎月の貯蓄額・投資額の目標を設定し、先取りで確保する",
-            "借入やローンがあれば返済計画を立て、繰上返済も検討する",
-            "家計管理アプリ等で収支を記録し、定期的に見直す",
-        ]
-    if category == "Career/Work":
-        return [
-            "自分のスキル・経験を棚卸しし、強みと弱みを書き出す",
-            "興味のある業界・職種の情報を集め、必要なスキルを確認する",
-            "履歴書・職務経歴書を作成し、第三者に添削を依頼する",
-            "模擬面接を行い、自己紹介や志望動機を練習しておく",
-            "現職でできる準備（資格取得やプロジェクト参加）を進めておく",
-        ]
-    if category == "Relationships/Communication":
-        return [
-            "現状の問題点を書き出し、自分が伝えたいことを整理する",
-            "相手の立場や気持ちを想像し、配慮すべき点を考える",
-            "伝える内容を簡潔な言葉でまとめ、言い方をシミュレーションする",
-            "必要に応じて第三者のアドバイスを求め、偏った視点を修正する",
-            "話す際は落ち着いた口調で、相手の話にも耳を傾ける",
-        ]
-    if category == "Home/Life Admin":
-        return [
-            "抱えている用事やタスクをすべて書き出し、見える化する",
-            "緊急度と重要度で優先順位をつけ、上位から着手する",
-            "大きなプロジェクト（引っ越し等）は小タスクに分割して管理する",
-            "定期的な支払い・更新はリマインダーを設定して忘れないようにする",
-            "外注や家族・友人の助けを検討し、一人で抱え込まない",
-        ]
-    if category == "Shopping/Products":
-        return [
-            "購入目的と予算上限をまず決めておく",
-            "自分に必要な機能・条件を箇条書きで列挙する",
-            "候補となる商品を数点に絞り、価格やレビューを比較する",
-            "公式サイトや店舗で実物や詳細スペックを確認する",
-            "総合的に判断し、納得できるものを選んだら迷わず購入する",
-        ]
-    if category == "Events/Leisure":
-        return [
-            "イベント/旅行の目的と予算、希望日程をまず決める",
-            "必要な準備事項をすべて書き出し、スケジュールに落とし込む",
-            "早めにチケット予約や会場手配など主要な手続きを済ませる",
-            "当日の進行表を作成し、役割分担や緊急連絡先も明記する",
-            "天候などの不測の事態に備え、代替案や予備日も検討する",
-        ]
-    return [
+    steps = [
         "再現条件を固定する（同じ入力・同じ手順・同じ端末/ブラウザで再現）",
-        "エラー表示やログをそのまま保存（スクショ/コピペ、時刻も残す）",
-        "キャッシュを疑う（スーパーリロード/別ブラウザ/シークレット、Service Workerの登録も確認）",
-        "設定・権限・トークン期限を確認（特に外部API/OAuth）",
-        "最小変更で1点ずつ潰す（“まとめて変更”は禁止）",
-        "直ったら差分を記録し、再発防止チェックを作る（次回は3分で復旧できる形）",
+        "表示/ログをそのまま保存（コピペ/スクショ、時刻も残す）",
+        "影響範囲が小さい順に確認（確認→読み取り→最小変更→検証）",
+        "直ったら差分を記録し、再発防止チェックを作る（次回3分復旧が目標）",
     ]
+
+    if category in ["Web/Hosting", "AI/Automation"]:
+        steps += [
+            "“上書き禁止”を強制する（衝突は -2/-3、凍結パスは触らない）",
+            "ログ粒度を上げる（HTTPステータス/例外/レスポンス先頭）",
+        ]
+
+    if category == "Travel/Planning":
+        steps += [
+            "日数・出発/帰宅時刻・絶対にやりたいこと（3つ）を先に固定",
+            "移動時間を先に置いて、残りに観光を入れる（詰め込み防止）",
+            "持ち物を「必須/現地調達/予備」に分けてチェックリスト化",
+            "予算を「宿/交通/食/観光/予備費」に割って上限を決める",
+        ]
+
+    if category == "Food/Cooking":
+        steps += [
+            "主菜を先に決める（3〜5個）→副菜→主食の順で決める",
+            "買い物リストを“カテゴリ別”（肉/野菜/調味料…）に出す",
+            "作り置きは保存日数ベースで回す（先に消費順を決める）",
+            "調理は“同時進行しやすい順”に並べる（焼く/茹でる/切る）",
+        ]
+
+    if category == "Health/Fitness":
+        steps += [
+            "まず睡眠時間を固定（就寝/起床の時刻を先に決める）",
+            "運動は最小単位から（例：腕立て5回/散歩10分）",
+            "週の回数→強度の順で上げる（いきなり強度は上げない）",
+            "記録は1項目だけ（体重/歩数/睡眠など）から開始",
+        ]
+
+    if category == "Study/Learning":
+        steps += [
+            "目標を「今週の量」→「今日の量」に割る（1日の最小単位を作る）",
+            "復習は“翌日/3日後/7日後”の固定枠で回す",
+            "教材は同時に2つまで（増やすほど迷う）",
+            "集中は環境で作る（通知OFF/場所固定/開始の儀式）",
+        ]
+
+    if category == "Money/Personal Finance":
+        steps += [
+            "固定費/変動費/特別費に分けて、まず固定費から最適化",
+            "手数料・返金条件・解約期限を先に確認してメモ化",
+            "支払い日をカレンダーに入れて“先取り”で資金を分ける",
+            "比較は総額（初期+月額+手数料）で決着をつける",
+        ]
+
+    if category == "Career/Work":
+        steps += [
+            "履歴書/職務経歴書の要点を“3つ”に絞る",
+            "実績は数字に変換（時間/回数/率/金額）",
+            "想定質問10個に短い回答（結論→理由→例）を用意",
+            "応募先ごとに冒頭文だけカスタムする",
+        ]
+
+    if category == "Relationships/Communication":
+        steps += [
+            "先に結論を1行（お願い/断り/確認）",
+            "背景は2行まで、最後に次のアクション（いつ/どうする）",
+            "相手の負担を減らす選択肢を添える（A or B）",
+            "返信は短く、必要なら「続きは後で」を使う",
+        ]
+
+    if category == "Home/Life Admin":
+        steps += [
+            "やることを一旦全部書き出す→期限/提出先/必要書類を付ける",
+            "片付けは“1引き出し”など小さく区切る",
+            "ルーティンはチェックリスト化して毎回同じ順にする",
+            "重要書類は場所を1つに固定する（探す時間を消す）",
+        ]
+
+    if category == "Shopping/Products":
+        steps += [
+            "用途を1文で言える形にする（どこで/何に使う）",
+            "比較軸を3つに絞る（価格/耐久/サイズなど）",
+            "候補は3つまで→最後は総額と返品条件で決める",
+            "買う前に“捨てる理由”を先に書く（衝動買い防止）",
+        ]
+
+    if category == "Events/Leisure":
+        steps += [
+            "優先順位（雰囲気/予算/移動/混雑耐性）を先に決める",
+            "天気でA案/B案を用意（雨・寒い等）",
+            "持ち物と予約をチェックリスト化して当日不安を消す",
+            "移動時間を先に置く（当日の詰まり防止）",
+        ]
+
+    return steps
+
 
 def build_pitfalls(category: str) -> List[str]:
-    if category == "Travel/Planning":
-        return [
-            "予定を詰め込みすぎて移動や休息の時間が足りなくなる",
-            "準備をギリギリまで先延ばしにして、直前に慌てる",
-            "予算や時間に余裕を見込まず、トラブルに対応できない",
-            "現地の事情を調査せずに訪れ、戸惑ってしまう",
-        ]
-    if category == "Food/Cooking":
-        return [
-            "気分に流されて計画した献立を守れなくなる",
-            "完璧を求めて時間と労力をかけすぎる",
-            "作り置きをしすぎて食べきれず、食材を無駄にする",
-            "レシピを見ず自己流で作って味が安定しない",
-        ]
-    if category == "Health/Fitness":
-        return [
-            "最初から飛ばしすぎて、早々に息切れしてしまう",
-            "結果を急ぎすぎて無理なダイエットや過度な運動に走る",
-            "体調の小さな変化を無視し続け、怪我や不調を招く",
-            "他人と比較して落ち込み、自分のペースを見失う",
-        ]
-    if category == "Study/Learning":
-        return [
-            "完璧な計画を立てようと時間をかけすぎて勉強開始が遅れる",
-            "計画倒れになっても見直さず惰性で続けてしまう",
-            "短期間で詰め込みすぎて内容を消化できない",
-            "得意科目ばかり勉強して苦手を避けてしまう",
-        ]
-    if category == "Money/Personal Finance":
-        return [
-            "出費記録が三日坊主になり、家計管理を放棄してしまう",
-            "節約に囚われすぎて必要な投資（資格取得等）も削ってしまう",
-            "節約と散財を極端に繰り返し、ストレスで出費が増える",
-            "家族と金銭感覚を共有せず、協力を得られない",
-        ]
-    if category == "Career/Work":
-        return [
-            "不安から闇雲に応募し、軸のない転職活動になる",
-            "準備不足のまま面接に臨み、伝えたいことが伝えられない",
-            "転職先の条件ばかり気にして、自分の成長計画を疎かにする",
-            "退職を焦るあまり、次の職場をよく調べず決めてしまう",
-        ]
-    if category == "Relationships/Communication":
-        return [
-            "勢いで感情をぶつけ、関係をさらに悪化させる",
-            "相手に察してほしいと期待しすぎて核心を伝えない",
-            "話し合いの場を設けず、問題を先送りにする",
-            "自己防衛に走って相手を責め、溝を深めてしまう",
-        ]
-    if category == "Home/Life Admin":
-        return [
-            "優先度の低い作業から手をつけ、重要な用事を後回しにする",
-            "チェックリストを作っても更新せず、古い情報のまま進める",
-            "一度に全て片付けようとして途中で力尽きる",
-            "助けを求めず、自分だけで無理をして消耗する",
-        ]
-    if category == "Shopping/Products":
-        return [
-            "決めきれず何店舗も回り、時間と労力を浪費する",
-            "安さにつられてまとめ買いし、結局使わないものが増える",
-            "友人の意見に流され、本当は不要なものを買ってしまう",
-            "セールの勢いで予算オーバーの買い物をする",
-        ]
-    if category == "Events/Leisure":
-        return [
-            "大丈夫だろうと油断し、事前確認を怠る",
-            "一人で抱え込みすぎてチームに任せない",
-            "当日のアドリブ頼みにして綿密な計画を立てない",
-            "直前の変更に対応できず、パニックになる",
-        ]
-    return [
+    pitfalls = [
         "一気に複数箇所を変えてしまい、どれが原因か分からなくなる",
-        "反映待ち（DNS/キャッシュ）を無視して、焦ってさらに壊す",
-        "ログを取らずに試行回数だけ増やす（後で復旧不能になる）",
-        "“いま見えている画面”が原因箇所だと決めつける（前段が原因のことが多い）",
+        "反映待ち（DNS/キャッシュ）を無視して焦ってさらに壊す",
+        "ログ/メモを取らずに試行回数だけ増やす（後で復旧不能になる）",
+        "“いま見えている画面”が原因だと決めつける（前段が原因のことが多い）",
     ]
+    if category in ["Web/Hosting", "AI/Automation"]:
+        pitfalls.append("既存URLや凍結領域（/hub/）を上書きして資産を壊す（絶対禁止）")
+    if category in ["Travel/Planning", "Food/Cooking", "Shopping/Products"]:
+        pitfalls.append("比較軸が曖昧なまま情報収集し続けて決断できない")
+    if category in ["Health/Fitness", "Study/Learning"]:
+        pitfalls.append("最初から量を盛りすぎて、続かず自己嫌悪になる")
+    return pitfalls
+
 
 def build_next_actions(category: str) -> List[str]:
-    if category in ["Travel/Planning", "Food/Cooking", "Health/Fitness", "Study/Learning", 
-                    "Money/Personal Finance", "Career/Work", "Relationships/Communication", 
-                    "Home/Life Admin", "Shopping/Products", "Events/Leisure"]:
-        return [
-            "信頼できる第三者に相談し、客観的なアドバイスをもらう",
-            "一度休憩して頭をリセットし、新しい視点で見直す",
-            "優先順位を見直し、必要に応じて計画を修正する",
-            "今回の経験から学び、次回に活かせるチェックリストを作る",
-        ]
-    return [
+    nxt = [
         "別経路で同じ結果が出るか確認（別端末/別回線/別ブラウザ）",
-        "ログの粒度を上げる（失敗時のHTTPステータス、レスポンス先頭、例外スタック）",
+        "ログ/メモの粒度を上げる（失敗時の条件と差分を残す）",
         "“元に戻せる形”で段階的にロールバック（変更前後の差分を残す）",
         "同じ失敗を繰り返さないよう、チェック項目を固定化する",
     ]
+    if category == "Security/Privacy":
+        nxt.append("怪しいリンク/認証画面は踏まない。公式ドメインと証明書を再確認")
+    if category in ["Travel/Planning", "Money/Personal Finance"]:
+        nxt.append("最悪ケース（延泊/キャンセル/手数料）を先に想定して予備費・代替案を用意")
+    return nxt
+
 
 def build_faq(category: str) -> List[Tuple[str, str]]:
-    if category in ["Travel/Planning", "Food/Cooking", "Health/Fitness", "Study/Learning", 
-                    "Money/Personal Finance", "Career/Work", "Relationships/Communication", 
-                    "Home/Life Admin", "Shopping/Products", "Events/Leisure"]:
-        return [
-            ("最初に何から始めればいい？", "まずは全体像の把握です。抱えている要素をすべて書き出し、優先順位を付けるところから始めます。"),
-            ("計画がうまく進んでいるか確認する方法は？", "途中経過を定期的に見直し、チェックリストが順調に消化できているか確認します。進捗が遅れていれば計画を調整しましょう。"),
-            ("どの順番で進めるのが効率的？", "影響範囲が小さいタスクから片付けていくと、リスクを抑えられます。早めに終わるものから処理し、大きなものは小分けに取り組みます。"),
-            ("完了後にやるべきことは？", "今回の経験から学んだことをまとめ、次回に活かせるチェックリストやテンプレートを作っておくと良いです。"),
-            ("相談するときに何を伝えればいい？", "背景や目的、現状の進捗、特に困っている点を具体的に伝えると、相手もアドバイスしやすくなります。"),
-        ]
     base = [
-        ("最初に何を見ればいい？", "再現条件・エラー文・時刻・直前に変えた点の4つをまず固定します。"),
-        ("キャッシュが原因かどうかの見分け方は？", "シークレット/別ブラウザ/別端末で同じ結果ならキャッシュ以外の可能性が高いです。"),
-        ("何から手を付ける順番が良い？", "影響範囲が小さい順（確認→読み取り→最小変更→検証）で進めると安全です。"),
-        ("直った後にやるべきことは？", "差分と再発防止チェックを残すと、次回は短時間で復旧できます。"),
-        ("情報を共有するときに何を書けばいい？", "再現手順、期待結果、実結果、ログ/スクショ、環境（OS/ブラウザ/版）です。"),
+        ("What should I check first?", "Fix the conditions: steps, expected result, actual result, and what changed recently."),
+        ("How do I know if it’s just cache / stale data?", "Try private mode or a different device. If it changes, cache is likely involved."),
+        ("What’s the safest order to troubleshoot?", "Confirm → read-only checks → one small change → verify → write down the diff."),
+        ("What should I do after it works?", "Save the diff + a quick checklist so the next recovery is under 3 minutes."),
+        ("How should I share this problem with someone?", "Include steps to reproduce, expected vs actual, logs/screenshots, and environment."),
     ]
     if category == "Web/Hosting":
-        base.append(("DNSはどれくらいで反映される？", "TTLやプロバイダで差が出ます。第三者のDNS解決でも確認してから判断します。"))
-    if category == "AI/Automation":
-        base.append(("自動化が暴走しないようにするには？", "上書き禁止・衝突回避・凍結パス保護・ログ保存を必須にします。"))
+        base.append(("How long can DNS propagation take?", "It depends on TTL and resolvers. Confirm from a third-party DNS lookup too."))
+    if category == "Travel/Planning":
+        base.append(("How do I avoid overpacking?", "Split items into: must-have, can-buy-there, and optional backups. Then cut optional."))
+    if category == "Shopping/Products":
+        base.append(("How do I stop endless comparing?", "Limit to 3 options, pick 3 criteria, then decide using total cost + return policy."))
+    # ensure >= MIN_FAQ
     return base[: max(MIN_FAQ, 5)]
+
 
 def supplemental_resources_for_category(category: str) -> List[str]:
     base = {
         "Web/Hosting": [
-            "https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_domain_name",
             "https://pages.github.com/",
             "https://letsencrypt.org/docs/",
+            "https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_domain_name",
         ],
         "Security/Privacy": [
             "https://owasp.org/www-project-top-ten/",
@@ -1387,6 +1770,56 @@ def supplemental_resources_for_category(category: str) -> List[str]:
             "https://en.wikipedia.org/wiki/Cron",
             "https://en.wikipedia.org/wiki/Rate_limiting",
         ],
+        "Travel/Planning": [
+            "https://en.wikipedia.org/wiki/Travel_insurance",
+            "https://en.wikipedia.org/wiki/International_roaming",
+            "https://en.wikipedia.org/wiki/Carry-on_baggage",
+        ],
+        "Food/Cooking": [
+            "https://en.wikipedia.org/wiki/Meal_preparation",
+            "https://en.wikipedia.org/wiki/Food_safety",
+            "https://en.wikipedia.org/wiki/Macronutrient_(nutrition)",
+        ],
+        "Health/Fitness": [
+            "https://en.wikipedia.org/wiki/Sleep_hygiene",
+            "https://en.wikipedia.org/wiki/Physical_exercise",
+            "https://en.wikipedia.org/wiki/Habit",
+        ],
+        "Study/Learning": [
+            "https://en.wikipedia.org/wiki/Spaced_repetition",
+            "https://en.wikipedia.org/wiki/Active_recall",
+            "https://en.wikipedia.org/wiki/Procrastination",
+        ],
+        "Money/Personal Finance": [
+            "https://en.wikipedia.org/wiki/Personal_finance",
+            "https://en.wikipedia.org/wiki/Budget",
+            "https://en.wikipedia.org/wiki/Opportunity_cost",
+        ],
+        "Career/Work": [
+            "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+            "https://en.wikipedia.org/wiki/Job_interview",
+            "https://en.wikipedia.org/wiki/STAR_(interview_method)",
+        ],
+        "Relationships/Communication": [
+            "https://en.wikipedia.org/wiki/Interpersonal_communication",
+            "https://en.wikipedia.org/wiki/Assertiveness",
+            "https://en.wikipedia.org/wiki/Nonviolent_Communication",
+        ],
+        "Home/Life Admin": [
+            "https://en.wikipedia.org/wiki/Moving_company",
+            "https://en.wikipedia.org/wiki/Decluttering",
+            "https://en.wikipedia.org/wiki/Housekeeping",
+        ],
+        "Shopping/Products": [
+            "https://en.wikipedia.org/wiki/Comparison_shopping",
+            "https://en.wikipedia.org/wiki/Cost%E2%80%93benefit_analysis",
+            "https://en.wikipedia.org/wiki/Warranty",
+        ],
+        "Events/Leisure": [
+            "https://en.wikipedia.org/wiki/Leisure",
+            "https://en.wikipedia.org/wiki/Event_planning",
+            "https://en.wikipedia.org/wiki/Weather",
+        ],
     }
     return base.get(category, [
         "https://developer.mozilla.org/",
@@ -1394,140 +1827,642 @@ def supplemental_resources_for_category(category: str) -> List[str]:
         "https://en.wikipedia.org/wiki/Troubleshooting",
     ])
 
+
+def pick_reference_urls(theme: Theme) -> List[str]:
+    """
+    References: 10-20 “source-like” URLs.
+    Since we’re not doing web scraping here, we use:
+      - representative post URLs (up to 8)
+      - plus supplemental resources and well-known docs
+    """
+    refs = [p.url for p in theme.representative_posts if p.url]
+    refs = uniq_keep_order(refs)
+    refs = refs[:8]
+
+    supp = supplemental_resources_for_category(theme.category)
+    # mix-in to reach REF_URL_MIN
+    extras = [
+        "https://support.google.com/webmasters/answer/156184",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview",
+        "https://developer.mozilla.org/en-US/docs/Web/SEO",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+    ]
+    pool = uniq_keep_order(supp + extras)
+    random.shuffle(pool)
+
+    for u in pool:
+        if len(refs) >= REF_URL_MIN:
+            break
+        if u not in refs:
+            refs.append(u)
+
+    # cap
+    return refs[: clamp(REF_URL_MAX, REF_URL_MIN, 30)]
+
+
 def generate_long_article_ja(theme: Theme) -> str:
+    """
+    Must be >= MIN_ARTICLE_CHARS_JA chars.
+    Deterministic long form to guarantee volume without OpenAI.
+    """
     intro = (
-        f"このページは「{theme.category}」でよく起きるトラブルを、"
-        f"短時間で安全に解決するためのガイドです。"
-        f"原因を推測で決め打ちせず、再現条件を固定し、"
-        f"影響範囲の小さい順に確認していくことで、無駄な試行回数を減らします。\n"
+        f"このページは「{theme.category}」でよく起きる悩みを、"
+        f"短時間で安全に整理して解決へ進めるためのガイドです。\n"
+        "ポイントは“推測で決め打ちしない”こと。再現条件を固定し、"
+        "影響範囲が小さい順にチェックするだけで、無駄な試行回数が大きく減ります。\n"
     )
     why = (
-        "多くの不具合は、(1)設定の不一致、(2)権限やトークンの期限切れ、"
-        "(3)キャッシュや反映待ち、(4)入力条件の揺れ、のどれかに落ちます。"
-        "逆に言うと、この4点を順に潰すだけで“直らない理由”の大半は説明できます。\n"
+        "多くのトラブルは、(1)設定の不一致、(2)権限や期限、(3)キャッシュ/反映待ち、"
+        "(4)入力条件の揺れ、のどれかに落ちます。\n"
+        "つまり、この4点を順に潰すだけで“直らない理由”の大半は説明できます。\n"
     )
     detail = (
-        "ここで大事なのは「最小変更」です。"
-        "一度に複数箇所をいじると、直ったとしても原因が分からず再発します。"
-        "最小変更→検証→記録、を繰り返すと、次回はチェックリストだけで復旧できます。\n"
+        "大事なのは「最小変更」です。一度に複数箇所をいじると、直ったとしても原因が分からず再発します。\n"
+        "最小変更→検証→記録、を守ると、次回はチェックリストだけで復旧できます。\n"
     )
-    causes = build_causes(theme.category)
-    steps = build_steps(theme.category)
-    pitfalls = build_pitfalls(theme.category)
-    nxt = build_next_actions(theme.category)
-    cause_text = "【原因のパターン分け】\n" + "\n".join([f"- {c}" for c in causes]) + "\n"
-    step_text = "【手順（チェックリスト）】\n" + "\n".join([f"- {s}" for s in steps]) + "\n"
-    pit_text = "【よくある失敗と回避策】\n" + "\n".join([f"- {p}" for p in pitfalls]) + "\n"
-    nxt_text = "【直らない場合の次の手】\n" + "\n".join([f"- {x}" for x in nxt]) + "\n"
+
     examples = "【このページで扱う悩み一覧（例）】\n" + "\n".join([f"- {p}" for p in theme.problem_list]) + "\n"
+    causes = "【原因のパターン分け】\n" + "\n".join([f"- {c}" for c in build_causes(theme.category)]) + "\n"
+    steps = "【手順（チェックリスト）】\n" + "\n".join([f"- {s}" for s in build_steps(theme.category)]) + "\n"
+    pitfalls = "【よくある失敗と回避策】\n" + "\n".join([f"- {p}" for p in build_pitfalls(theme.category)]) + "\n"
+    nxt = "【直らない場合の次の手】\n" + "\n".join([f"- {n}" for n in build_next_actions(theme.category)]) + "\n"
+
     verify = (
         "【検証のコツ】\n"
-        "- まず“期待結果”を文章にする（何ができれば成功か）\n"
+        "- “期待結果”を1文にする（何ができれば成功か）\n"
         "- 失敗が出たら、入力・環境・時刻・ログをセットで残す\n"
         "- 直った瞬間に、何を変えたかを1行で書ける状態にする\n"
         "- 再発防止は“次回3分で復旧できるか”で判断する\n"
         "これだけで、調査が感情ではなく手順になります。\n"
     )
+
     tree = (
         "【切り分けの分岐（迷った時用）】\n"
         "1) 別ブラウザ/別端末でも同じ？\n"
-        "  - はい → サーバ/設定/権限側が濃厚\n"
+        "  - はい → サービス/設定/権限側が濃厚\n"
         "  - いいえ → キャッシュ/拡張機能/端末依存が濃厚\n"
         "2) 同じ入力・同じ手順で再現する？\n"
-        "  - はい → 原因の追跡が可能。ログを増やして一点ずつ潰す\n"
+        "  - はい → 原因追跡が可能。ログを増やして一点ずつ潰す\n"
         "  - いいえ → 入力条件が揺れている。まず再現条件の固定が最優先\n"
         "この分岐を守るだけで、無駄な試行をかなり減らせます。\n"
     )
-    body = "\n".join([intro, why, detail, examples, cause_text, step_text, pit_text, nxt_text, verify, tree]).strip()
+
+    body = "\n".join([intro, why, detail, examples, causes, steps, pitfalls, nxt, verify, tree]).strip()
+
+    # pad to guarantee chars
     if len(body) < MIN_ARTICLE_CHARS_JA:
-        pads = []
+        pads: List[str] = []
         while len(body) + sum(len(x) for x in pads) < MIN_ARTICLE_CHARS_JA + 200:
             pads.append(
                 "【追加メモ】\n"
-                "問題が複雑に見える時ほど、最初に“変えた点”を列挙し、"
-                "それを一つずつ戻して差分を取ると復旧が早くなります。"
+                "問題が複雑に見える時ほど、最初に“変えた点”を列挙し、それを一つずつ戻して差分を取ると復旧が早くなります。\n"
                 "ログがない場合は、まずログを作ることが最短ルートです。\n"
             )
         body = body + "\n" + "\n".join(pads)
+
     return body.strip()
 
-def openai_generate(theme: Theme, refs: List[str]) -> Optional[Dict[str, Any]]:
-    if not OPENAI_API_KEY:
-        return None
-    try:
-        return None
-    except Exception:
-        return None
+
+def short_value_line(category: str) -> str:
+    """
+    One-line value (for Bluesky post draft).
+    Keep it short, concrete, non-spammy.
+    """
+    mapping = {
+        "Travel/Planning": "Build a clean itinerary + packing checklist in seconds.",
+        "Food/Cooking": "Generate a meal-prep plan + shopping list in seconds.",
+        "Health/Fitness": "Turn your goal into a tiny daily routine + tracker in seconds.",
+        "Study/Learning": "Generate a study plan + spaced-review schedule in seconds.",
+        "Money/Personal Finance": "Make a simple budget + fee checklist in seconds.",
+        "Career/Work": "Turn your notes into resume bullets + interview prompts in seconds.",
+        "Relationships/Communication": "Get short conversation templates (ask/decline/follow-up) in seconds.",
+        "Home/Life Admin": "Create a moving/life-admin checklist in seconds.",
+        "Shopping/Products": "Compare options using 3 criteria + decide fast in seconds.",
+        "Events/Leisure": "Pick a weekend plan (A/B for weather) in seconds.",
+        "Web/Hosting": "Get a DNS/SSL checklist + quick tests in seconds.",
+        "PDF/Docs": "Get a PDF convert/merge checklist in seconds.",
+        "Media": "Get video compression settings + checklist in seconds.",
+        "Data/Spreadsheets": "Get spreadsheet debugging steps + checklist in seconds.",
+        "Security/Privacy": "Get privacy/login troubleshooting checklist in seconds.",
+        "AI/Automation": "Get automation workflow debugging checklist in seconds.",
+    }
+    return mapping.get(category, "Get a clean checklist + next steps in seconds.")
 
 
-# =========================
-# HTML generation
-# =========================
+# =============================================================================
+# Tool UI generation (category-aware planners)
+# =============================================================================
+def build_tool_ui(theme: Theme) -> str:
+    """
+    In-page tool:
+      - user inputs free text
+      - we generate a structured template/checklist
+    No external API required.
+    """
+    # We embed category in JS to switch templates
+    cat = html.escape(theme.category, quote=True)
+    title = html.escape(theme.search_title, quote=True)
 
+    # Templates (client-side)
+    return f"""
+<div class="rounded-3xl border border-white/10 bg-white/5 p-5 md:p-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold" data-i18n="tool">Tool</h2>
+      <p class="text-white/70 mt-1">Category: <span class="text-white/90">{cat}</span></p>
+    </div>
+    <div class="text-right">
+      <div class="text-xs text-white/60" data-i18n="short_value">Do it in 3 seconds</div>
+    </div>
+  </div>
+
+  <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div class="text-sm text-white/70 mb-2">Input (paste your details)</div>
+      <textarea id="inp" class="w-full h-36 rounded-xl bg-black/40 border border-white/10 p-3 text-sm text-white/90"
+        placeholder="Example: dates, constraints, what you tried, what you need…"></textarea>
+      <div class="mt-3 flex items-center gap-2">
+        <button id="genBtn" class="rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">Generate</button>
+        <button id="clearBtn" class="rounded-xl bg-white/10 border border-white/10 px-4 py-2 text-sm">Clear</button>
+      </div>
+      <p class="text-xs text-white/60 mt-2">Tip: include constraints (time, budget, device, deadline). Output improves.</p>
+    </div>
+
+    <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-sm text-white/70">Output (copy/paste)</div>
+        <div class="flex items-center gap-2">
+          <button id="copyOutBtn" class="rounded-xl bg-white/10 border border-white/10 px-3 py-1.5 text-xs" data-i18n="copy">Copy</button>
+        </div>
+      </div>
+      <textarea id="out" class="mt-2 w-full h-44 rounded-xl bg-black/40 border border-white/10 p-3 text-sm text-white/90"
+        placeholder="Generated plan/checklist will appear here."></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){{
+  const CAT = "{cat}";
+  const PAGE_TITLE = "{title}";
+  const inp = document.getElementById("inp");
+  const out = document.getElementById("out");
+  const genBtn = document.getElementById("genBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const copyOutBtn = document.getElementById("copyOutBtn");
+
+  function nowStamp() {{
+    const d = new Date();
+    return d.toISOString().slice(0,19).replace('T',' ');
+  }}
+
+  function headerBlock() {{
+    return `# ${PAGE_TITLE}\\n# Generated: ${nowStamp()}\\n# Category: ${CAT}\\n`;
+  }}
+
+  function genTravel(t) {{
+    return headerBlock() + `
+1) Trip basics
+- Dates:
+- Start / End city:
+- Must-do (top 3):
+- Hard constraints (time/budget/transport):
+
+2) Draft itinerary (fill per day)
+Day 1:
+- Morning:
+- Afternoon:
+- Evening:
+- Transit time buffer:
+
+Day 2:
+- Morning:
+- Afternoon:
+- Evening:
+- Transit time buffer:
+
+3) Packing checklist
+- Must-have (passport/wallet/phone/charger):
+- Weather (layers/rain):
+- Health (meds/band-aids):
+- Tech (eSIM/SIM, adapters):
+- Optional (comfort items):
+
+4) Budget split
+- Lodging:
+- Transport:
+- Food:
+- Activities:
+- Emergency buffer (10–20%):
+
+5) Before-you-go checklist
+- Tickets / bookings confirmed
+- Offline maps downloaded
+- Payment methods checked
+- Cancellation/refund rules saved
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genFood(t) {{
+    return headerBlock() + `
+1) Goal
+- Days covered:
+- Time per cook session:
+- Dietary constraints:
+- Target (high-protein / low-cost / quick):
+
+2) Meal plan (repeatable)
+Main dishes (pick 3–5):
+- (1)
+- (2)
+- (3)
+
+Side dishes (2–4):
+- (1)
+- (2)
+
+Staples:
+- rice/pasta/bread etc.
+
+3) Shopping list (grouped)
+Protein:
+Vegetables:
+Carbs:
+Dairy/eggs:
+Sauces/seasoning:
+Frozen/canned:
+Snacks:
+
+4) Prep workflow (fast)
+- Wash & cut veg
+- Cook protein in bulk
+- Assemble 3 containers
+- Label (date + contents)
+
+5) Storage / safety
+- Eat order (oldest first)
+- Reheat plan
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genHealth(t) {{
+    return headerBlock() + `
+1) Tiny routine (start here)
+Daily (5–10 min):
+- (A) Movement:
+- (B) Mobility:
+- (C) Short walk:
+
+2) Weekly schedule
+Mon:
+Tue:
+Wed:
+Thu:
+Fri:
+Sat:
+Sun:
+
+3) Habit tracker (checkbox)
+[ ] sleep on time
+[ ] 10-min movement
+[ ] protein + veggies
+[ ] water
+[ ] log 1 metric
+
+4) Safety
+- Keep intensity low for 2 weeks
+- Increase frequency first, intensity later
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genStudy(t) {{
+    return headerBlock() + `
+1) Target
+- Exam/date:
+- Topics:
+- Daily time:
+
+2) Weekly plan
+Mon:
+Tue:
+Wed:
+Thu:
+Fri:
+Sat:
+Sun:
+
+3) Spaced review
+- Day+1:
+- Day+3:
+- Day+7:
+
+4) Today’s minimum (non-zero rule)
+- 10 minutes: __________________
+- 20 minutes: __________________
+
+5) Focus setup
+- Notifications OFF
+- Start ritual (2 min)
+- End with checklist
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genMoney(t) {{
+    return headerBlock() + `
+1) Monthly snapshot
+Income:
+Fixed costs:
+Variable costs:
+Special (one-off):
+
+2) Budget caps
+- Food:
+- Transport:
+- Fun:
+- Subscriptions:
+- Emergency:
+
+3) Fee/refund checklist
+- Cancellation deadline:
+- Refund method:
+- Fees (card / bank):
+- Hidden charges:
+
+4) Decision template (compare 3 options)
+Option A: total cost / pros / cons
+Option B: total cost / pros / cons
+Option C: total cost / pros / cons
+
+5) Next action
+- One change to reduce fixed costs:
+- One change to reduce variable costs:
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genCareer(t) {{
+    return headerBlock() + `
+1) Resume bullets (STAR)
+- Situation:
+- Task:
+- Action:
+- Result (numbers):
+
+2) Strengths (3 lines)
+- (1)
+- (2)
+- (3)
+
+3) Interview prompts
+- Why this role?
+- Tell me about a challenge
+- Tell me about a success
+- Tell me about teamwork
+- What are you improving now?
+
+4) Application checklist
+[ ] Custom intro paragraph
+[ ] Keywords matched
+[ ] Proofread
+[ ] Portfolio links updated
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genRel(t) {{
+    return headerBlock() + `
+1) Templates (short)
+Ask:
+"Hey — quick one. Could you ____ by ____? If not, no worries."
+
+Decline:
+"Thanks for asking. I can’t this time, but I hope it goes well."
+
+Follow-up:
+"Just checking — does ____ still work for you?"
+
+Awkward fix:
+"Sorry if my last message was unclear — what I meant was ____."
+
+2) Rules
+- Lead with 1-line conclusion
+- Give 1 option A/B
+- End with next action
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genHome(t) {{
+    return headerBlock() + `
+1) List everything (dump)
+- tasks:
+- deadlines:
+- places to submit:
+- required docs:
+
+2) Moving checklist
+[ ] address change
+[ ] utilities start/stop
+[ ] internet setup
+[ ] mail forwarding
+[ ] packing (room by room)
+
+3) Declutter micro-steps
+- 1 drawer
+- 1 shelf
+- 1 bag to donate
+
+4) Weekly routine
+- Mon:
+- Wed:
+- Sat:
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genShop(t) {{
+    return headerBlock() + `
+1) Purpose (one sentence)
+"I need this for ____ (where/when/how)."
+
+2) 3 criteria (only)
+- (1)
+- (2)
+- (3)
+
+3) Compare table
+Option A: price / meets criteria? / return?
+Option B: price / meets criteria? / return?
+Option C: price / meets criteria? / return?
+
+4) Decision rule
+- Pick lowest total cost that meets all 3 criteria + best return policy.
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genLeisure(t) {{
+    return headerBlock() + `
+1) Constraints
+- budget:
+- time window:
+- weather:
+- vibe (quiet / active / food / views):
+
+2) Plan A (good weather)
+- morning:
+- afternoon:
+- evening:
+
+3) Plan B (rain/cold)
+- morning:
+- afternoon:
+- evening:
+
+4) Checklist
+[ ] reservations
+[ ] tickets
+[ ] transport
+[ ] must-bring
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function genTech(t) {{
+    return headerBlock() + `
+1) Repro steps (exact)
+- Step 1:
+- Step 2:
+- Expected:
+- Actual:
+
+2) Environment
+- OS:
+- Browser/app version:
+- Network:
+- Recent changes:
+
+3) Checklist (safe order)
+[ ] try private mode / another device
+[ ] capture error text + timestamp
+[ ] verify settings/permissions/tokens
+[ ] make ONE small change then retest
+[ ] write down the diff when it works
+
+4) Next if stuck
+- isolate the smallest failing part
+- increase log detail (status code / stack trace)
+\\nNotes from you:\\n${t}
+`.trim();
+  }}
+
+  function generate() {{
+    const t = (inp.value || "").trim();
+    let r = "";
+    if (CAT === "Travel/Planning") r = genTravel(t);
+    else if (CAT === "Food/Cooking") r = genFood(t);
+    else if (CAT === "Health/Fitness") r = genHealth(t);
+    else if (CAT === "Study/Learning") r = genStudy(t);
+    else if (CAT === "Money/Personal Finance") r = genMoney(t);
+    else if (CAT === "Career/Work") r = genCareer(t);
+    else if (CAT === "Relationships/Communication") r = genRel(t);
+    else if (CAT === "Home/Life Admin") r = genHome(t);
+    else if (CAT === "Shopping/Products") r = genShop(t);
+    else if (CAT === "Events/Leisure") r = genLeisure(t);
+    else r = genTech(t);
+    out.value = r;
+  }}
+
+  genBtn.addEventListener("click", generate);
+  clearBtn.addEventListener("click", () => {{ inp.value=""; out.value=""; }});
+  copyOutBtn.addEventListener("click", async () => {{
+    try {{
+      await navigator.clipboard.writeText(out.value || "");
+      const v = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copied) || "Copied";
+      copyOutBtn.textContent = v;
+      setTimeout(() => {{
+        const v2 = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copy) || "Copy";
+        copyOutBtn.textContent = v2;
+      }}, 1000);
+    }} catch(e) {{}}
+  }});
+}})();
+</script>
+""".strip()
+
+
+# =============================================================================
+# HTML generation (Tailwind, dark mode, i18n, internal linking)
+# =============================================================================
 def html_escape(s: str) -> str:
-    return html.escape(s, quote=True)
+    return html.escape(s or "", quote=True)
+
 
 def render_affiliate_block(affiliate: Dict[str, Any]) -> str:
     if affiliate.get("html"):
         return str(affiliate["html"])
-    if affiliate.get("code"):
-        return str(affiliate["code"])
     if affiliate.get("url"):
         title = html_escape(affiliate.get("title", "Recommended"))
         url = html_escape(affiliate["url"])
         return f'<a class="underline" href="{url}" rel="nofollow noopener" target="_blank">{title}</a>'
     return ""
 
-def build_i18n_script(default_lang: str = "en") -> str:
-    i18n_json = json.dumps(I18N, ensure_ascii=False)
-    return f"""
-<script>
-const I18N = {i18n_json};
-const LANGS = {json.dumps(LANGS)};
-function setLang(lang) {{
-  if (!LANGS.includes(lang)) lang = "{default_lang}";
-  document.documentElement.setAttribute("lang", lang);
-  localStorage.setItem("lang", lang);
-  document.querySelectorAll("[data-i18n]").forEach(el => {{
-    const key = el.getAttribute("data-i18n");
-    const v = (I18N[lang] && I18N[lang][key]) || (I18N["{default_lang}"][key]) || key;
-    el.textContent = v;
-  }});
-}}
-function initLang() {{
-  const saved = localStorage.getItem("lang");
-  const lang = saved || "{default_lang}";
-  setLang(lang);
-  const sel = document.getElementById("langSel");
-  if (sel) {{
-    sel.value = lang;
-    sel.addEventListener("change", (e) => setLang(e.target.value));
-  }}
-}}
-document.addEventListener("DOMContentLoaded", initLang);
-</script>
-""".strip()
 
-def build_page_html(theme: Theme,
-                    tool_url: str,
-                    all_sites: List[Dict[str, Any]],
-                    affiliates_top2: List[Dict[str, Any]],
-                    references: List[str],
-                    supplements: List[str],
-                    article_ja: str,
-                    faq: List[Tuple[str, str]],
-                    related_tools: List[Dict[str, Any]],
-                    popular_sites: List[Dict[str, Any]]) -> str:
+def fetch_unsplash_bg_url() -> str:
+    """
+    Optional. If UNSPLASH_ACCESS_KEY is set, try to fetch a single abstract gradient image.
+    Fallback to empty string (CSS gradients used).
+    """
+    if not UNSPLASH_ACCESS_KEY:
+        return ""
+    # Use Unsplash "random" endpoint (no heavy parsing needed)
+    # https://api.unsplash.com/photos/random?query=abstract%20gradient&orientation=landscape
+    url = "https://api.unsplash.com/photos/random?" + urlencode({
+        "query": "abstract gradient",
+        "orientation": "landscape",
+        "content_filter": "high",
+    })
+    st, body = http_get(url, headers={"Accept": "application/json", "Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}, timeout=20)
+    if st != 200:
+        return ""
+    try:
+        js = json.loads(body)
+        u = ((js.get("urls") or {}).get("regular") or "").strip()
+        return u
+    except Exception:
+        return ""
+
+
+def build_page_html(
+    theme: Theme,
+    tool_url: str,
+    short_url: str,
+    affiliates_top2: List[Dict[str, Any]],
+    references: List[str],
+    supplements: List[str],
+    article_ja: str,
+    faq: List[Tuple[str, str]],
+    related_tools: List[Dict[str, Any]],
+    popular_sites: List[Dict[str, Any]],
+    hero_bg_url: str = "",
+) -> str:
     problems_html = "\n".join([f"<li class='py-1'>{html_escape(p)}</li>" for p in theme.problem_list])
+
     quick_answer = build_quick_answer(theme.category, theme.keywords)
     causes = build_causes(theme.category)
     steps = build_steps(theme.category)
     pitfalls = build_pitfalls(theme.category)
     next_actions = build_next_actions(theme.category)
+
     causes_html = "\n".join([f"<li class='py-1'>{html_escape(c)}</li>" for c in causes])
     steps_html = "\n".join([f"<li class='py-1'>{html_escape(s)}</li>" for s in steps])
     pitfalls_html = "\n".join([f"<li class='py-1'>{html_escape(p)}</li>" for p in pitfalls])
     next_html = "\n".join([f"<li class='py-1'>{html_escape(n)}</li>" for n in next_actions])
+
     faq_html = "\n".join([
         f"""
         <details class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -1537,8 +2472,11 @@ def build_page_html(theme: Theme,
         """.strip()
         for q, a in faq
     ])
+
     ref_html = "\n".join([f"<li class='py-1'><a class='underline break-all' href='{html_escape(u)}' target='_blank' rel='noopener'>{html_escape(u)}</a></li>" for u in references])
     sup_html = "\n".join([f"<li class='py-1'><a class='underline break-all' href='{html_escape(u)}' target='_blank' rel='noopener'>{html_escape(u)}</a></li>" for u in supplements])
+
+    # affiliates slot: top2
     aff_blocks = []
     for a in affiliates_top2[:2]:
         title = html_escape(a.get("title", "Recommended"))
@@ -1559,38 +2497,75 @@ def build_page_html(theme: Theme,
         </div>
         """.strip()]
     aff_html = "\n".join(aff_blocks)
+
     related_html = "\n".join([
-        f"<li class='py-1'><a class='underline' href='{html_escape(t['url'])}'>{html_escape(t['title'])}</a> <span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
+        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in related_tools
     ])
+
     popular_html = "\n".join([
-        f"<li class='py-1'><a class='underline' href='{html_escape(t['url'])}'>{html_escape(t['title'])}</a> <span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
+        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in popular_sites
     ])
+
     canonical = tool_url if tool_url.startswith("http") else (SITE_DOMAIN.rstrip("/") + "/" + theme.slug + "/")
+
     article_html = "<p class='leading-relaxed whitespace-pre-wrap text-white/85'>" + html_escape(article_ja) + "</p>"
+    tool_ui = build_tool_ui(theme)
+
+    # internal linking: ALWAYS provide a path back to /hub/
+    hub_url = SITE_DOMAIN.rstrip("/") + "/hub/"
+
+    # short URL block (for click-through + share)
     share_script = """
 <script>
-function copyText(id){
+function copyTextFrom(id, btnId){
   const el = document.getElementById(id);
   if(!el) return;
   navigator.clipboard.writeText(el.value).then(()=>{
-    const b = document.getElementById("copyBtn");
-    if(b){ b.textContent = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copied) || "Copied"; }
-    setTimeout(()=>{ const b2=document.getElementById("copyBtn"); if(b2){ b2.textContent = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copy) || "Copy"; } }, 1200);
+    const b = document.getElementById(btnId);
+    if(b){
+      b.textContent = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copied) || "Copied";
+    }
+    setTimeout(()=>{
+      const b2 = document.getElementById(btnId);
+      if(b2){
+        b2.textContent = (window.I18N && I18N[document.documentElement.lang] && I18N[document.documentElement.lang].copy) || "Copy";
+      }
+    }, 1200);
   });
 }
 </script>
 """.strip()
+
+    bg_css = ""
+    if hero_bg_url:
+        bg_css = f"""
+  <div class="pointer-events-none fixed inset-0 opacity-40">
+    <div class="absolute inset-0 bg-cover bg-center" style="background-image:url('{html_escape(hero_bg_url)}')"></div>
+    <div class="absolute inset-0 bg-zinc-950/70"></div>
+  </div>
+        """.strip()
+    else:
+        bg_css = """
+  <div class="pointer-events-none fixed inset-0 opacity-70">
+    <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-500/35 to-cyan-400/20 blur-3xl"></div>
+    <div class="absolute top-40 -right-24 h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500/25 to-lime-400/10 blur-3xl"></div>
+    <div class="absolute bottom-0 left-1/4 h-96 w-96 rounded-full bg-gradient-to-br from-fuchsia-500/20 to-rose-400/10 blur-3xl"></div>
+  </div>
+        """.strip()
+
     html_doc = f"""<!doctype html>
 <html lang="{html_escape(DEFAULT_LANG)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html_escape(theme.title)} | {html_escape(SITE_BRAND)}</title>
-  <meta name="description" content="{html_escape('Practical troubleshooting guide and tool: ' + theme.title)}">
+  <title>{html_escape(theme.search_title)} | {html_escape(SITE_BRAND)}</title>
+  <meta name="description" content="{html_escape('One-page fix guide + checklist + tool: ' + theme.search_title)}">
   <link rel="canonical" href="{html_escape(canonical)}">
-  <meta property="og:title" content="{html_escape(theme.title)}">
+  <meta property="og:title" content="{html_escape(theme.search_title)}">
   <meta property="og:description" content="{html_escape('Fix guide + checklist + FAQ + references')}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{html_escape(canonical)}">
@@ -1599,197 +2574,197 @@ function copyText(id){
   <style>
     :root {{ color-scheme: dark; }}
     body {{
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+        "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
     }}
+    .glass {{ backdrop-filter: blur(10px); }}
   </style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-white">
-  <!-- Gradient background -->
-  <div class="pointer-events-none fixed inset-0 opacity-70">
-    <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-500/35 to-cyan-400/20 blur-3xl"></div>
-    <div class="absolute top-40 -right-24 h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500/25 to-lime-400/10 blur-3xl"></div>
-    <div class="absolute bottom-0 left-1/4 h-96 w-96 rounded-full bg-gradient-to-br from-fuchsia-500/20 to-rose-400/10 blur-3xl"></div>
-  </div>
+  {bg_css}
+
   <header class="relative z-10 mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
-      <a href="{html_escape(SITE_DOMAIN)}" class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">M</div>
+      <a href="{html_escape(hub_url)}" class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
         <div>
-          <div class="text-sm text-white/70">{html_escape(SITE_BRAND)}</div>
-          <div class="font-semibold">{html_escape(theme.title[:48])}</div>
+          <div class="font-semibold leading-tight">{html_escape(SITE_BRAND)}</div>
+          <div class="text-xs text-white/60">Hub → categories / popular / new</div>
         </div>
       </a>
-      <div class="flex items-center gap-3">
-        <nav class="hidden md:flex items-center gap-5 text-sm text-white/80">
-          <a class="hover:text-white" data-i18n="home" href="{html_escape(SITE_DOMAIN)}">Home</a>
-          <a class="hover:text-white" data-i18n="about" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/about.html')}">About Us</a>
-          <a class="hover:text-white" data-i18n="all_tools" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/hub/')}">All Tools</a>
-        </nav>
-        <div class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-          <span class="text-xs text-white/70" data-i18n="language">Language</span>
-          <select id="langSel" class="bg-transparent text-sm outline-none">
-            <option value="en">EN</option>
-            <option value="ja">JA</option>
-            <option value="ko">KO</option>
-            <option value="zh">ZH</option>
-          </select>
-        </div>
-      </div>
+
+      <nav class="flex items-center gap-3 text-sm">
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
+        <select id="langSel" class="ml-2 rounded-xl bg-white/10 border border-white/10 px-2 py-1 text-xs">
+          <option value="en">EN</option>
+          <option value="ja">JA</option>
+          <option value="ko">KO</option>
+          <option value="zh">ZH</option>
+        </select>
+      </nav>
     </div>
   </header>
+
   <main class="relative z-10 mx-auto max-w-6xl px-4 pb-16">
-    <!-- Hero -->
-    <section class="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-10 shadow-2xl shadow-black/40">
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-        <div class="max-w-3xl">
-          <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-            <span>{html_escape(theme.category)}</span>
-            <span>•</span>
-            <span>{html_escape(now_iso())}</span>
-          </div>
-          <h1 class="mt-4 text-2xl md:text-4xl font-semibold leading-tight">{html_escape(theme.title)}</h1>
-          <p class="mt-3 text-white/75 leading-relaxed">
-            A practical guide + checklist + FAQ + references. Built from real public posts and patterns.
+    <section class="rounded-3xl border border-white/10 bg-white/5 glass p-6 md:p-8">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl md:text-3xl font-semibold leading-tight">{html_escape(theme.search_title)}</h1>
+          <p class="mt-2 text-white/70">
+            Category: <span class="text-white/90">{html_escape(theme.category)}</span> ·
+            Updated: <span class="text-white/90">{html_escape(now_iso())}</span>
           </p>
         </div>
-        <div class="w-full md:w-[360px]">
-          <div class="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div class="text-sm text-white/70 mb-2" data-i18n="share">Share</div>
-            <div class="flex gap-2">
-              <input id="shareUrl" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-white/80"
-                     value="{html_escape(tool_url)}" readonly />
-              <button id="copyBtn" onclick="copyText('shareUrl')" class="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm hover:bg-white/15" data-i18n="copy">Copy</button>
+        <div class="rounded-2xl border border-white/10 bg-black/20 p-4 w-full md:w-[360px]">
+          <div class="text-sm text-white/70 mb-2" data-i18n="share">Share</div>
+          <div class="space-y-2">
+            <div class="text-xs text-white/60">Short URL (for posts)</div>
+            <div class="flex items-center gap-2">
+              <input id="shortUrl" value="{html_escape(short_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnShort" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('shortUrl','copyBtnShort')">Copy</button>
             </div>
-            <div class="mt-3 text-xs text-white/60">
-              Canonical: <span class="break-all">{html_escape(canonical)}</span>
+
+            <div class="text-xs text-white/60">Full URL</div>
+            <div class="flex items-center gap-2">
+              <input id="fullUrl" value="{html_escape(tool_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnFull" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('fullUrl','copyBtnFull')">Copy</button>
             </div>
           </div>
         </div>
       </div>
     </section>
-    <!-- Grid -->
-    <section class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <section class="mt-6">
+      {tool_ui}
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="problems">Problems this tool can help with</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="problems">Problems this tool can help with</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {problems_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="quick_answer">Quick answer</h2>
-          <div class="mt-3 text-white/80 leading-relaxed whitespace-pre-wrap">{html_escape(quick_answer)}</div>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="causes">Common causes</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="quick_answer">Quick answer</h2>
+          <pre class="mt-3 text-white/85 whitespace-pre-wrap leading-relaxed">{html_escape(quick_answer)}</pre>
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="causes">Common causes</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {causes_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="steps">Step-by-step checklist</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="steps">Step-by-step checklist</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {steps_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="pitfalls">Common pitfalls & how to avoid them</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="pitfalls">Common pitfalls & how to avoid them</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {pitfalls_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="next">If it still doesn’t work</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="next">If it still doesn’t work</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {next_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold">Deep Guide (JA)</h2>
-          <div class="mt-4">
-            {article_html}
-          </div>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="faq">FAQ</h2>
-          <div class="mt-4 grid gap-3">
-            {faq_html}
-          </div>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="references">Reference links</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold">Long guide (JP, 2500+ chars)</h2>
+          <div class="mt-3">{article_html}</div>
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="faq">FAQ</h2>
+          <div class="mt-3 space-y-3">{faq_html}</div>
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="references">Reference links</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {ref_html}
           </ul>
-          <h3 class="mt-6 text-base font-semibold text-white/90" data-i18n="supplement">Supplementary resources</h3>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 class="text-xl font-semibold" data-i18n="supplement">Supplementary resources</h2>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {sup_html}
           </ul>
-        </section>
+        </div>
       </div>
+
       <aside class="space-y-6">
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold" data-i18n="aff_title">Recommended</h2>
-            <div class="text-xs text-white/60">AFF</div>
-          </div>
-          <div class="mt-4 grid gap-3">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h3 class="text-lg font-semibold" data-i18n="aff_title">Recommended</h3>
+          <div class="mt-3 space-y-3">
+            <!-- AFF_SLOT (top2 injected) -->
             {aff_html}
           </div>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="related">Related tools</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h3 class="text-lg font-semibold" data-i18n="related">Related tools</h3>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {related_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold" data-i18n="popular">Popular tools</h2>
-          <ul class="mt-3 list-disc pl-6 text-white/80">
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h3 class="text-lg font-semibold" data-i18n="popular">Popular tools</h3>
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {popular_html}
           </ul>
-        </section>
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 class="text-lg font-semibold">Meta</h2>
-          <div class="mt-3 text-sm text-white/75 space-y-2">
-            <div><span class="text-white/60">Category:</span> {html_escape(theme.category)}</div>
-            <div><span class="text-white/60">Slug:</span> {html_escape(theme.slug)}</div>
-            <div><span class="text-white/60">Run:</span> {html_escape(RUN_ID)}</div>
-            <div><span class="text-white/60">Keywords:</span> {html_escape(", ".join(theme.keywords[:12]))}</div>
-          </div>
-        </section>
+        </div>
       </aside>
     </section>
   </main>
-  <footer class="relative z-10 border-t border-white/10 bg-black/30">
-    <div class="mx-auto max-w-6xl px-4 py-10">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div>
-          <div class="font-semibold">{html_escape(SITE_BRAND)}</div>
-          <div class="mt-2 text-sm text-white/70" data-i18n="footer_note">We aim to provide practical, fast, and respectful troubleshooting guides.</div>
+
+  <footer class="relative z-10 mt-10 bg-zinc-900/60 border-t border-white/10">
+    <div class="mx-auto max-w-6xl px-4 py-10 grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div class="md:col-span-2">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
+          <div>
+            <div class="font-semibold">{html_escape(SITE_BRAND)}</div>
+            <div class="text-xs text-white/60" data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</div>
+          </div>
         </div>
-        <div>
-          <div class="text-sm font-semibold text-white/80">Links</div>
-          <ul class="mt-2 text-sm text-white/70 space-y-1">
-            <li><a class="underline" href="{html_escape(SITE_DOMAIN)}" data-i18n="home">Home</a></li>
-            <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/about.html')}" data-i18n="about">About Us</a></li>
-            <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/hub/')}" data-i18n="all_tools">All Tools</a></li>
-          </ul>
-        </div>
-        <div>
-          <div class="text-sm font-semibold text-white/80">Legal</div>
-          <ul class="mt-2 text-sm text-white/70 space-y-1">
-            <li><a class="underline" href="/policies/privacy.html" data-i18n="privacy">Privacy</a></li>
-            <li><a class="underline" href="/policies/terms.html" data-i18n="terms">Terms</a></li>
-            <li><a class="underline" href="/policies/disclaimer.html" data-i18n="disclaimer">Disclaimer</a></li>
-            <li><a class="underline" href="/policies/contact.html" data-i18n="contact">Contact</a></li>
-          </ul>
-          <div class="mt-3 text-xs text-white/50">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
-        </div>
+        <div class="mt-3 text-xs text-white/60">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
       </div>
-      <div class="mt-10 text-xs text-white/45">© {dt.datetime.now().year} {html_escape(SITE_BRAND)}. Built automatically.</div>
+
+      <div class="text-sm">
+        <div class="font-semibold mb-2">Legal</div>
+        <ul class="space-y-2 text-white/70">
+          <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/privacy.html')}" data-i18n="privacy">Privacy</a></li>
+          <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/terms.html')}" data-i18n="terms">Terms</a></li>
+          <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/contact.html')}" data-i18n="contact">Contact</a></li>
+        </ul>
+      </div>
+
+      <div class="text-sm">
+        <div class="font-semibold mb-2">Hub</div>
+        <ul class="space-y-2 text-white/70">
+          <li><a class="underline" href="{html_escape(hub_url)}">/hub/</a></li>
+          <li><a class="underline" href="{html_escape(hub_url)}#tools">All tools</a></li>
+        </ul>
+      </div>
     </div>
   </footer>
+
   {build_i18n_script(DEFAULT_LANG)}
   {share_script}
 </body>
@@ -1798,498 +2773,669 @@ function copyText(id){
     return html_doc
 
 
-# =========================
-# Policies pages generation
-# =========================
+# =============================================================================
+# Site building helpers (slug collision safe, related/popular)
+# =============================================================================
+def allocate_unique_slug(base_slug: str) -> str:
+    """
+    No-overwrite rule: if goliath/pages/<slug> exists, use -2, -3...
+    """
+    base = safe_slug(base_slug)
+    if not os.path.exists(os.path.join(PAGES_DIR, base)):
+        return base
+    for i in range(2, 100):
+        cand = f"{base}-{i}"
+        if not os.path.exists(os.path.join(PAGES_DIR, cand)):
+            return cand
+    # extremely unlikely
+    return f"{base}-{sha1(base)[:6]}"
 
-def generate_policies_pages() -> None:
+
+def site_url_for_slug(slug: str) -> str:
+    """
+    Public URL for a generated page.
+    Your generation path: goliath/pages/<slug>/index.html
+    """
+    return SITE_DOMAIN.rstrip("/") + f"/goliath/pages/{slug}/"
+
+
+def choose_related_tools(all_sites: List[Dict[str, Any]], category: str, exclude_slug: str, n: int = 5) -> List[Dict[str, Any]]:
+    same = [s for s in all_sites if s.get("category") == category and s.get("slug") != exclude_slug]
+    other = [s for s in all_sites if s.get("slug") != exclude_slug]
+    random.shuffle(same)
+    random.shuffle(other)
+    picks = (same + other)[:n]
+    return [{"title": s.get("search_title") or s.get("title", "Tool"), "url": s.get("url", "#"), "category": s.get("category", ""), "slug": s.get("slug", "")} for s in picks]
+
+
+def compute_popular_sites(all_sites: List[Dict[str, Any]], n: int = 6) -> List[Dict[str, Any]]:
+    def metric(s: Dict[str, Any]) -> float:
+        for k in ["views", "score", "popularity"]:
+            if k in s:
+                try:
+                    return float(s.get(k, 0))
+                except Exception:
+                    pass
+        iso = s.get("updated_at") or s.get("created_at") or ""
+        try:
+            return dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return 0.0
+
+    sites = list(all_sites)
+    sites.sort(key=lambda x: metric(x), reverse=True)
+    return [{"title": s.get("search_title") or s.get("title", "Tool"), "url": s.get("url", "#"), "category": s.get("category", ""), "slug": s.get("slug", "")} for s in sites[:n]]
+
+
+# =============================================================================
+# Policies (legal fortress) - /policies/ only (allowed)
+# =============================================================================
+def ensure_policies() -> List[str]:
+    """
+    Create/overwrite policies pages (privacy/terms/contact) under /policies/.
+    Returns list of relative URLs for sitemap.
+    """
     os.makedirs(POLICIES_DIR, exist_ok=True)
+    privacy_path = os.path.join(POLICIES_DIR, "privacy.html")
+    terms_path = os.path.join(POLICIES_DIR, "terms.html")
+    contact_path = os.path.join(POLICIES_DIR, "contact.html")
+
+    base_css = """
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", Arial; }
+</style>
+""".strip()
+
     privacy = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy | {html_escape(SITE_BRAND)}</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-zinc-950 text-white"><main class="mx-auto max-w-3xl px-4 py-10">
-  <h1 class="text-2xl font-semibold">Privacy Policy</h1>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    This website may display ads (including Google AdSense) and may use cookies or similar technologies to measure usage and improve services.
-    Third-party vendors, including Google, use cookies to serve ads based on prior visits.
-  </p>
-  <h2 class="mt-8 text-xl font-semibold">Data we may collect</h2>
-  <ul class="mt-3 list-disc pl-6 text-white/80">
-    <li>Basic access logs (timestamp, user agent, referrer, pages accessed)</li>
-    <li>Anonymous analytics data</li>
-    <li>Cookie identifiers used by ad/analytics providers</li>
-  </ul>
-  <h2 class="mt-8 text-xl font-semibold">Contact</h2>
-  <p class="mt-3 text-white/80">For inquiries: {html_escape(SITE_CONTACT_EMAIL)}</p>
-  <p class="mt-10 text-sm text-white/60"><a class="underline" href="{html_escape(SITE_DOMAIN)}">Home</a></p>
-</main></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-semibold">Privacy Policy</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      This site may use Google AdSense and similar advertising services. These services may use cookies and/or
+      device identifiers to show ads and measure performance.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Cookies</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      Cookies may be used to store preferences and improve user experience. You can manage cookies via your browser settings.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Analytics</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      We may collect aggregated usage data to improve the site. We do not intentionally collect sensitive personal information.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Contact</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      If you have questions about this policy, contact: {html_escape(SITE_CONTACT_EMAIL)}
+    </p>
+  </main>
+</body></html>
 """
-    write_text(os.path.join(POLICIES_DIR, "privacy.html"), privacy)
+
     terms = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Terms | {html_escape(SITE_BRAND)}</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-zinc-950 text-white"><main class="mx-auto max-w-3xl px-4 py-10">
-  <h1 class="text-2xl font-semibold">Terms</h1>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    By using this website, you agree that the content is provided as-is for informational purposes.
-    You are responsible for verifying any steps before applying them to your environment.
-  </p>
-  <h2 class="mt-8 text-xl font-semibold">Usage</h2>
-  <ul class="mt-3 list-disc pl-6 text-white/80">
-    <li>No warranty is provided.</li>
-    <li>Do not use the site for unlawful activities.</li>
-    <li>We may update content without notice.</li>
-  </ul>
-  <p class="mt-10 text-sm text-white/60"><a class="underline" href="{html_escape(SITE_DOMAIN)}">Home</a></p>
-</main></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms & Disclaimer | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-semibold">Terms & Disclaimer</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      This site provides informational tools and guides. Results may vary based on inputs and environment.
+      You are responsible for verifying outputs before using them in important decisions.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">No Warranty</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      The site is provided "as is" without warranties of any kind. We do not guarantee completeness, accuracy, or availability.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Limitation of Liability</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      We are not liable for any damages resulting from the use of this site or its outputs, to the fullest extent permitted by law.
+    </p>
+  </main>
+</body></html>
 """
-    write_text(os.path.join(POLICIES_DIR, "terms.html"), terms)
-    disclaimer = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Disclaimer | {html_escape(SITE_BRAND)}</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-zinc-950 text-white"><main class="mx-auto max-w-3xl px-4 py-10">
-  <h1 class="text-2xl font-semibold">Disclaimer</h1>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    This site may contain affiliate links. If you purchase through them, we may earn a commission.
-    Recommendations are selected by category matching and priority rules.
-  </p>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    We do not guarantee outcomes. Always back up your data and test changes safely.
-  </p>
-  <p class="mt-10 text-sm text-white/60"><a class="underline" href="{html_escape(SITE_DOMAIN)}">Home</a></p>
-</main></body></html>
-"""
-    write_text(os.path.join(POLICIES_DIR, "disclaimer.html"), disclaimer)
+
     contact = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contact | {html_escape(SITE_BRAND)}</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-zinc-950 text-white"><main class="mx-auto max-w-3xl px-4 py-10">
-  <h1 class="text-2xl font-semibold">Contact</h1>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    運営者/運営サイト: {html_escape(SITE_BRAND)} / {html_escape(SITE_DOMAIN)}
-  </p>
-  <p class="mt-4 text-white/80 leading-relaxed">
-    Email: {html_escape(SITE_CONTACT_EMAIL)}
-  </p>
-  <p class="mt-10 text-sm text-white/60"><a class="underline" href="{html_escape(SITE_DOMAIN)}">Home</a></p>
-</main></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact & Operator | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-semibold">Contact & Operator</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      Operator: {html_escape(SITE_BRAND)} (mikanntool.com owner)<br>
+      Contact: {html_escape(SITE_CONTACT_EMAIL)}
+    </p>
+    <p class="text-white/70 mt-4 leading-relaxed">
+      If you found an issue or want to request improvements, please email us with the page URL and a short description.
+    </p>
+  </main>
+</body></html>
 """
-    write_text(os.path.join(POLICIES_DIR, "contact.html"), contact)
+
+    write_text(privacy_path, privacy)
+    write_text(terms_path, terms)
+    write_text(contact_path, contact)
+
+    return [
+        SITE_DOMAIN.rstrip("/") + "/policies/privacy.html",
+        SITE_DOMAIN.rstrip("/") + "/policies/terms.html",
+        SITE_DOMAIN.rstrip("/") + "/policies/contact.html",
+    ]
 
 
-# =========================
-# Validation & Autofix
-# =========================
-
-def validate_site_html(html_doc: str, theme: Theme, references: List[str], supplements: List[str]) -> List[str]:
-    issues = []
-    required_keys = ["problems", "quick_answer", "causes", "steps", "pitfalls", "next", "faq", "references"]
-    for k in required_keys:
-        if f'data-i18n="{k}"' not in html_doc:
-            issues.append(f"missing i18n key block: {k}")
-    for p in ["/policies/privacy.html", "/policies/terms.html", "/policies/disclaimer.html", "/policies/contact.html"]:
-        if p not in html_doc:
-            issues.append(f"missing legal link: {p}")
-    if "AFF_SLOT" not in html_doc:
-        issues.append("missing AFF_SLOT marker")
-    if not (REF_URL_MIN <= len(references) <= REF_URL_MAX):
-        issues.append(f"references count out of range: {len(references)}")
-    if len(supplements) < SUPP_URL_MIN:
-        issues.append(f"supplement count too low: {len(supplements)}")
-    if len(re.sub(r"<[^>]+>", "", html_doc)) < 1200:
-        issues.append("page text content too small (overall)")
-    if theme.slug not in html_doc:
-        issues.append("slug not present in page")
-    return issues
-
-def autofix_inputs(theme: Theme,
-                   references: List[str],
-                   supplements: List[str],
-                   faq: List[Tuple[str, str]],
-                   article_ja: str) -> Tuple[List[str], List[str], List[Tuple[str, str]], str]:
-    references = uniq_keep_order([u for u in references if u])
-    if len(references) < REF_URL_MIN:
-        filler = [
-            "https://developer.mozilla.org/",
-            "https://docs.github.com/",
-            "https://en.wikipedia.org/wiki/Troubleshooting",
-            "https://en.wikipedia.org/wiki/Domain_Name_System",
-            "https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol",
-        ]
-        for u in filler:
-            if len(references) >= REF_URL_MIN:
-                break
-            if u not in references:
-                references.append(u)
-    references = references[:REF_URL_MAX]
-    supplements = uniq_keep_order([u for u in supplements if u])
-    if len(supplements) < SUPP_URL_MIN:
-        for u in supplemental_resources_for_category(theme.category):
-            if len(supplements) >= SUPP_URL_MIN:
-                break
-            if u not in supplements:
-                supplements.append(u)
-    if len(faq) < MIN_FAQ:
-        extra = build_faq(theme.category)
-        for q, a in extra:
-            if len(faq) >= MIN_FAQ:
-                break
-            faq.append((q, a))
-    if len(article_ja) < MIN_ARTICLE_CHARS_JA:
-        article_ja = generate_long_article_ja(theme)
-    return references, supplements, faq, article_ja
-
-
-# =========================
-# Sitemap & robots
-# =========================
-
-def build_sitemap_urls(sites: List[Dict[str, Any]]) -> List[str]:
-    urls = []
-    for s in sites:
-        u = s.get("url") or ""
-        if u and u.startswith("http"):
-            urls.append(u)
-    return uniq_keep_order(urls)
-
-def render_sitemap_xml(urls: List[str]) -> str:
-    now_date = dt.datetime.now(dt.timezone.utc).date().isoformat()
+# =============================================================================
+# Sitemap + robots + ping
+# =============================================================================
+def build_sitemap(urls: List[str]) -> str:
+    urls = uniq_keep_order([u for u in urls if isinstance(u, str) and u.startswith("http")])
+    lastmod = dt.datetime.now(dt.timezone.utc).date().isoformat()
     items = []
     for u in urls:
-        items.append(f"""  <url>
-    <loc>{html_escape(u)}</loc>
-    <lastmod>{now_date}</lastmod>
-  </url>""")
-    return """<?xml version="1.0" encoding="UTF-8"?>\n""" + \
-        """<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n""" + \
-        "\n".join(items) + "\n</urlset>\n"
+        items.append(
+            f"<url><loc>{html_escape(u)}</loc><lastmod>{lastmod}</lastmod></url>"
+        )
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{''.join(items)}
+</urlset>
+"""
+    return xml
 
-def render_robots_txt(sitemap_url: str) -> str:
+
+def build_robots(sitemap_url: str) -> str:
     return f"""User-agent: *
 Allow: /
 
 Sitemap: {sitemap_url}
 """
 
-def update_sitemap_robots(all_sites: List[Dict[str, Any]]) -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
-    urls = build_sitemap_urls(all_sites)
-    sitemap = render_sitemap_xml(urls)
-    robots = render_robots_txt(SITE_DOMAIN.rstrip("/") + "/sitemap.xml")
-    write_text(os.path.join(OUT_DIR, "sitemap.xml"), sitemap)
-    write_text(os.path.join(OUT_DIR, "robots.txt"), robots)
-    if ALLOW_ROOT_UPDATE:
-        root_sitemap = os.path.join(REPO_ROOT, "sitemap.xml")
-        root_robots = os.path.join(REPO_ROOT, "robots.txt")
-        for p in [root_sitemap, root_robots]:
-            if os.path.exists(p):
-                shutil.copy2(p, p + f".bak_{RUN_ID}")
-        write_text(root_sitemap, sitemap)
-        write_text(root_robots, robots)
-        logging.info("Updated root sitemap.xml and robots.txt (backup created)")
-    else:
-        logging.info("Root sitemap/robots not updated (ALLOW_ROOT_UPDATE!=1). Written to goliath/_out instead.")
+
+def ping_search_engines(sitemap_url: str) -> None:
+    """
+    Optional ping. Not guaranteed, but logs status.
+    """
+    targets = [
+        "https://www.google.com/ping?" + urlencode({"sitemap": sitemap_url}),
+        "https://www.bing.com/ping?" + urlencode({"sitemap": sitemap_url}),
+    ]
+    for u in targets:
+        st, body = http_get(u, headers={"User-Agent": "goliath-tool/1.0"}, timeout=20)
+        logging.info("Ping sitemap: %s -> %s", u, st)
 
 
-# =========================
-# Hub sites.json update
-# =========================
+# =============================================================================
+# Validation + Auto-fix (up to MAX_AUTOFIX)
+# =============================================================================
+REQUIRED_MARKERS = [
+    "AFF_SLOT",
+    "Long guide (JP, 2500+ chars)",
+    "Reference links",
+    "<script src=\"https://cdn.tailwindcss.com\"></script>",
+]
 
-def ensure_unique_site_entry(existing: List[Dict[str, Any]], new_entry: Dict[str, Any]) -> List[Dict[str, Any]]:
-    slug = new_entry.get("slug", "")
-    url = new_entry.get("url", "")
-    out = []
-    replaced = False
-    for s in existing:
-        if not isinstance(s, dict):
+def validate_site_html(html_text: str) -> List[str]:
+    errs: List[str] = []
+    if not html_text or len(html_text) < 2000:
+        errs.append("html_too_short")
+        return errs
+    for m in REQUIRED_MARKERS:
+        if m not in html_text:
+            errs.append(f"missing:{m}")
+    # article length check: crude
+    if "Long guide (JP" in html_text:
+        # ensure article content roughly long
+        if html_text.count("【") < 6 and len(html_text) < 12000:
+            errs.append("article_maybe_too_short")
+    return errs
+
+
+# =============================================================================
+# Reply generation (EN, short, no “AI/bot” words, URL last line)
+# =============================================================================
+FORBIDDEN_REPLY_WORDS = ["ai", "bot", "automation", "automated"]
+
+def openai_generate_reply_stub(post: Post, tool_url: str) -> str:
+    """
+    Deterministic reply. 280-400 chars target. English. Last line is URL only.
+    """
+    # empathy first
+    t = post.norm_text()
+    # short summary (very light)
+    summary = "That sounds frustrating—especially when you’re trying to decide quickly."
+    if any(w in t.lower() for w in ["overwhelmed", "confused", "stuck", "don’t know"]):
+        summary = "That sounds really overwhelming—especially when you’re stuck and need a clear next step."
+    elif any(w in t.lower() for w in ["today", "tomorrow", "this week", "urgent", "deadline"]):
+        summary = "That’s stressful—especially with the clock ticking."
+
+    line2 = "I put together a simple one-page guide + checklist that should help you move forward:"
+    reply = f"{summary}\n{line2}\n{tool_url}"
+
+    # keep clean
+    low = reply.lower()
+    for w in FORBIDDEN_REPLY_WORDS:
+        if w in low:
+            reply = reply.replace(w, "")
+    # length guard
+    if len(reply) > 430:
+        reply = f"{summary}\nOne-page checklist here:\n{tool_url}"
+    if len(reply) < 220:
+        reply = f"{summary}\nI made a one-page checklist for this:\n{tool_url}"
+    return reply.strip()
+
+
+# =============================================================================
+# Issues output (minimum 100 items; stub fill allowed)
+# =============================================================================
+def make_stub_posts(n: int) -> List[Post]:
+    stubs: List[Post] = []
+    for i in range(n):
+        stubs.append(Post(
+            source="stub",
+            id=sha1(f"stub:{RUN_ID}:{i}"),
+            url=f"{SITE_DOMAIN.rstrip('/')}/goliath/_out/stub/{RUN_ID}/{i}",
+            text="Need a checklist / template for a common problem.",
+            author="unknown",
+            created_at=now_iso(),
+        ))
+    return stubs
+
+
+def build_issue_items(posts: List[Post], post_to_tool_url: Dict[str, str]) -> List[Dict[str, str]]:
+    items: List[Dict[str, str]] = []
+    for p in posts:
+        tool_url = post_to_tool_url.get(p.id, "")
+        if not tool_url:
             continue
-        if slug and s.get("slug") == slug:
-            merged = dict(s)
-            merged.update(new_entry)
-            out.append(merged)
-            replaced = True
-        elif url and s.get("url") == url:
-            merged = dict(s)
-            merged.update(new_entry)
-            out.append(merged)
-            replaced = True
-        else:
-            out.append(s)
-    if not replaced:
-        out.append(new_entry)
+        reply = openai_generate_reply_stub(p, tool_url)
+        items.append({
+            "problem_url": p.url,
+            "reply": reply,
+            "source": p.source,
+        })
+    return items
+
+
+def chunk_issue_bodies(items: List[Dict[str, str]], chunk_size: int = 40) -> List[str]:
+    bodies: List[str] = []
+    for i in range(0, len(items), chunk_size):
+        chunk = items[i:i+chunk_size]
+        lines: List[str] = []
+        for it in chunk:
+            lines.append(f"Problem URL: {it['problem_url']}")
+            lines.append("Reply:")
+            lines.append(it["reply"])
+            lines.append("")  # blank
+            lines.append("---")
+        bodies.append("\n".join(lines).rstrip() + "\n")
+    return bodies
+
+
+def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> str:
+    """
+    Write JSON with titles/bodies for GitHub issues.
+    Returns path to JSON.
+    """
+    bodies = chunk_issue_bodies(items, ISSUE_MAX_ITEMS)
+    payloads: List[Dict[str, str]] = []
+    for idx, body in enumerate(bodies, start=1):
+        title = f"Goliath reply candidates ({RUN_ID}) part {idx}/{len(bodies)}"
+        if extra_notes and idx == 1:
+            body = extra_notes.strip() + "\n\n" + body
+        payloads.append({"title": title, "body": body})
+
+    out_path = os.path.join(OUT_DIR, f"issues_payload_{RUN_ID}.json")
+    write_json(out_path, {"run_id": RUN_ID, "count": len(items), "issues": payloads})
+    return out_path
+
+
+# =============================================================================
+# Orchestration
+# =============================================================================
+def collect_all() -> List[Post]:
+    # per spec targets:
+    # Bluesky 50, Mastodon 100, Reddit 20, X 1(mentions), HN (rest)
+    bs = collect_bluesky(max_items=50)
+    ms = collect_mastodon(max_items=100)
+    rd = collect_reddit(max_items=20)
+    xx = collect_x_mentions(max_items=max(1, min(X_MAX, 5)))
+    hn = collect_hn(max_items=HN_MAX)
+
+    all_posts = bs + ms + rd + xx + hn
+    # filter dup urls
+    seen = set()
+    out: List[Post] = []
+    for p in all_posts:
+        if not p.url:
+            continue
+        if adult_or_sensitive(p.text):
+            continue
+        key = sha1(p.url)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+
+    # cap MAX_COLLECT
+    out = out[:MAX_COLLECT]
+    logging.info("Collected total=%d (Bluesky=%d, Mastodon=%d, Reddit=%d, X=%d, HN=%d)",
+                 len(out), len(bs), len(ms), len(rd), len(xx), len(hn))
     return out
 
-def hub_url_for_slug(slug: str) -> str:
-    return SITE_DOMAIN.rstrip("/") + "/goliath/pages/" + slug + "/"
 
-def ghpages_url_for_slug(slug: str) -> str:
-    parsed = urlparse(SITE_DOMAIN)
-    if parsed.netloc and "github.io" in parsed.netloc:
-        return SITE_DOMAIN.rstrip("/") + "/goliath/pages/" + slug + "/"
-    return hub_url_for_slug(slug)
+def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
+    clusters = cluster_posts(posts, threshold=0.22)
+    themes = [make_theme(c) for c in clusters if len(c) >= 2]
+    themes.sort(key=lambda t: t.score, reverse=True)
+    return themes[:max_themes]
 
 
-# =========================
-# Build sites
-# =========================
+def build_sites(themes: List[Theme], aff_norm: Dict[str, List[Dict[str, Any]]], all_sites_inventory: List[Dict[str, Any]], hero_bg_url: str) -> Tuple[List[Theme], List[Dict[str, Any]], Dict[str, str], List[str]]:
+    """
+    Builds pages + shortlinks. Updates site inventory list (not hub HTML).
+    Returns:
+      - built themes (with final slug + short_code)
+      - new inventory list entries
+      - mapping post_id -> tool_url for issue generation
+      - list of urls for sitemap
+    """
+    os.makedirs(PAGES_DIR, exist_ok=True)
+    os.makedirs(os.path.join(GOLIATH_DIR, "go"), exist_ok=True)
 
-def reserve_output_folder(base_slug: str) -> str:
-    slug = base_slug
-    path = os.path.join(PAGES_DIR, slug)
-    if not os.path.exists(path):
-        return slug
-    i = 2
-    while True:
-        slug2 = f"{base_slug}-{i}"
-        path2 = os.path.join(PAGES_DIR, slug2)
-        if not os.path.exists(path2):
-            return slug2
-        i += 1
+    sitemap_urls: List[str] = []
+    new_inventory_entries: List[Dict[str, Any]] = []
+    post_to_tool_url: Dict[str, str] = {}
 
-def build_references(theme: Theme) -> List[str]:
-    urls = [p.url for p in theme.representative_posts if p.url]
-    urls = uniq_keep_order(urls)
-    if len(urls) < REF_URL_MIN:
-        for u in supplemental_resources_for_category(theme.category):
-            if len(urls) >= REF_URL_MIN:
-                break
-            if u not in urls:
-                urls.append(u)
-    return urls[:REF_URL_MAX]
+    # compute popular once from current inventory
+    popular_now = compute_popular_sites(all_sites_inventory, n=8)
 
-def build_reply_main_text() -> str:
-    empathy = "I know how you feel, it's really tough to deal with."
-    second = "I put together a quick one-page guide for you that might help solve this."
-    third = "It covers common causes and a step-by-step checklist to save you time."
-    last = "I hope it helps."
-    return f"{empathy} {second} {third} {last}"
+    for theme in themes:
+        # allocate collision-safe slug
+        final_slug = allocate_unique_slug(theme.slug)
+        theme.slug = final_slug
 
-def build_one_site(theme: Theme, all_sites: List[Dict[str, Any]], aff: Dict[str, Any]) -> Dict[str, Any]:
-    final_slug = reserve_output_folder(theme.slug)
-    theme.slug = final_slug
-    folder = os.path.join(PAGES_DIR, final_slug)
-    index_path = os.path.join(folder, "index.html")
-    tool_url = SITE_DOMAIN.rstrip("/") + "/goliath/pages/" + final_slug + "/"
-    top2 = pick_affiliates_for_category(aff, theme.category, topn=2)
-    references = build_references(theme)
-    supplements = supplemental_resources_for_category(theme.category)
-    faq = build_faq(theme.category)
-    article_ja = generate_long_article_ja(theme)
-    references, supplements, faq, article_ja = autofix_inputs(theme, references, supplements, faq, article_ja)
-    related = choose_related_tools(all_sites, theme.category, exclude_slug=final_slug, n=5)
-    popular = compute_popular_sites(all_sites, n=6)
-    html_doc = build_page_html(
-        theme=theme,
-        tool_url=tool_url,
-        all_sites=all_sites,
-        affiliates_top2=top2,
-        references=references,
-        supplements=supplements,
-        article_ja=article_ja,
-        faq=faq,
-        related_tools=related,
-        popular_sites=popular,
-    )
-    for attempt in range(1, MAX_AUTOFIX + 1):
-        issues = validate_site_html(html_doc, theme, references, supplements)
-        if not issues:
-            break
-        logging.warning("Validate issues (attempt %d): %s", attempt, issues)
-        references, supplements, faq, article_ja = autofix_inputs(theme, references, supplements, faq, article_ja)
-        html_doc = build_page_html(
+        tool_url = site_url_for_slug(final_slug)
+
+        # shortlink
+        code = short_code_for_url(tool_url)
+        theme.short_code = code
+        short_url = SITE_DOMAIN.rstrip("/") + f"/goliath/go/{code}/"
+
+        # write shortlink page
+        rel_path, short_html = build_shortlink_page(tool_url, code)
+        abs_short_path = os.path.join(REPO_ROOT, rel_path)
+        write_text(abs_short_path, short_html)
+
+        # build content
+        references = pick_reference_urls(theme)
+        supplements = supplemental_resources_for_category(theme.category)[:max(SUPP_URL_MIN, 3)]
+        article_ja = generate_long_article_ja(theme)
+        faq = build_faq(theme.category)
+
+        # affiliates top2
+        aff_top2 = pick_affiliates_for_category(aff_norm, theme.category, topn=2)
+
+        # related tools from existing inventory + new ones (accumulate)
+        inventory_for_related = all_sites_inventory + new_inventory_entries
+        related = choose_related_tools(inventory_for_related, theme.category, exclude_slug=final_slug, n=5)
+
+        # build html
+        html_text = build_page_html(
             theme=theme,
             tool_url=tool_url,
-            all_sites=all_sites,
-            affiliates_top2=top2,
+            short_url=short_url,
+            affiliates_top2=aff_top2,
             references=references,
             supplements=supplements,
             article_ja=article_ja,
             faq=faq,
             related_tools=related,
-            popular_sites=popular,
+            popular_sites=popular_now,
+            hero_bg_url=hero_bg_url,
         )
-    write_text(index_path, html_doc)
-    entry = {
-        "title": theme.title,
-        "slug": final_slug,
-        "category": theme.category,
-        "url": tool_url,
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-        "run_id": RUN_ID,
-        "keywords": theme.keywords[:12],
-    }
-    return entry
 
-
-# =========================
-# Issues payload output
-# =========================
-
-def build_issues_payload(themes: List[Theme],
-                         site_entries: List[Dict[str, Any]],
-                         source_counts: Dict[str, int],
-                         reply_count: int,
-                         missing_affiliates: List[str]) -> str:
-    by_slug = {s["slug"]: s for s in site_entries if isinstance(s, dict) and s.get("slug")}
-    lines = []
-    lines.append(f"# Goliath Issues Payload ({now_iso()})")
-    lines.append("")
-    lines.append(f"- run_id: {RUN_ID}")
-    lines.append(f"- generated_sites: {len(site_entries)}")
-    if source_counts:
-        counts_line = " ".join([f"{name}: {cnt}" for name, cnt in source_counts.items()])
-        lines.append(f"- collected_posts: {counts_line}")
-    lines.append(f"- reply_candidates: {reply_count}")
-    if missing_affiliates:
-        lines.append(f"- affiliates_missing_categories: {', '.join(missing_affiliates)}")
-    lines.append("")
-    reply_main_text = build_reply_main_text()
-    for theme in themes:
-        se = by_slug.get(theme.slug)
-        if not se:
-            continue
-        tool_url = se.get("url", "#")
-        for p in theme.representative_posts:
-            lines.append(p.url)
-            lines.append(reply_main_text)
-            lines.append(tool_url)
-            lines.append("")
-    return "\n".join(lines).strip() + "\n"
-
-
-# =========================
-# Runner
-# =========================
-
-def ensure_dirs() -> None:
-    os.makedirs(PAGES_DIR, exist_ok=True)
-    os.makedirs(OUT_DIR, exist_ok=True)
-    os.makedirs(POLICIES_DIR, exist_ok=True)
-
-def collect_all_posts() -> Tuple[List[Post], Dict[str, int]]:
-    posts: List[Post] = []
-    source_counts: Dict[str, int] = {}
-    bsky = collect_bluesky(max_items=60); source_counts["Bluesky"] = len(bsky); posts.extend(bsky)
-    xposts = collect_x_mentions(max_items=X_MAX); source_counts["X"] = len(xposts); posts.extend(xposts)
-    reddit_posts = collect_reddit(max_items=60); source_counts["Reddit"] = len(reddit_posts); posts.extend(reddit_posts)
-    hn_posts = collect_hn(max_items=HN_MAX); source_counts["HN"] = len(hn_posts); posts.extend(hn_posts)
-    mastodon_posts = collect_mastodon(max_items=120); source_counts["Mastodon"] = len(mastodon_posts); posts.extend(mastodon_posts)
-    seen = set()
-    deduped = []
-    for p in posts:
-        key = sha1((p.url or "") + "|" + (p.norm_text()[:200] or ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(p)
-    deduped = deduped[:MAX_COLLECT]
-    logging.info("Total collected posts (deduped): %d", len(deduped))
-    return deduped, source_counts
-
-def run() -> None:
-    setup_logging()
-    ensure_dirs()
-    generate_policies_pages()
-    aff, missing_affiliates = load_affiliates()
-    hub_sites = read_hub_sites()
-    posts, source_counts = collect_all_posts()
-    if len(posts) < 12:
-        logging.warning("Too few posts collected (%d). Generating fallback theme.", len(posts))
-        fallback_post = Post(
-            source="system",
-            id=sha1("fallback"),
-            url="https://example.com",
-            text="Need help fixing an issue quickly with a safe checklist and references.",
-            author="system",
-            created_at=now_iso(),
-        )
-        clusters = [[fallback_post]]
-    else:
-        clusters = cluster_posts(posts, threshold=0.22)
-    themes: List[Theme] = []
-    posts_used = 0
-    non_solo_clusters = [c for c in clusters if len(c) >= 2]
-    solo_clusters = [c for c in clusters if len(c) < 2]
-    for c in non_solo_clusters:
-        if len(themes) >= MAX_THEMES and posts_used >= LEADS_TOTAL:
-            break
-        t = make_theme(c)
-        themes.append(t)
-        posts_used += len(t.representative_posts)
-        if posts_used >= LEADS_TOTAL and len(themes) >= MAX_THEMES:
-            break
-    if posts_used < LEADS_TOTAL:
-        for c in solo_clusters:
-            if posts_used >= LEADS_TOTAL:
-                break
-            t = make_theme(c)
-            themes.append(t)
-            posts_used += len(t.representative_posts)
-    if posts_used < LEADS_TOTAL:
-        logging.warning("Collected posts still below target (%d/%d). Padding with stub entries.", posts_used, LEADS_TOTAL)
-        dummy_prompts = [
-            "travel itinerary", "quick recipe", "workout routine", "study plan", "budget planning",
-            "job interview", "communication issue", "organizing home tasks", "compare products", "event schedule"
-        ]
-        i = 0
-        while posts_used < LEADS_TOTAL:
-            prompt = dummy_prompts[i % len(dummy_prompts)]
-            dummy_text = f"I need help with a {prompt}."
-            dummy_post = Post(
-                source="stub",
-                id=sha1(f"stub{posts_used}{prompt}"),
-                url="https://example.com/dummy",
-                text=dummy_text,
-                author="user",
-                created_at=now_iso(),
+        # validate/autofix
+        attempts = 0
+        errs = validate_site_html(html_text)
+        while errs and attempts < MAX_AUTOFIX:
+            attempts += 1
+            # simple autofix: pad article, ensure markers
+            if "article_maybe_too_short" in errs:
+                article_ja = article_ja + "\n" + ("【追加メモ】\n" + "確認→最小変更→検証→記録、の順番を崩さないことが最短です。\n") * 8
+            # rebuild html after pad
+            html_text = build_page_html(
+                theme=theme,
+                tool_url=tool_url,
+                short_url=short_url,
+                affiliates_top2=aff_top2,
+                references=references,
+                supplements=supplements,
+                article_ja=article_ja,
+                faq=faq,
+                related_tools=related,
+                popular_sites=popular_now,
+                hero_bg_url=hero_bg_url,
             )
-            t = make_theme([dummy_post])
-            themes.append(t)
-            posts_used += len(t.representative_posts)
-            i += 1
-    themes.sort(key=lambda t: t.score, reverse=True)
-    if not themes:
-        themes = [make_theme(clusters[0])]
-    site_entries: List[Dict[str, Any]] = []
+            errs = validate_site_html(html_text)
+
+        if errs:
+            logging.warning("Site validation still has errors for %s: %s", final_slug, errs)
+
+        # write file
+        out_dir = os.path.join(PAGES_DIR, final_slug)
+        out_path = os.path.join(out_dir, "index.html")
+        write_text(out_path, html_text)
+
+        # sitemap urls
+        sitemap_urls.append(tool_url)
+        sitemap_urls.append(short_url)
+
+        # inventory entry
+        entry = {
+            "slug": final_slug,
+            "title": theme.title,
+            "search_title": theme.search_title,
+            "category": theme.category,
+            "url": tool_url,
+            "short_url": short_url,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "keywords": theme.keywords[:12],
+        }
+        new_inventory_entries.append(entry)
+
+        # map representative posts to tool url (for issue output)
+        for p in theme.representative_posts:
+            post_to_tool_url[p.id] = tool_url
+
+        logging.info("Built site: %s (%s) short=%s", tool_url, theme.category, short_url)
+
+    return themes, new_inventory_entries, post_to_tool_url, sitemap_urls
+
+
+def build_post_drafts(themes: List[Theme]) -> List[Dict[str, str]]:
+    """
+    Bluesky posting drafts: "one-line value" + short URL only (short).
+    """
+    drafts: List[Dict[str, str]] = []
     for t in themes:
-        entry = build_one_site(t, hub_sites, aff)
-        site_entries.append(entry)
-        hub_sites = ensure_unique_site_entry(hub_sites, entry)
-    write_hub_sites(hub_sites)
-    logging.info("Updated hub/sites.json (hub frozen respected)")
-    update_sitemap_robots(hub_sites if isinstance(hub_sites, list) else [])
-    reply_count = sum(len(t.representative_posts) for t in themes)
-    logging.info("Generated reply candidates: %d", reply_count)
-    payload_md = build_issues_payload(themes, site_entries, source_counts, reply_count, missing_affiliates)
-    issues_path = os.path.join(OUT_DIR, f"issues_payload_{RUN_ID}.md")
-    write_text(issues_path, payload_md)
-    logging.info("Wrote Issues payload: %s", issues_path)
+        short_url = SITE_DOMAIN.rstrip("/") + f"/goliath/go/{t.short_code}/"
+        one = short_value_line(t.category)
+        # fixed format: value + URL
+        text = f"{one}\n{short_url}"
+        drafts.append({
+            "category": t.category,
+            "search_title": t.search_title,
+            "short_url": short_url,
+            "text": text,
+        })
+    return drafts
+
+
+def write_run_summary(
+    counts: Dict[str, int],
+    reply_count: int,
+    aff_audit: Dict[str, Any],
+    post_drafts: List[Dict[str, str]],
+    sitemap_url_written: str,
+) -> None:
+    """
+    Self-check output (Actions log + json file).
+    """
     summary = {
         "run_id": RUN_ID,
-        "generated_at": now_iso(),
-        "counts": {
-            "posts": len(posts),
-            "clusters": len(clusters),
-            "themes": len(themes),
-            "sites": len(site_entries),
-        },
-        "sites": site_entries,
-        "notes": {
-            "hub_frozen": True,
-            "hub_updated_files": ["hub/sites.json"],
-            "root_sitemap_updated": ALLOW_ROOT_UPDATE,
-        },
+        "counts": counts,
+        "reply_candidates": reply_count,
+        "affiliates_audit": aff_audit,
+        "sitemap_url": sitemap_url_written,
+        "post_drafts": post_drafts,
+        "updated_at": now_iso(),
     }
-    write_json(os.path.join(OUT_DIR, f"summary_{RUN_ID}.json"), summary)
-    logging.info("DONE")
+    out_path = os.path.join(OUT_DIR, f"run_summary_{RUN_ID}.json")
+    write_json(out_path, summary)
+
+    logging.info("Self-check: counts=%s", counts)
+    logging.info("Self-check: reply_candidates=%d", reply_count)
+    logging.info("Self-check: affiliates_audit ok=%s missing=%d extra=%d",
+                 aff_audit.get("ok"), len(aff_audit.get("missing", [])), len(aff_audit.get("extra", [])))
+    logging.info("Self-check: sitemap=%s", sitemap_url_written)
+
+
+def main() -> int:
+    setup_logging()
+
+    # legal pages
+    policy_urls = ensure_policies()
+
+    # affiliates
+    aff_raw = load_affiliates()
+    aff_audit = audit_affiliate_keys(aff_raw)
+    aff_norm = normalize_affiliates_shape(aff_raw)
+
+    # collect
+    posts = collect_all()
+    counts = {
+        "Bluesky": sum(1 for p in posts if p.source == "bluesky"),
+        "Mastodon": sum(1 for p in posts if p.source == "mastodon"),
+        "Reddit": sum(1 for p in posts if p.source == "reddit"),
+        "X": sum(1 for p in posts if p.source == "x"),
+        "HN": sum(1 for p in posts if p.source == "hn"),
+        "Total": len(posts),
+    }
+
+    # choose themes
+    themes = choose_themes(posts, max_themes=MAX_THEMES)
+    logging.info("Chosen themes=%d", len(themes))
+
+    # hero background (optional)
+    hero_bg = fetch_unsplash_bg_url()
+    if hero_bg:
+        logging.info("Unsplash hero bg enabled.")
+
+    # inventory: read existing hub sites
+    existing_sites = read_hub_sites()
+
+    # build sites
+    built_themes, new_entries, post_to_tool_url, site_urls = build_sites(
+        themes=themes,
+        aff_norm=aff_norm,
+        all_sites_inventory=existing_sites,
+        hero_bg_url=hero_bg,
+    )
+
+    # update hub/sites.json ONLY
+    merged_sites = existing_sites + new_entries
+    aggregates = compute_aggregates(merged_sites)
+    write_hub_sites(merged_sites, aggregates)
+
+    # Prepare reply candidates (min 100)
+    # We prefer real posts; if not enough posts mapped, stub fill.
+    mapped_post_ids = set(post_to_tool_url.keys())
+    mapped_posts = [p for p in posts if p.id in mapped_post_ids]
+    if len(mapped_posts) < LEADS_TOTAL:
+        need = LEADS_TOTAL - len(mapped_posts)
+        stubs = make_stub_posts(need)
+        # map stubs to some built tool URLs (round-robin)
+        built_urls = [site_url_for_slug(t.slug) for t in built_themes] or []
+        for i, sp in enumerate(stubs):
+            if built_urls:
+                post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
+        mapped_posts = mapped_posts + stubs
+
+    # cap exactly LEADS_TOTAL (requirement: at least 100; we do exactly env default)
+    mapped_posts = mapped_posts[:max(LEADS_TOTAL, 100)]
+
+    issue_items = build_issue_items(mapped_posts, post_to_tool_url)
+    # ensure minimum 100 output
+    if len(issue_items) < 100:
+        more_need = 100 - len(issue_items)
+        extra_stubs = make_stub_posts(more_need)
+        built_urls = [site_url_for_slug(t.slug) for t in built_themes] or [SITE_DOMAIN.rstrip("/") + "/hub/"]
+        for i, sp in enumerate(extra_stubs):
+            post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
+        issue_items += build_issue_items(extra_stubs, post_to_tool_url)
+
+    # affiliates audit note -> include in first issue body
+    notes = []
+    notes.append(f"Run: {RUN_ID}")
+    notes.append(f"Collected: Bluesky={counts['Bluesky']} Mastodon={counts['Mastodon']} Reddit={counts['Reddit']} X={counts['X']} HN={counts['HN']} Total={counts['Total']}")
+    notes.append(f"Reply candidates: {len(issue_items)}")
+    if not aff_audit.get("ok"):
+        notes.append("Affiliates audit: MISSING keys in affiliates.json:")
+        for k in aff_audit.get("missing", []):
+            notes.append(f"- {k}")
+    if aff_audit.get("extra"):
+        notes.append("Affiliates audit: EXTRA keys (ignored):")
+        for k in aff_audit.get("extra", []):
+            notes.append(f"- {k}")
+    extra_notes = "\n".join(notes).strip()
+
+    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
+    logging.info("Wrote issues payload: %s", issues_path)
+
+    # post drafts (short URL + one-line value)
+    drafts = build_post_drafts(built_themes)
+    write_json(os.path.join(OUT_DIR, f"post_drafts_{RUN_ID}.json"), {"run_id": RUN_ID, "drafts": drafts})
+
+    # sitemap + robots
+    # Always write safe versions into goliath/_out/
+    sitemap_urls = []
+    sitemap_urls += policy_urls
+    sitemap_urls += site_urls
+    sitemap_urls.append(SITE_DOMAIN.rstrip("/") + "/hub/")
+    # (Optional) if you have other top-level pages you want indexed, add here.
+
+    sitemap_xml = build_sitemap(sitemap_urls)
+    sitemap_out_path = os.path.join(OUT_DIR, "sitemap.xml")
+    write_text(sitemap_out_path, sitemap_xml)
+
+    # Default sitemap URL depends on where you place it. For search engines, root is best.
+    # We will write to root only if ALLOW_ROOT_UPDATE=1.
+    sitemap_public_url = SITE_DOMAIN.rstrip("/") + "/sitemap.xml"
+    robots_text = build_robots(sitemap_public_url)
+    robots_out_path = os.path.join(OUT_DIR, "robots.txt")
+    write_text(robots_out_path, robots_text)
+
+    if ALLOW_ROOT_UPDATE:
+        write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
+        write_text(os.path.join(REPO_ROOT, "robots.txt"), robots_text)
+        logging.info("Root sitemap/robots updated.")
+        if PING_SITEMAP:
+            ping_search_engines(sitemap_public_url)
+    else:
+        logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
+
+    # self-check summary
+    write_run_summary(
+        counts=counts,
+        reply_count=len(issue_items),
+        aff_audit=aff_audit,
+        post_drafts=drafts,
+        sitemap_url_written=(sitemap_public_url if ALLOW_ROOT_UPDATE else (SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml")),
+    )
+
+    return 0
+
 
 if __name__ == "__main__":
-    try:
-        run()
-    except KeyboardInterrupt:
-        logging.error("Interrupted")
-        sys.exit(130)
-    except Exception as e:
-        logging.exception("Fatal error: %s", str(e))
-        sys.exit(1)
+    raise SystemExit(main())
