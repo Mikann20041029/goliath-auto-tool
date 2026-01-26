@@ -1905,7 +1905,7 @@ def build_faq(category: str) -> List[Tuple[str, str]]:
 
 
 def supplemental_resources_for_category(category: str) -> List[str]:
-    base = {
+    base: Dict[str, List[str]] = {
         "Web/Hosting": [
             "https://pages.github.com/",
             "https://letsencrypt.org/docs/",
@@ -1934,64 +1934,65 @@ def supplemental_resources_for_category(category: str) -> List[str]:
         "AI/Automation": [
             "https://docs.github.com/en/actions",
             "https://en.wikipedia.org/wiki/Cron",
-            "https://en.wikipedia.org/wiki/Rate_limiting",
+            "https://en.wikipedia.org/wiki/Automation",
         ],
         "Travel/Planning": [
-            "https://en.wikipedia.org/wiki/Travel_insurance",
-            "https://en.wikipedia.org/wiki/International_roaming",
-            "https://en.wikipedia.org/wiki/Carry-on_baggage",
+            "https://en.wikipedia.org/wiki/Travel_itinerary",
+            "https://en.wikipedia.org/wiki/Packing_list",
+            "https://www.wikivoyage.org/",
         ],
         "Food/Cooking": [
             "https://en.wikipedia.org/wiki/Meal_preparation",
             "https://en.wikipedia.org/wiki/Food_safety",
-            "https://en.wikipedia.org/wiki/Macronutrient_(nutrition)",
+            "https://www.fda.gov/food",
         ],
         "Health/Fitness": [
+            "https://en.wikipedia.org/wiki/Physical_fitness",
             "https://en.wikipedia.org/wiki/Sleep_hygiene",
-            "https://en.wikipedia.org/wiki/Physical_exercise",
-            "https://en.wikipedia.org/wiki/Habit",
+            "https://www.who.int/health-topics/physical-activity",
         ],
         "Study/Learning": [
             "https://en.wikipedia.org/wiki/Spaced_repetition",
             "https://en.wikipedia.org/wiki/Active_recall",
-            "https://en.wikipedia.org/wiki/Procrastination",
+            "https://en.wikipedia.org/wiki/Time_management",
         ],
         "Money/Personal Finance": [
             "https://en.wikipedia.org/wiki/Personal_finance",
             "https://en.wikipedia.org/wiki/Budget",
-            "https://en.wikipedia.org/wiki/Opportunity_cost",
+            "https://en.wikipedia.org/wiki/Bank_fee",
         ],
         "Career/Work": [
             "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
             "https://en.wikipedia.org/wiki/Job_interview",
-            "https://en.wikipedia.org/wiki/STAR_(interview_method)",
+            "https://en.wikipedia.org/wiki/Curriculum_vitae",
         ],
         "Relationships/Communication": [
             "https://en.wikipedia.org/wiki/Interpersonal_communication",
-            "https://en.wikipedia.org/wiki/Assertiveness",
             "https://en.wikipedia.org/wiki/Nonviolent_Communication",
+            "https://en.wikipedia.org/wiki/Conversation",
         ],
         "Home/Life Admin": [
+            "https://en.wikipedia.org/wiki/Personal_organization",
             "https://en.wikipedia.org/wiki/Moving_company",
-            "https://en.wikipedia.org/wiki/Decluttering",
-            "https://en.wikipedia.org/wiki/Housekeeping",
+            "https://en.wikipedia.org/wiki/Checklist",
         ],
         "Shopping/Products": [
             "https://en.wikipedia.org/wiki/Comparison_shopping",
-            "https://en.wikipedia.org/wiki/Cost%E2%80%93benefit_analysis",
             "https://en.wikipedia.org/wiki/Warranty",
+            "https://en.wikipedia.org/wiki/Return_policy",
         ],
         "Events/Leisure": [
+            "https://en.wikipedia.org/wiki/Event_management",
             "https://en.wikipedia.org/wiki/Leisure",
-            "https://en.wikipedia.org/wiki/Event_planning",
-            "https://en.wikipedia.org/wiki/Weather",
+            "https://en.wikipedia.org/wiki/Ticket_(admission)",
         ],
     }
     return base.get(category, [
-        "https://developer.mozilla.org/",
-        "https://docs.github.com/",
         "https://en.wikipedia.org/wiki/Troubleshooting",
+        "https://en.wikipedia.org/wiki/Checklist",
+        "https://developer.mozilla.org/",
     ])
+
 
 
 def pick_reference_urls(theme: Theme) -> List[str]:
