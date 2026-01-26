@@ -1,0 +1,57 @@
+{
+  "run_id": "1769416712",
+  "counts": {
+    "Bluesky": 0,
+    "Mastodon": 99,
+    "Reddit": 0,
+    "X": 0,
+    "HN": 0,
+    "Total": 99
+  },
+  "reply_candidates": 100,
+  "affiliates_audit": {
+    "missing": [],
+    "extra": [],
+    "ok": true
+  },
+  "sitemap_url": "https://mikann20041029.github.io/goliath/_out/sitemap.xml",
+  "post_drafts": [
+    {
+      "category": "Dev/Tools",
+      "search_title": "food help please fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/j5nfD3r/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/j5nfD3r/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "family boost donate DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/dIbPD67/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/dIbPD67/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "support association minneapolis DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/5QdKCTB/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/5QdKCTB/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "26 news 00008 DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/26WWZLw/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/26WWZLw/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "mohammed donation basics DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/emBKDYw/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/emBKDYw/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "china international travel DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/cppYScT/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/cppYScT/"
+    }
+  ],
+  "updated_at": "2026-01-26T08:38:38+00:00"
+}

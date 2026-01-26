@@ -1,0 +1,74 @@
+2026-01-26 08:38:32,284 | INFO | RUN_ID=1769416712
+2026-01-26 08:38:32,284 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-26 08:38:32,284 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-26 08:38:32,284 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-26 08:38:32,284 | INFO | LEADS_TOTAL=100
+2026-01-26 08:38:32,284 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-26 08:38:32,284 | INFO | HN_MAX=70
+2026-01-26 08:38:32,285 | INFO | Bluesky: collecting up to 50
+2026-01-26 08:38:32,392 | WARNING | Bluesky: session failed status=401 body={"error":"AuthenticationRequired","message":"Invalid identifier or password"}
+2026-01-26 08:38:32,392 | INFO | Mastodon: collecting up to 100 from https://mastodon.social
+2026-01-26 08:38:37,194 | INFO | Mastodon: collected 100
+2026-01-26 08:38:37,194 | INFO | Reddit: public mode collecting up to 20
+2026-01-26 08:38:37,855 | INFO | Reddit: collected 0
+2026-01-26 08:38:38,057 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-26 08:38:38,406 | INFO | HN: collected 0
+2026-01-26 08:38:38,407 | INFO | Collected total=99 (Bluesky=0, Mastodon=100, Reddit=0, X=0, HN=0)
+2026-01-26 08:38:38,407 | INFO | Clustering 99 posts (threshold=0.22)
+2026-01-26 08:38:38,424 | INFO | Clusters: 87 (top sizes=[3, 3, 3, 3, 2, 2, 2, 2])
+2026-01-26 08:38:38,427 | INFO | Chosen themes=6
+2026-01-26 08:38:38,674 | INFO | Unsplash hero bg enabled.
+2026-01-26 08:38:38,675 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,677 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/food-help-please-fix-guide-checklist-tool-2/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/j5nfD3r/
+2026-01-26 08:38:38,677 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,678 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/family-boost-donate-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/dIbPD67/
+2026-01-26 08:38:38,678 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,679 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/support-association-minneapolis-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/5QdKCTB/
+2026-01-26 08:38:38,679 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,679 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/26-news-00008-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/26WWZLw/
+2026-01-26 08:38:38,680 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,680 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/mohammed-donation-basics-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/emBKDYw/
+2026-01-26 08:38:38,681 | ERROR | build_tool_ui failed: name 'x' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2834, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2224, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(x))}</li>")
+NameError: name 'x' is not defined
+2026-01-26 08:38:38,681 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/china-international-travel-dns-ssl-fix-checklist-2/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/cppYScT/
+2026-01-26 08:38:38,685 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769416712.json
+2026-01-26 08:38:38,685 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-26 08:38:38,685 | INFO | Self-check: counts={'Bluesky': 0, 'Mastodon': 99, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 99}
+2026-01-26 08:38:38,685 | INFO | Self-check: reply_candidates=100
+2026-01-26 08:38:38,686 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-26 08:38:38,686 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
