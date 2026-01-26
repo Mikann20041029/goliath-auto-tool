@@ -3813,6 +3813,19 @@ if (not mapped_posts) and mapped_post_ids:
 if theme is not None:
     slug = getattr(theme, "slug", "") or ""
 if not slug:
+# --- hotfix: ensure `slug` is defined before use (avoid NameError) ---
+slug = locals().get("slug", "")
+if not slug:
+    _obj = locals().get("theme") or locals().get("t") or locals().get("th") or locals().get("item")
+    if _obj is not None:
+        if isinstance(_obj, Theme):
+            slug = (_obj.slug or "")
+        elif isinstance(_obj, dict):
+            slug = str(_obj.get("slug") or "")
+        else:
+            slug = str(getattr(_obj, "slug", "") or "")
+slug = str(slug).strip()
+
     slug = default_tool_slug
 tool_url = f"{PUBLIC_BASE_URL.rstrip('/')}/goliath/pages/{slug}/"
 
