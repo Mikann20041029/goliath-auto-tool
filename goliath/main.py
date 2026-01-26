@@ -1953,45 +1953,74 @@ def supplemental_resources_for_category(category: str) -> List[str]:
         ],
         "Study/Learning": [
             "https://en.wikipedia.org/wiki/Spaced_repetition",
-            "https://en.wikipedia.org/wiki/Active_recall",
-            "https://en.wikipedia.org/wiki/Time_management",
+            "https://en.wikipedia.org/wiki/Testing_effect",
+            "https://en.wikipedia.org/wiki/Study_skills",
         ],
         "Money/Personal Finance": [
             "https://en.wikipedia.org/wiki/Personal_finance",
             "https://en.wikipedia.org/wiki/Budget",
-            "https://en.wikipedia.org/wiki/Bank_fee",
+            "https://en.wikipedia.org/wiki/Interest",
         ],
         "Career/Work": [
-            "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
-            "https://en.wikipedia.org/wiki/Job_interview",
             "https://en.wikipedia.org/wiki/Curriculum_vitae",
+            "https://en.wikipedia.org/wiki/Job_interview",
+            "https://en.wikipedia.org/wiki/Cover_letter",
         ],
         "Relationships/Communication": [
             "https://en.wikipedia.org/wiki/Interpersonal_communication",
-            "https://en.wikipedia.org/wiki/Nonviolent_Communication",
-            "https://en.wikipedia.org/wiki/Conversation",
+            "https://en.wikipedia.org/wiki/Active_listening",
+            "https://en.wikipedia.org/wiki/Nonviolent_communication",
         ],
         "Home/Life Admin": [
-            "https://en.wikipedia.org/wiki/Personal_organization",
-            "https://en.wikipedia.org/wiki/Moving_company",
             "https://en.wikipedia.org/wiki/Checklist",
+            "https://en.wikipedia.org/wiki/Time_management",
+            "https://en.wikipedia.org/wiki/Personal_organizer",
         ],
         "Shopping/Products": [
             "https://en.wikipedia.org/wiki/Comparison_shopping",
+            "https://en.wikipedia.org/wiki/Product_lifecycle",
             "https://en.wikipedia.org/wiki/Warranty",
-            "https://en.wikipedia.org/wiki/Return_policy",
         ],
         "Events/Leisure": [
-            "https://en.wikipedia.org/wiki/Event_management",
-            "https://en.wikipedia.org/wiki/Leisure",
+            "https://en.wikipedia.org/wiki/Event_planning",
             "https://en.wikipedia.org/wiki/Ticket_(admission)",
+            "https://en.wikipedia.org/wiki/Leisure",
+        ],
+        # tech-ish fallbacks
+        "Dev/Tools": [
+            "https://en.wikipedia.org/wiki/Debugging",
+            "https://en.wikipedia.org/wiki/Software_bug",
+            "https://docs.python.org/3/tutorial/errors.html",
+        ],
+        "Marketing/Social": [
+            "https://en.wikipedia.org/wiki/Search_engine_optimization",
+            "https://en.wikipedia.org/wiki/Digital_marketing",
+            "https://en.wikipedia.org/wiki/Social_media",
+        ],
+        "Business/Accounting/Tax": [
+            "https://en.wikipedia.org/wiki/Accounting",
+            "https://en.wikipedia.org/wiki/Tax",
+            "https://en.wikipedia.org/wiki/Invoice",
+        ],
+        "Images/Design": [
+            "https://en.wikipedia.org/wiki/Raster_graphics",
+            "https://en.wikipedia.org/wiki/Vector_graphics",
+            "https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types",
+        ],
+        "Education/Language": [
+            "https://en.wikipedia.org/wiki/Second-language_acquisition",
+            "https://en.wikipedia.org/wiki/Language_learning",
+            "https://en.wikipedia.org/wiki/Flashcard",
         ],
     }
-    return base.get(category, [
+
+    default = [
         "https://en.wikipedia.org/wiki/Troubleshooting",
         "https://en.wikipedia.org/wiki/Checklist",
         "https://developer.mozilla.org/",
-    ])
+    ]
+    return (base.get(category) or default)
+
 
 
 
