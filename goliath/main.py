@@ -3655,6 +3655,9 @@ for _t in (chosen_themes or []):
     if _t and getattr(_t, "slug", ""):
         default_tool_slug = _t.slug
         break
+            # default_tool_slug may be unset depending on code path; define it defensively.
+    default_tool_slug = os.environ.get("DEFAULT_TOOL_SLUG", "").strip()
+
 if not default_tool_slug:
     default_tool_slug = "tool"
 
