@@ -3942,7 +3942,8 @@ if True:
                 counts["total"] = len(_all)
     except Exception as e:
         logging.warning("counts build failed: %s", e)
-
+write_run_summary(
+    counts=counts,
     reply_count=len(issue_items),
     aff_audit=aff_audit,
     post_drafts=drafts,
