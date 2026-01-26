@@ -3902,7 +3902,28 @@ else:
 
     # self-check summary
 write_run_summary(
-    counts=counts,
+        # --- counts (always defined) ---
+    counts = {"bluesky": 0, "mastodon": 0, "reddit": 0, "hn": 0, "x": 0, "total": 0}
+    try:
+        _all = (
+            globals().get("all_posts")
+            or globals().get("posts_all")
+            or globals().get("posts")
+            or []
+        )
+        if isinstance(_all, list) and _all:
+            # Post dataclass想定: p.source があれば source 別に数える
+            if hasattr(_all[0], "source"):
+                for p in _all:
+                    src = getattr(p, "source", "")
+                    if src in counts:
+                        counts[src] += 1
+                counts["total"] = len(_all)
+            else:
+                counts["total"] = len(_all)
+    except Exception as e:
+        logging.warning("counts build failed: %s", e)
+
     reply_count=len(issue_items),
     aff_audit=aff_audit,
     post_drafts=drafts,
