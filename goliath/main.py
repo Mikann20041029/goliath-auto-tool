@@ -2212,7 +2212,8 @@ for x in (theme.problem_list or []):
         # Problems list
     problems_html_items: List[str] = []
     for problem in (theme.problem_list or []):
-        problems_html_items.append(f"<li>{html.escape(str(problem))}</li>")
+        problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+
 
 
             problems_html_items = []
