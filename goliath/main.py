@@ -3947,4 +3947,27 @@ write_run_summary(
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # --- robust entrypoint: call whichever exists (main/run/run_goliath/...) ---
+    try:
+        fn = (
+            globals().get("main")
+            or globals().get("run")
+            or globals().get("run_goliath")
+            or globals().get("goliath_main")
+        )
+        if not callable(fn):
+            raise RuntimeError(
+                "Entry function not found. Expected one of: main / run / run_goliath / goliath_main"
+            )
+
+        ret = fn()
+        if isinstance(ret, int):
+            sys.exit(ret)
+
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        # logging may be not configured yet; still okay (prints via default handler/lastResort)
+        logging.exception("Unhandled exception in goliath/main.py: %s", e)
+        raise
+
