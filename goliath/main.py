@@ -818,8 +818,7 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 # =============================================================================
 # X state (duplicate prevention)
 # =============================================================================
-STATE_DIR = os.path.join(REPO_ROOT, "state")
-LAST_SEEN_PATH = os.path.join(STATE_DIR, "last_seen.json")
+
 
 def load_last_seen() -> Dict[str, Any]:
     d = read_json(LAST_SEEN_PATH, default={})
