@@ -3720,6 +3720,30 @@ if not default_tool_slug:
     # We prefer real posts; if not enough posts mapped, stub fill.
     mapped_post_ids = set(post_to_tool_url.keys())
     mapped_posts = [p for p in posts if p.id in mapped_post_ids]
+    # --- FIX: resolve posts list safely (avoid NameError when posts wasn't assigned) ---
+_scope = locals()
+
+_posts_for_mapping = _scope.get("posts", None)
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = _scope.get("all_posts", None)
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = _scope.get("collected_posts", None)
+
+# fallback to globals too (works even if this block is inside a function)
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = globals().get("posts", None)
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = globals().get("all_posts", None)
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = globals().get("collected_posts", None)
+
+if not isinstance(_posts_for_mapping, list):
+    _posts_for_mapping = []
+
+mapped_posts = [p for p in _posts_for_mapping if getattr(p, "id", None) in mapped_post_ids]
+if (not mapped_posts) and mapped_post_ids:
+    logging.warning("mapped_post_ids exists but no posts list was resolved; check collection variable names/assignment path.")
+
     if len(mapped_posts) < LEADS_TOTAL:
         need = LEADS_TOTAL - len(mapped_posts)
         stubs = make_stub_posts(need)
