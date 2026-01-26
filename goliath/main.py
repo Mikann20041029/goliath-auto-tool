@@ -3657,9 +3657,6 @@ def write_run_summary(
 
 
 def main() -> int:
-    # Always initialize to avoid UnboundLocalError in any branch
-    chosen = []
-
     setup_logging()
 
     # legal pages
@@ -3683,68 +3680,20 @@ def main() -> int:
 
     # choose themes
     themes = choose_themes(posts, max_themes=MAX_THEMES)
-    logging.info("Chosen themes=%d", len(themes))
-    default_tool_slug = ""
-        # --- guard: chosen_themes が未定義でも落とさない（フォールバックあり） ---
-    chosen_themes = globals().get("chosen_themes")
-    if not chosen_themes:
-        _fallback = (
-            globals().get("themes")
-            or globals().get("all_themes")
-            or globals().get("candidate_themes")
-            or []
-        )
-        if isinstance(_fallback, list):
-            chosen_themes = _fallback[:MAX_THEMES]
-        else:
-            chosen_themes = []
-# ---- SAFETY: chosen_themes が未定義の分岐があるため、必ず正規化する ----
-if "chosen_themes" not in globals():
-    # 既存の変数名に寄せて拾う（過去のリファクタで名前が変わっても落ちない）
-    chosen_themes = globals().get("selected_themes") or globals().get("themes") or []
-
-if chosen_themes is None:
-    chosen_themes = []
-
-# list 以外でも回せるようにしておく（最終防衛）
-if not isinstance(chosen_themes, list):
-    try:
-        chosen_themes = list(chosen_themes)
-    except Exception:
-        chosen_themes = []
-
-for _t in (chosen_themes or []):
-    if _t and getattr(_t, "slug", ""):
-        default_tool_slug = _t.slug
-        break
-            # default_tool_slug may be unset depending on code path; define it defensively.
-    default_tool_slug = os.environ.get("DEFAULT_TOOL_SLUG", "").strip()
-# --- ensure variable exists (prevents NameError) ---
-default_tool_slug = (os.environ.get("DEFAULT_TOOL_SLUG") or os.environ.get("DEFAULT_PAGE_SLUG") or "").strip()
-# --- /ensure ---
-
-if not default_tool_slug:
-    default_tool_slug = "tool"
-
-        # Safety: chosenが未代入のまま参照される事故を防ぐ
-    if "chosen" not in locals() or chosen is None:
-        chosen = []
-
-    if len(chosen) == 0:
-    # 収集0でも「最低1サイト生成」して、Issuesに必ずURLを出す
+    if not themes:
+        # 収集0でも最低1サイト生成
         seed_post = Post(
             source="seed",
             id=sha1(f"seed:{RUN_ID}"),
-            url=HUB_BASE_URL.rstrip("/"),  # 参照用（ダミー）
+            url=HUB_BASE_URL.rstrip("/"),
             text="seed: no posts collected this run",
             author="system",
             created_at=now_iso(),
         )
-    t = make_theme([seed_post])
-    # slug衝突回避は既存ロジックに任せる前提（-2/-3）
-    chosen = [t]
-    logging.info("Chosen themes forced=1 (seed)")
+        themes = [make_theme([seed_post])]
+        logging.info("Chosen themes forced=1 (seed)")
 
+    logging.info("Chosen themes=%d", len(themes))
 
     # hero background (optional)
     hero_bg = fetch_unsplash_bg_url()
@@ -3756,8 +3705,7 @@ if not default_tool_slug:
 
     # build sites
     built_themes, new_entries, post_to_tool_url, site_urls = build_sites(
-        themes=(themes := (globals().get("themes") or globals().get("selected_themes") or globals().get("chosen_themes") or globals().get("best_themes") or globals().get("top_themes") or globals().get("final_themes") or globals().get("picked_themes") or [])),
-
+        themes=themes,
         aff_norm=aff_norm,
         all_sites_inventory=existing_sites,
         hero_bg_url=hero_bg,
@@ -3768,86 +3716,38 @@ if not default_tool_slug:
     aggregates = compute_aggregates(merged_sites)
     write_hub_sites(merged_sites, aggregates)
 
-    # Prepare reply candidates (min 100)
-    # We prefer real posts; if not enough posts mapped, stub fill.
+    # Prepare reply candidates (minimum 100)
     mapped_post_ids = set(post_to_tool_url.keys())
-    # ---- SAFE: posts がこのスコープに無い（= リファクタで local になった等）場合でも落ちないようにする ----
-_posts = globals().get("posts")
-if _posts is None:
-    _posts = (
-        globals().get("all_posts")
-        or globals().get("collected_posts")
-        or globals().get("raw_posts")
-        or []
-    )
-
-# iterable を list 化（念のため）
-if not isinstance(_posts, list):
-    try:
-        _posts = list(_posts)
-    except Exception:
-        _posts = []
-
-# mapped_post_ids が無い/壊れてても落ちないようにする
-try:
-    _ids = set(mapped_post_ids)
-except Exception:
-    _ids = set()
-
-mapped_posts = [p for p in _posts if getattr(p, "id", None) in _ids]
-logging.info("mapped_posts=%d (ids=%d, pool=%d)", len(mapped_posts), len(_ids), len(_posts))
-
-    # --- FIX: resolve posts list safely (avoid NameError when posts wasn't assigned) ---
-_scope = locals()
-
-_posts_for_mapping = _scope.get("posts", None)
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = _scope.get("all_posts", None)
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = _scope.get("collected_posts", None)
-
-# fallback to globals too (works even if this block is inside a function)
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = globals().get("posts", None)
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = globals().get("all_posts", None)
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = globals().get("collected_posts", None)
-
-if not isinstance(_posts_for_mapping, list):
-    _posts_for_mapping = []
-
-mapped_posts = [p for p in _posts_for_mapping if getattr(p, "id", None) in mapped_post_ids]
-if (not mapped_posts) and mapped_post_ids:
-    logging.warning("mapped_post_ids exists but no posts list was resolved; check collection variable names/assignment path.")
+    mapped_posts = [p for p in posts if p.id in mapped_post_ids]
 
     if len(mapped_posts) < LEADS_TOTAL:
         need = LEADS_TOTAL - len(mapped_posts)
         stubs = make_stub_posts(need)
-        # map stubs to some built tool URLs (round-robin)
-        built_urls = [site_url_for_slug(t.slug) for t in built_themes] or []
-        for i, sp in enumerate(stubs):
-            if built_urls:
-                post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
-        mapped_posts = mapped_posts + stubs
 
-    # cap exactly LEADS_TOTAL (requirement: at least 100; we do exactly env default)
-    mapped_posts = mapped_posts[:max(LEADS_TOTAL, 100)]
+        built_urls = [site_url_for_slug(t.slug) for t in built_themes] or [SITE_DOMAIN.rstrip("/") + "/hub/"]
+        for i, sp in enumerate(stubs):
+            post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
+
+        mapped_posts.extend(stubs)
+
+    mapped_posts = mapped_posts[: max(LEADS_TOTAL, 100)]
 
     issue_items = build_issue_items(mapped_posts, post_to_tool_url)
-    # ensure minimum 100 output
+
     if len(issue_items) < 100:
         more_need = 100 - len(issue_items)
         extra_stubs = make_stub_posts(more_need)
         built_urls = [site_url_for_slug(t.slug) for t in built_themes] or [SITE_DOMAIN.rstrip("/") + "/hub/"]
         for i, sp in enumerate(extra_stubs):
             post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
-        issue_items += build_issue_items(extra_stubs, post_to_tool_url)
+        issue_items.extend(build_issue_items(extra_stubs, post_to_tool_url))
 
-    # affiliates audit note -> include in first issue body
     notes = []
     notes.append(f"Run: {RUN_ID}")
-    notes.append(f"Collected: Bluesky={counts['Bluesky']} Mastodon={counts['Mastodon']} Reddit={counts['Reddit']} X={counts['X']} HN={counts['HN']} Total={counts['Total']}")
+    notes.append(
+        f"Collected: Bluesky={counts['Bluesky']} Mastodon={counts['Mastodon']} "
+        f"Reddit={counts['Reddit']} X={counts['X']} HN={counts['HN']} Total={counts['Total']}"
+    )
     notes.append(f"Reply candidates: {len(issue_items)}")
     if not aff_audit.get("ok"):
         notes.append("Affiliates audit: MISSING keys in affiliates.json:")
@@ -3861,149 +3761,55 @@ if (not mapped_posts) and mapped_post_ids:
 
     issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
     logging.info("Wrote issues payload: %s", issues_path)
-    slug = ""
-if theme is not None:
-    slug = getattr(theme, "slug", "") or ""
-# ---- slug safety: always have a usable string ----
-slug = locals().get("slug", "")
-if not isinstance(slug, str):
-    slug = "" if slug is None else str(slug)
-slug = slug.strip()
-if not slug:
-    base_for_slug = locals().get("search_title", "") or locals().get("title", "") or "tool"
-    slug = safe_slug(str(base_for_slug))
 
-if not slug:
-    _obj = locals().get("theme") or locals().get("t") or locals().get("th") or locals().get("item")
-    if _obj is not None:
-        if isinstance(_obj, Theme):
-            slug = (_obj.slug or "")
-        elif isinstance(_obj, dict):
-            slug = str(_obj.get("slug") or "")
-        else:
-            slug = str(getattr(_obj, "slug", "") or "")
-slug = str(slug).strip()
-
-slug = default_tool_slug
-tool_url = f"{PUBLIC_BASE_URL.rstrip('/')}/goliath/pages/{slug}/"
-
-
-
-    # post drafts (short URL + one-line value):
-drafts = build_post_drafts(built_themes)
-
-write_json(
-    os.path.join(OUT_DIR, f"post_drafts_{RUN_ID}.json"),
-    {"run_id": RUN_ID, "created_at": now_iso(), "drafts": drafts},
-)
-
-
-
-    # sitemap + robots
-    # Always write safe versions into goliath/_out/
-sitemap_urls = []
-# --- policies URLs for sitemap (always defined) ---
-policy_urls: List[str] = []
-try:
-    if os.path.isdir(POLICIES_DIR):
-        # /policies/<something>/index.html -> /policies/<something>/
-        for root, _dirs, files in os.walk(POLICIES_DIR):
-            for fn in files:
-                if fn.lower() != "index.html":
-                    continue
-                full = os.path.join(root, fn)
-                rel = os.path.relpath(full, REPO_ROOT).replace(os.sep, "/")
-                url_path = "/" + rel.replace("index.html", "")
-                url_path = re.sub(r"/+$", "/", url_path)
-                policy_urls.append(PUBLIC_BASE_URL.rstrip("/") + url_path)
-
-        # /policies/privacy.html など単体HTMLも拾う（存在する場合）
-        for fn in os.listdir(POLICIES_DIR):
-            if fn.lower().endswith(".html") and fn.lower() != "index.html":
-                rel = f"policies/{fn}"
-                policy_urls.append(PUBLIC_BASE_URL.rstrip("/") + "/" + rel)
-
-    policy_urls = uniq_keep_order([u for u in policy_urls if u])
-except Exception as e:
-    logging.warning("policy_urls build failed: %s", e)
-    policy_urls = []
-
-sitemap_urls += site_urls
-sitemap_urls.append(SITE_DOMAIN.rstrip("/") + "/hub/")
-    # (Optional) if you have other top-level pages you want indexed, add here.
-
-sitemap_xml = build_sitemap(sitemap_urls)
-sitemap_out_path = os.path.join(OUT_DIR, "sitemap.xml")
-write_text(sitemap_out_path, sitemap_xml)
-
-    # Default sitemap URL depends on where you place it. For search engines, root is best.
-    # We will write to root only if ALLOW_ROOT_UPDATE=1.
-sitemap_public_url = SITE_DOMAIN.rstrip("/") + "/sitemap.xml"
-robots_text = build_robots(sitemap_public_url)
-robots_out_path = os.path.join(OUT_DIR, "robots.txt")
-write_text(robots_out_path, robots_text)
-
-if ALLOW_ROOT_UPDATE:
-    write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
-    write_text(os.path.join(REPO_ROOT, "robots.txt"), robots_text)
-    logging.info("Root sitemap/robots updated.")
-    if PING_SITEMAP:
-        ping_search_engines(sitemap_public_url)
-else:
-    logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
-
-        # self-check summary (always run)
-counts = {"bluesky": 0, "mastodon": 0, "reddit": 0, "hn": 0, "x": 0, "total": 0}
-
-try:
-    _all = (
-        globals().get("all_posts")
-        or globals().get("posts_all")
-        or globals().get("posts")
-        or []
+    # post drafts (short URL + one-line value)
+    drafts = build_post_drafts(built_themes)
+    write_json(
+        os.path.join(OUT_DIR, f"post_drafts_{RUN_ID}.json"),
+        {"run_id": RUN_ID, "created_at": now_iso(), "drafts": drafts},
     )
 
-    if isinstance(_all, list) and _all:
-        # Post dataclass想定: p.source があれば source 別に数える
-        for p in _all:
-            src = getattr(p, "source", "")
-            if src in counts:
-                counts[src] += 1
-        counts["total"] = len(_all)
-    elif isinstance(_all, list):
-        counts["total"] = len(_all)
+    # sitemap + robots
+    sitemap_urls = []
+    sitemap_urls.extend(site_urls)
+    sitemap_urls.extend(policy_urls)
+    sitemap_urls.append(SITE_DOMAIN.rstrip("/") + "/hub/")
 
-except Exception as e:
-    logging.warning("counts build failed: %s", e)
+    sitemap_xml = build_sitemap(sitemap_urls)
+    sitemap_out_path = os.path.join(OUT_DIR, "sitemap.xml")
+    write_text(sitemap_out_path, sitemap_xml)
 
-reply_count = int(reply_count or 0)
+    sitemap_public_url = SITE_DOMAIN.rstrip("/") + "/sitemap.xml"
+    robots_text = build_robots(sitemap_public_url)
+    robots_out_path = os.path.join(OUT_DIR, "robots.txt")
+    write_text(robots_out_path, robots_text)
 
-# write_run_summary は環境によって引数が違っても落ちないように安全実行
-try:
-    write_run_summary(counts=counts, reply_count=reply_count, issue_items=issue_items)
-except TypeError:
-    try:
-        write_run_summary(counts=counts, reply_count=reply_count)
-    except TypeError:
-        try:
-            write_run_summary(counts=counts)
-        except Exception as e:
-            logging.warning("write_run_summary failed: %s", e)
-except Exception as e:
-    logging.warning("write_run_summary failed: %s", e)
+    if ALLOW_ROOT_UPDATE:
+        write_text(os.path.join(REPO_ROOT, "sitemap.xml"), sitemap_xml)
+        write_text(os.path.join(REPO_ROOT, "robots.txt"), robots_text)
+        logging.info("Root sitemap/robots updated.")
+        if PING_SITEMAP:
+            ping_search_engines(sitemap_public_url)
+        sitemap_url_written = sitemap_public_url
+    else:
+        logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
+        sitemap_url_written = SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml"
 
+    # self-check summary
+    write_run_summary(
+        counts=counts,
+        reply_count=len(issue_items),
+        aff_audit=aff_audit,
+        post_drafts=drafts,
+        sitemap_url_written=sitemap_url_written,
+    )
 
-
-    aff_audit=aff_audit,
-    post_drafts=drafts,
-    sitemap_url_written=(sitemap_public_url if ALLOW_ROOT_UPDATE else (SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml")),
-)
-
-# return 0  # top-level return is invalid in Python (leave exit code to wrapper / normal script end)
-
+    return 0
 
 
 if __name__ == "__main__":
+    sys.exit(main())
+
     try:
         entry = (
             globals().get("main")
