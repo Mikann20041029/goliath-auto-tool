@@ -3850,7 +3850,32 @@ write_json(
     # sitemap + robots
     # Always write safe versions into goliath/_out/
 sitemap_urls = []
-sitemap_urls += policy_urls
+    # --- policies URLs for sitemap (always defined) ---
+    policy_urls: List[str] = []
+    try:
+        if os.path.isdir(POLICIES_DIR):
+            # /policies/<something>/index.html -> /policies/<something>/
+            for root, _dirs, files in os.walk(POLICIES_DIR):
+                for fn in files:
+                    if fn.lower() != "index.html":
+                        continue
+                    full = os.path.join(root, fn)
+                    rel = os.path.relpath(full, REPO_ROOT).replace(os.sep, "/")
+                    url_path = "/" + rel.replace("index.html", "")
+                    url_path = re.sub(r"/+$", "/", url_path)
+                    policy_urls.append(PUBLIC_BASE_URL.rstrip("/") + url_path)
+
+            # /policies/privacy.html など単体HTMLも拾う（存在する場合）
+            for fn in os.listdir(POLICIES_DIR):
+                if fn.lower().endswith(".html") and fn.lower() != "index.html":
+                    rel = f"policies/{fn}"
+                    policy_urls.append(PUBLIC_BASE_URL.rstrip("/") + "/" + rel)
+
+        policy_urls = uniq_keep_order([u for u in policy_urls if u])
+    except Exception as e:
+        logging.warning("policy_urls build failed: %s", e)
+        policy_urls = []
+
 sitemap_urls += site_urls
 sitemap_urls.append(SITE_DOMAIN.rstrip("/") + "/hub/")
     # (Optional) if you have other top-level pages you want indexed, add here.
