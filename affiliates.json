@@ -1,13 +1,26 @@
 {
-  "tech_web": [],
-  "travel_planning": [],
-  "food_cooking": [],
-  "health_fitness": [],
-  "study_learning": [],
-  "money_personal_finance": [],
-  "career_work": [],
-  "relationships_communication": [],
-  "home_life_admin": [],
-  "shopping_products": [],
-  "events_leisure": []
+  "categories": {
+    "Web/Hosting": [],
+    "Dev/Tools": [],
+    "AI/Automation": [],
+    "Security/Privacy": [],
+    "Media": [],
+    "PDF/Docs": [],
+    "Images/Design": [],
+    "Data/Spreadsheets": [],
+    "Business/Accounting/Tax": [],
+    "Marketing/Social": [],
+    "Productivity": [],
+    "Education/Language": [],
+    "Travel/Planning": [],
+    "Food/Cooking": [],
+    "Health/Fitness": [],
+    "Study/Learning": [],
+    "Money/Personal Finance": [],
+    "Career/Work": [],
+    "Relationships/Communication": [],
+    "Home/Life Admin": [],
+    "Shopping/Products": [],
+    "Events/Leisure": []
+  }
 }
