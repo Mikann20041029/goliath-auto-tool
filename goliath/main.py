@@ -3947,27 +3947,40 @@ write_run_summary(
 
 
 if __name__ == "__main__":
-    # --- robust entrypoint: call whichever exists (main/run/run_goliath/...) ---
+    # --- robust entrypoint (syntax-safe) ---
+    # 目的:
+    # 1) 末尾の try 構文を必ず正しい形に固定する
+    # 2) 既存の main / run / run_goliath / goliath_main のどれがあっても起動できる
     try:
-        fn = (
+        entry = (
             globals().get("main")
             or globals().get("run")
             or globals().get("run_goliath")
             or globals().get("goliath_main")
         )
-        if not callable(fn):
+
+        if not callable(entry):
             raise RuntimeError(
-                "Entry function not found. Expected one of: main / run / run_goliath / goliath_main"
+                "Entry function not found. Expected one of: "
+                "main / run / run_goliath / goliath_main"
             )
 
-        ret = fn()
-        if isinstance(ret, int):
-            sys.exit(ret)
+        result = entry()
+
+        # 数値が返った場合だけ exit に反映（None 等は無視）
+        if isinstance(result, int):
+            sys.exit(result)
 
     except KeyboardInterrupt:
+        # Ctrl+C はそのまま上に投げる
         raise
     except Exception as e:
-        # logging may be not configured yet; still okay (prints via default handler/lastResort)
-        logging.exception("Unhandled exception in goliath/main.py: %s", e)
+        # logging が未初期化でも落ちないようにする
+        try:
+            import logging
+            logging.exception("Unhandled exception in goliath/main.py: %s", e)
+        except Exception:
+            print("Unhandled exception in goliath/main.py:", e, file=sys.stderr)
         raise
+
 
