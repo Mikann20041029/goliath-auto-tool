@@ -3922,36 +3922,46 @@ if ALLOW_ROOT_UPDATE:
 else:
     logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
 
-        # self-check summary
-    # --- counts (always defined) ---
-    counts = {"bluesky": 0, "mastodon": 0, "reddit": 0, "hn": 0, "x": 0, "total": 0}
-    try:
-        _all = (
-            globals().get("all_posts")
-            or globals().get("posts_all")
-            or globals().get("posts")
-            or []
-        )
-        if isinstance(_all, list) and _all:
-            # Post dataclass想定: p.source があれば source 別に数える
-            if hasattr(_all[0], "source"):
-                for p in _all:
-                    src = getattr(p, "source", "")
-                    if src in counts:
-                        counts[src] += 1
-                counts["total"] = len(_all)
-            else:
-                counts["total"] = len(_all)
-    except Exception as e:
-        logging.warning("counts build failed: %s", e)
+        # self-check summary (always run)
+counts = {"bluesky": 0, "mastodon": 0, "reddit": 0, "hn": 0, "x": 0, "total": 0}
 
-    # safety: reply_count が None/空でも数値化
-    reply_count = int(reply_count or 0)
-
-    write_run_summary(
-        counts=counts,
-        reply_count=reply_count,
+try:
+    _all = (
+        globals().get("all_posts")
+        or globals().get("posts_all")
+        or globals().get("posts")
+        or []
     )
+
+    if isinstance(_all, list) and _all:
+        # Post dataclass想定: p.source があれば source 別に数える
+        for p in _all:
+            src = getattr(p, "source", "")
+            if src in counts:
+                counts[src] += 1
+        counts["total"] = len(_all)
+    elif isinstance(_all, list):
+        counts["total"] = len(_all)
+
+except Exception as e:
+    logging.warning("counts build failed: %s", e)
+
+reply_count = int(reply_count or 0)
+
+# write_run_summary は環境によって引数が違っても落ちないように安全実行
+try:
+    write_run_summary(counts=counts, reply_count=reply_count, issue_items=issue_items)
+except TypeError:
+    try:
+        write_run_summary(counts=counts, reply_count=reply_count)
+    except TypeError:
+        try:
+            write_run_summary(counts=counts)
+        except Exception as e:
+            logging.warning("write_run_summary failed: %s", e)
+except Exception as e:
+    logging.warning("write_run_summary failed: %s", e)
+
 
 
     aff_audit=aff_audit,
