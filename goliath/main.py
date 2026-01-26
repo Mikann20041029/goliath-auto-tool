@@ -3832,7 +3832,7 @@ if not slug:
             slug = str(getattr(_obj, "slug", "") or "")
 slug = str(slug).strip()
 
-    slug = default_tool_slug
+slug = default_tool_slug
 tool_url = f"{PUBLIC_BASE_URL.rstrip('/')}/goliath/pages/{slug}/"
 
 
