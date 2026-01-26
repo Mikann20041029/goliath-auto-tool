@@ -3947,7 +3947,8 @@ if True:
         logging.warning("counts build failed: %s", e)
 write_run_summary(
     counts=counts,
-    reply_count=len(issue_items),
+    reply_count=reply_count,
+
     aff_audit=aff_audit,
     post_drafts=drafts,
     sitemap_url_written=(sitemap_public_url if ALLOW_ROOT_UPDATE else (SITE_DOMAIN.rstrip("/") + "/goliath/_out/sitemap.xml")),
