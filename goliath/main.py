@@ -3920,7 +3920,7 @@ else:
     logging.info("Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.")
 
     # self-check summary
-write_run_summary(
+if True:
         # --- counts (always defined) ---
     counts = {"bluesky": 0, "mastodon": 0, "reddit": 0, "hn": 0, "x": 0, "total": 0}
     try:
