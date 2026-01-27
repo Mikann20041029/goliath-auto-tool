@@ -2,17 +2,22 @@ name: Goliath Auto Tool System
 
 on:
   workflow_dispatch:
+  # 8時間ごとに回したいなら有効化
+  # schedule:
+  #   - cron: '0 */8 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,12 +30,47 @@ jobs:
       - name: Run Goliath System
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python main.py
+          # 必要ならここに各種トークン/設定も追加
+        run: |
+          # あなたの実体が goliath/main.py ならこっちに合わせる
+          python goliath/main.py
+
+      - name: Create GitHub Issues from payload
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import glob, json, os, subprocess
+
+          files = glob.glob("goliath/_out/issues_payload_*.json")
+          if not files:
+            raise SystemExit("No issues_payload_*.json found (main.py didn't write payload).")
+
+          path = max(files, key=os.path.getmtime)
+          data = json.load(open(path, "r", encoding="utf-8"))
+          issues = data.get("issues", [])
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          for it in issues:
+            title = it["title"]
+            body = it["body"]
+            subprocess.check_call([
+              "gh","api","-X","POST",f"repos/{repo}/issues",
+              "-f",f"title={title}",
+              "-f",f"body={body}",
+            ])
+
+          print(f"Created {len(issues)} issues from {path}")
+          PY
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "Goliath-Bot"
           git config --global user.email "bot@mikanntool.com"
-          git add index.html
-          git commit -m "Update tool and SEO article" || exit 0
+
+          # 生成物をコミット（index.htmlだけ、はやめる）
+          git add goliath/ hub/sites.json || true
+
+          git commit -m "Update generated sites + issues payload" || exit 0
           git push origin main
