@@ -1,109 +1,28 @@
 <!doctype html>
-<html lang="en" class="">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mikanntool | privacy</title>
-  <script>tailwind = window.tailwind || {}; tailwind.config = { darkMode: "class" };</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root { color-scheme: light; }
-    html.dark { color-scheme: dark; }
-    body {
-      font-family: ui-sans-serif, system-ui, -apple-system, "Inter", Segoe UI, Roboto,
-        "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
-    }
-  </style>
-</head>
-<body class="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-white">
-  <header class="border-b border-slate-200/70 dark:border-white/10">
-    <div class="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
-      <a href="https://mikann20041029.github.io/hub/" class="flex items-center gap-2">
-        <span class="text-lg">🧰</span>
-        <span class="font-semibold">Mikanntool</span>
-      </a>
-      <nav class="flex items-center gap-4 text-sm">
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="https://mikann20041029.github.io/hub/" data-i18n="home">Home</a>
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="https://mikann20041029.github.io/hub/#about" data-i18n="about">About Us</a>
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="https://mikann20041029.github.io/hub/#tools" data-i18n="all_tools">All Tools</a>
-        <button id="themeBtn" type="button" class="ml-2 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs" aria-label="Theme">🌓</button>
-        <select id="langSel" class="ml-2 rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs">
-          <option value="en">EN</option>
-          <option value="ja">JA</option>
-          <option value="ko">KO</option>
-          <option value="zh">ZH</option>
-        </select>
-      </nav>
-    </div>
-  </header>
-
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy | Mikanntool</title><script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", Arial; }
+</style></head>
+<body class="min-h-screen bg-zinc-950 text-white">
   <main class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="text-2xl font-semibold" data-i18n="privacy">Privacy</h1>
-    <div id="policyBody" class="mt-6 space-y-3 text-slate-700 dark:text-white/70 leading-relaxed"></div>
+    <h1 class="text-2xl font-semibold">Privacy Policy</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      This site may use Google AdSense and similar advertising services. These services may use cookies and/or
+      device identifiers to show ads and measure performance.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Cookies</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      Cookies may be used to store preferences and improve user experience. You can manage cookies via your browser settings.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Analytics</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      We may collect aggregated usage data to improve the site. We do not intentionally collect sensitive personal information.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Contact</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      If you have questions about this policy, contact: contact@mikanntool.com
+    </p>
   </main>
-
-  <footer class="border-t border-slate-200/70 dark:border-white/10">
-    <div class="mx-auto max-w-5xl px-4 py-8 text-xs text-slate-500 dark:text-white/60">
-      <div>Mikanntool · <span data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</span></div>
-    </div>
-  </footer>
-
-  <script>
-  const I18N = {"en": {"home": "Home", "about": "About Us", "all_tools": "All Tools", "language": "Language", "share": "Share", "problems": "Problems this tool can help with", "tool": "Tool", "quick_answer": "Quick answer", "causes": "Common causes", "steps": "Step-by-step checklist", "pitfalls": "Common pitfalls & how to avoid them", "next": "If it still doesn’t work", "faq": "FAQ", "references": "Reference links", "supplement": "Supplementary resources", "related": "Related tools", "popular": "Popular tools", "disclaimer": "Disclaimer", "terms": "Terms", "privacy": "Privacy", "contact": "Contact", "footer_note": "Practical, fast, and respectful guides—built to reduce wasted trial-and-error.", "aff_title": "Recommended", "copy": "Copy", "copied": "Copied", "short_value": "Do it in 3 seconds", "tool_input": "Input", "tool_input_hint": "(paste your details)", "tool_placeholder": "Example: dates, constraints, what you tried, what you need…", "tool_generate": "Generate", "tool_clear": "Clear", "tool_tip": "Tip: include the exact error message and what changed recently."}, "ja": {"home": "Home", "about": "About Us", "all_tools": "All Tools", "language": "言語", "share": "共有", "problems": "このツールが助ける悩み一覧", "tool": "ツール", "quick_answer": "結論（最短で直す方針）", "causes": "原因のパターン分け", "steps": "手順（チェックリスト）", "pitfalls": "よくある失敗と回避策", "next": "直らない場合の次の手", "faq": "FAQ", "references": "参考URL", "supplement": "補助資料", "related": "関連ツール", "popular": "人気のツール", "disclaimer": "免責事項", "terms": "利用規約", "privacy": "プライバシーポリシー", "contact": "お問い合わせ", "footer_note": "実務で使える手順に寄せて、短時間で解決できる形を目指しています。", "aff_title": "おすすめ", "copy": "コピー", "copied": "コピーしました", "short_value": "3秒でできる", "tool_input": "入力", "tool_input_hint": "（状況を貼り付け）", "tool_placeholder": "例：日時、制約、試したこと、必要なこと…", "tool_generate": "生成", "tool_clear": "クリア", "tool_tip": "コツ：エラーメッセージ全文と「最近変えたこと」を入れると精度が上がります。"}, "ko": {"home": "Home", "about": "About Us", "all_tools": "All Tools", "language": "언어", "share": "공유", "problems": "이 도구가 해결할 수 있는 고민", "tool": "도구", "quick_answer": "결론(가장 빠른 해결 방향)", "causes": "원인 패턴", "steps": "체크리스트(단계별)", "pitfalls": "자주 하는 실수와 회피법", "next": "계속 안 될 때", "faq": "FAQ", "references": "참고 링크", "supplement": "추가 자료", "related": "관련 도구", "popular": "인기 도구", "disclaimer": "면책", "terms": "이용약관", "privacy": "개인정보 처리방침", "contact": "문의", "footer_note": "바로 실행 가능한 가이드를 목표로 합니다.", "aff_title": "추천", "copy": "복사", "copied": "복사됨", "short_value": "3초면 끝", "tool_input": "입력", "tool_input_hint": "(상황을 붙여넣기)", "tool_placeholder": "예: 날짜/제약/시도한 것/원하는 것…", "tool_generate": "생성", "tool_clear": "지우기", "tool_tip": "팁: 정확한 오류 메시지와 최근 변경점을 포함하세요."}, "zh": {"home": "Home", "about": "About Us", "all_tools": "All Tools", "language": "语言", "share": "分享", "problems": "本工具可帮助解决的问题", "tool": "工具", "quick_answer": "结论（最快修复方向）", "causes": "常见原因分类", "steps": "步骤清单", "pitfalls": "常见坑与规避方法", "next": "仍无法解决时", "faq": "FAQ", "references": "参考链接", "supplement": "补充资料", "related": "相关工具", "popular": "热门工具", "disclaimer": "免责声明", "terms": "条款", "privacy": "隐私政策", "contact": "联系", "footer_note": "提供可落地、快速、尊重用户的排障指南。", "aff_title": "推荐", "copy": "复制", "copied": "已复制", "short_value": "3秒搞定", "tool_input": "输入", "tool_input_hint": "（粘贴你的情况）", "tool_placeholder": "例如：日期、限制、已尝试内容、目标…", "tool_generate": "生成", "tool_clear": "清空", "tool_tip": "提示：请包含完整报错信息以及最近变更点。"}};
-  const LANGS = ["en", "ja", "ko", "zh"];
-  const BODY = {"en": ["This site uses cookies and similar technologies to improve usability and measure performance.", "We may use Google AdSense to display ads. Third-party vendors, including Google, may use cookies to serve ads based on a user’s prior visits.", "You can control cookies in your browser settings. Disabling cookies may affect site features."], "ja": ["当サイトは利便性向上・計測のため、Cookie等の技術を使用する場合があります。", "当サイトでは Google AdSense を利用して広告を配信する場合があります。第三者配信事業者（Google等）が Cookie を使用し、過去のアクセス情報に基づいて広告を表示することがあります。", "Cookie はブラウザ設定で無効化できますが、一部機能が利用できなくなる場合があります。"], "ko": ["이 사이트는 사용성 개선 및 성능 측정을 위해 쿠키 등 유사 기술을 사용할 수 있습니다.", "이 사이트는 Google AdSense를 사용하여 광고를 게재할 수 있습니다. Google 등 제3자 공급업체는 사용자의 이전 방문 정보를 기반으로 쿠키를 사용할 수 있습니다.", "쿠키는 브라우저 설정에서 관리/비활성화할 수 있으나 일부 기능이 제한될 수 있습니다."], "zh": ["本网站可能使用 Cookie 等技术以提升可用性并进行性能统计。", "本网站可能使用 Google AdSense 投放广告。包括 Google 在内的第三方供应商可能会使用 Cookie，根据用户以往访问记录投放广告。", "您可以在浏览器设置中管理/禁用 Cookie，但可能会影响部分功能。"]};
-
-  function t(lang, key) {
-    return (I18N[lang] && I18N[lang][key]) || (I18N["en"][key]) || key;
-  }
-
-  function setLang(lang) {
-    if (!LANGS.includes(lang)) lang = "en";
-    document.documentElement.setAttribute("lang", lang);
-    localStorage.setItem("lang", lang);
-
-    document.querySelectorAll("[data-i18n]").forEach(el => {
-      const key = el.getAttribute("data-i18n");
-      el.textContent = t(lang, key);
-    });
-
-    const container = document.getElementById("policyBody");
-    if (container) {
-      const ps = (BODY[lang] || BODY["en"] || []);
-      container.innerHTML = ps.map(p => `<p>${p}</p>`).join("");
-    }
-  }
-
-  function setTheme(mode) {
-    if (mode === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-    localStorage.setItem("theme", mode);
-  }
-
-  function init() {
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setTheme(savedTheme || (prefersDark ? "dark" : "light"));
-
-    const savedLang = localStorage.getItem("lang") || "en";
-    setLang(savedLang);
-
-    const sel = document.getElementById("langSel");
-    if (sel) {
-      sel.value = savedLang;
-      sel.addEventListener("change", (e) => setLang(e.target.value));
-    }
-
-    const btn = document.getElementById("themeBtn");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        const isDark = document.documentElement.classList.contains("dark");
-        setTheme(isDark ? "light" : "dark");
-      });
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", init);
-  </script>
-</body>
-</html>
+</body></html>
