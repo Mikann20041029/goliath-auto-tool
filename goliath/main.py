@@ -107,6 +107,11 @@ AFFILIATES_JSON = os.environ.get("AFFILIATES_JSON", os.path.join(REPO_ROOT, "aff
 DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "en")  # en/ja/ko/zh
 LANGS = ["en", "ja", "ko", "zh"]
 
+DEFAULT_UA = os.environ.get(
+    "HTTP_USER_AGENT",
+    "Mozilla/5.0 (compatible; GoliathAutoTool/1.0; +https://mikanntool.com)"
+)
+
 RUN_ID = os.environ.get("RUN_ID", str(int(time.time())))
 RANDOM_SEED = os.environ.get("RANDOM_SEED", RUN_ID)
 
@@ -311,7 +316,9 @@ def is_frozen_path(path: str) -> bool:
 
 
 def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Tuple[int, str]:
-    h = headers or {}
+    h = dict(headers or {})
+    if "User-Agent" not in h:
+        h["User-Agent"] = DEFAULT_UA
     req = Request(url, headers=h, method="GET")
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -341,6 +348,8 @@ def http_post_json(
     h = {"Content-Type": "application/json"}
     if headers:
         h.update(headers)
+    if "User-Agent" not in h:
+        h["User-Agent"] = DEFAULT_UA
     data = json.dumps(payload).encode("utf-8")
     req = Request(url, headers=h, data=data, method="POST")
     try:
@@ -522,8 +531,20 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
         if not q:
             return []
         limit = max(1, min(int(limit), 100))
-        url = f"{base}/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": str(limit)})
-        st, body = http_get(url, headers=headers, timeout=20)
+        bases = [base]
+        # public endpoint can occasionally fail; try the other base as fallback (Bluesky is free-ish; cost concern is X only)
+        if base != "https://public.api.bsky.app":
+            bases.append("https://public.api.bsky.app")
+        if base != "https://bsky.social":
+            bases.append("https://bsky.social")
+
+        body = ""
+        st = 0
+        for b in bases:
+            url = f"{b}/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": str(limit)})
+            st, body = http_get(url, headers=headers, timeout=20)
+            if st == 200 and body:
+                break
         if st != 200:
             return []
         try:
@@ -2349,7 +2370,7 @@ def build_tool_ui(theme: Theme) -> str:
   }}
 
   function header(title) {{
-    return `# ${title}\\n\\n`;
+    return `# ${{title}}\\n\\n`;
   }}
 
   function planTemplate(userText) {{
@@ -2360,7 +2381,7 @@ def build_tool_ui(theme: Theme) -> str:
     lines.push("- Goal:");
     lines.push("- Current state:");
     lines.push("- Constraints (budget/time/tools):");
-    lines.push(t ? `\\n> ${t}` : "");
+    lines.push(t ? `\\n> ${{t}}` : "");
     lines.push("\\n## 2) Quick diagnosis");
     lines.push("- What is most likely happening:");
     lines.push("- What is *not* likely (avoid rabbit holes):");
