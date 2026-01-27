@@ -1,0 +1,57 @@
+{
+  "run_id": "1769530670",
+  "counts": {
+    "Bluesky": 50,
+    "Mastodon": 100,
+    "Reddit": 0,
+    "X": 0,
+    "HN": 0,
+    "Total": 150
+  },
+  "reply_candidates": 100,
+  "affiliates_audit": {
+    "missing": [],
+    "extra": [],
+    "ok": true
+  },
+  "sitemap_url": "https://mikann20041029.github.io/goliath/_out/sitemap.xml",
+  "post_drafts": [
+    {
+      "category": "Dev/Tools",
+      "search_title": "engine affected: during fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/eK3rwOm/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/eK3rwOm/"
+    },
+    {
+      "category": "Health/Fitness",
+      "search_title": "engine check light workout plan + habit tracker",
+      "short_url": "https://mikann20041029.github.io/goliath/go/9bjOt1f/",
+      "text": "Turn your goal into a tiny daily routine + tracker in seconds.\nhttps://mikann20041029.github.io/goliath/go/9bjOt1f/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "amp activitypub flipboard DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/dmtOOFR/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/dmtOOFR/"
+    },
+    {
+      "category": "Home/Life Admin",
+      "search_title": "ps5 fix how moving checklist + life admin planner",
+      "short_url": "https://mikann20041029.github.io/goliath/go/cyfOcJb/",
+      "text": "Create a moving/life-admin checklist in seconds.\nhttps://mikann20041029.github.io/goliath/go/cyfOcJb/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "サイト サービス ニュースリリース DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/6r72AH4/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/6r72AH4/"
+    },
+    {
+      "category": "Dev/Tools",
+      "search_title": "affected: steering fix fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/iomjZfZ/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/iomjZfZ/"
+    }
+  ],
+  "updated_at": "2026-01-27T16:17:57+00:00"
+}
