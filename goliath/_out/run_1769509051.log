@@ -1,0 +1,40 @@
+2026-01-27 10:17:31,721 | INFO | RUN_ID=1769509051
+2026-01-27 10:17:31,721 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 10:17:31,721 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 10:17:31,721 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 10:17:31,721 | INFO | LEADS_TOTAL=100
+2026-01-27 10:17:31,721 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 10:17:31,722 | INFO | HN_MAX=70
+2026-01-27 10:17:31,814 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 10:17:31,814 | INFO | Bluesky: collecting up to 50
+2026-01-27 10:17:32,428 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 10:17:33,109 | INFO | Bluesky: collected 50
+2026-01-27 10:17:33,109 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-27 10:17:35,647 | INFO | Mastodon: collected 100
+2026-01-27 10:17:35,648 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 10:17:36,139 | INFO | Reddit: collected 0
+2026-01-27 10:17:36,500 | INFO | HN: collected 0
+2026-01-27 10:17:36,501 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 10:17:36,501 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 10:17:36,956 | INFO | Reddit: collected 0
+2026-01-27 10:17:37,178 | INFO | HN: collected 0
+2026-01-27 10:17:37,179 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 10:17:37,179 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 10:17:37,643 | INFO | Reddit: collected 0
+2026-01-27 10:17:37,854 | INFO | HN: collected 0
+2026-01-27 10:17:37,857 | INFO | Collected total: 150 (bs=50 ms=100 rd=0 x=0 hn=0)
+2026-01-27 10:17:37,857 | INFO | Clustering 150 posts (threshold=0.22)
+2026-01-27 10:17:37,882 | INFO | Clusters: 138 (top sizes=[5, 4, 3, 3, 2, 1, 1, 1])
+2026-01-27 10:17:37,885 | INFO | Chosen themes=5
+2026-01-27 10:17:38,086 | INFO | Unsplash hero bg enabled.
+2026-01-27 10:17:38,088 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-idle-affected-fix-guide-checklist-tool-3/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/hb7zFLn/
+2026-01-27 10:17:38,089 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/immigration-system-how-fix-guide-checklist-tool-3/ (Business/Accounting/Tax) short=https://mikann20041029.github.io/goliath/go/5aiXUu5/
+2026-01-27 10:17:38,090 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-acceleration-affected-fix-guide-checklist-tool-2/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/5sbVgSE/
+2026-01-27 10:17:38,090 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/activitypub-amp-flipboard-dns-ssl-fix-checklist-3/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/29kYs7l/
+2026-01-27 10:17:38,091 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/dans-un-activitypub-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/2RyDReO/
+2026-01-27 10:17:38,096 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769509051.json
+2026-01-27 10:17:38,096 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 10:17:38,097 | INFO | Self-check: counts={'Bluesky': 50, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 150}
+2026-01-27 10:17:38,097 | INFO | Self-check: reply_candidates=100
+2026-01-27 10:17:38,097 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 10:17:38,097 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
