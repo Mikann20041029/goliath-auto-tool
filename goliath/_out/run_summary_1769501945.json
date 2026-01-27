@@ -1,0 +1,51 @@
+{
+  "run_id": "1769501945",
+  "counts": {
+    "Bluesky": 0,
+    "Mastodon": 100,
+    "Reddit": 0,
+    "X": 0,
+    "HN": 0,
+    "Total": 100
+  },
+  "reply_candidates": 100,
+  "affiliates_audit": {
+    "missing": [],
+    "extra": [],
+    "ok": true
+  },
+  "sitemap_url": "https://mikann20041029.github.io/goliath/_out/sitemap.xml",
+  "post_drafts": [
+    {
+      "category": "Web/Hosting",
+      "search_title": "f1 activitypub amp DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/6QOrB94/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/6QOrB94/"
+    },
+    {
+      "category": "Dev/Tools",
+      "search_title": "ein mit eu fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/gnwFXHw/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/gnwFXHw/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "https:// DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/bHRcaPa/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/bHRcaPa/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "ai activitypub ai-nndflip DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/9p5GwmN/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/9p5GwmN/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "gt https:// japanese DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/8tRRciw/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/8tRRciw/"
+    }
+  ],
+  "updated_at": "2026-01-27T08:19:57+00:00"
+}
