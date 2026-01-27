@@ -1,0 +1,12 @@
+2026-01-27 10:38:51,992 | INFO | RUN_ID=1769510331
+2026-01-27 10:38:51,992 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 10:38:51,992 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 10:38:51,992 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 10:38:51,992 | INFO | LEADS_TOTAL=100
+2026-01-27 10:38:51,992 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 10:38:51,992 | INFO | HN_MAX=70
+2026-01-27 10:38:52,169 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 10:38:52,169 | INFO | Bluesky: collecting up to 50
+2026-01-27 10:38:52,402 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 10:38:53,355 | INFO | Bluesky: collected 50
+2026-01-27 10:38:53,355 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
