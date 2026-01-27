@@ -168,7 +168,6 @@ ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for l
 # Branding / canonical
 # Branding / canonical
 SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
-SITE_LOGO = os.environ.get("SITE_LOGO", "🧰")
 
 SITE_DOMAIN = env_first("SITE_DOMAIN", default=PUBLIC_BASE_URL)
 HUB_BASE_URL = env_first("HUB_BASE_URL", default=PUBLIC_BASE_URL.rstrip("/") + "/hub/")
@@ -465,100 +464,140 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
     ATProto:
       - createSession: https://bsky.social/xrpc/com.atproto.server.createSession
       - searchPosts:   https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=...
+    Notes:
+      - If credentials are missing or session fails, fallback to public endpoint:
+        https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts
+      - To avoid returning 0 too often, we progressively widen queries.
     """
-    if not (BLUESKY_HANDLE and BLUESKY_APP_PASSWORD):
-        logging.info("Bluesky: skipped (missing BLUESKY_HANDLE/BLUESKY_APP_PASSWORD)")
+    target = max(0, int(max_items))
+    if target <= 0:
         return []
 
-    logging.info("Bluesky: collecting up to %d", max_items)
-    status, js, raw = http_post_json(
-        "https://bsky.social/xrpc/com.atproto.server.createSession",
-        {"identifier": BLUESKY_HANDLE, "password": BLUESKY_APP_PASSWORD},
-        headers={"Accept": "application/json"},
-        timeout=20,
-    )
-    if status != 200 or "accessJwt" not in js:
-        logging.warning("Bluesky: session failed status=%s body=%s", status, (raw or "")[:300])
-        return []
-
-    token = js["accessJwt"]
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-
-    # Mix tech + life
-    queries = [
-        # tech
-        "how to fix error",
-        "can't login help",
-        "pdf convert fails",
-        "compress mp4 best settings",
-        "excel formula wrong",
-        "github pages custom domain dns",
-        "oauth token expired",
-        "privacy settings cookies",
-        # life
-        "itinerary planner help",
-        "packing list checklist",
-        "layover eSIM advice",
-        "refund cancellation policy",
-        "meal prep plan",
-        "calories protein plan",
-        "sleep schedule fix",
-        "workout routine beginner",
-        "study plan schedule",
-        "procrastination can't focus",
-        "resume interview help",
-        "budget template",
-        "compare best option",
-        "weekend plan ideas",
+    # Query sets: narrow -> wide -> very wide
+    queries_narrow = [
+        # tech / ops
+        "how to fix", "error", "cannot", "failed", "bug", "github pages", "dns", "ssl", "oauth",
+        "pdf convert", "compress pdf", "excel formula", "spreadsheet template",
+        # planning / life admin
+        "itinerary", "packing list", "meal prep", "sleep schedule", "workout routine", "study plan",
+        "budget template", "compare best", "refund policy", "cancellation policy",
     ]
+    queries_wide = [
+        "need help", "help", "why does", "how do i", "how to", "problem", "issue", "fix this",
+        "recommend", "template", "checklist", "plan",
+    ]
+    queries_very_wide = ["help", "how", "fix", "template", "plan", "checklist"]
 
-    out: List[Post] = []
-    for q in queries:
-        if len(out) >= max_items:
-            break
-        url = "https://bsky.social/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": 25})
+    # Prefer authenticated session (more stable + may yield more)
+    use_public = False
+    headers = {"Accept": "application/json"}
+    base = "https://bsky.social"
+
+    if BLUESKY_HANDLE and BLUESKY_APP_PASSWORD:
+        logging.info("Bluesky: collecting up to %d", target)
+        st, js, raw = http_post_json(
+            f"{base}/xrpc/com.atproto.server.createSession",
+            {"identifier": BLUESKY_HANDLE, "password": BLUESKY_APP_PASSWORD},
+            headers={"Accept": "application/json"},
+            timeout=20,
+        )
+        if st == 200 and isinstance(js, dict):
+            jwt = (js.get("accessJwt") or "").strip()
+            if jwt:
+                headers["Authorization"] = f"Bearer {jwt}"
+            else:
+                use_public = True
+        else:
+            use_public = True
+    else:
+        # missing creds -> public fallback
+        use_public = True
+
+    if use_public:
+        base = "https://public.api.bsky.app"
+        headers = {"Accept": "application/json"}
+        logging.info("Bluesky: using public endpoint (no credentials/session). collecting up to %d", target)
+
+    def search(q: str, limit: int) -> List[Post]:
+        if not q:
+            return []
+        limit = max(1, min(int(limit), 100))
+        url = f"{base}/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": str(limit)})
         st, body = http_get(url, headers=headers, timeout=20)
         if st != 200:
-            continue
+            return []
         try:
             data = json.loads(body)
         except Exception:
-            continue
+            return []
+        posts = data.get("posts") or []
+        out_local: List[Post] = []
+        for it in posts:
+            try:
+                uri = it.get("uri") or ""
+                cid = it.get("cid") or ""
+                record = it.get("record") or {}
+                text = record.get("text") or ""
+                author = (it.get("author") or {}).get("handle") or ""
+                created = record.get("createdAt") or it.get("indexedAt") or ""
+                urlp = ""
+                # best-effort: convert uri -> bsky.app url
+                if uri:
+                    # at://did/app.bsky.feed.post/<rkey>
+                    m = re.search(r"/([^/]+)$", uri)
+                    rkey = m.group(1) if m else ""
+                    if author and rkey:
+                        urlp = f"https://bsky.app/profile/{author}/post/{rkey}"
+                pid = sha1(uri or cid or (author + "|" + created + "|" + text))[:16]
+                if not text:
+                    continue
+                out_local.append(Post(
+                    source="bluesky",
+                    id=pid,
+                    url=urlp,
+                    text=text,
+                    author=author,
+                    created_at=str(created),
+                    lang_hint="",
+                    meta={"q": q, "uri": uri, "cid": cid},
+                ))
+            except Exception:
+                continue
+        return out_local
 
-        for item in data.get("posts", []):
-            if len(out) >= max_items:
+    seen_ids: set = set()
+    out: List[Post] = []
+
+    def add_many(items: List[Post]) -> None:
+        for p in items:
+            if len(out) >= target:
+                return
+            if not p or not p.text:
+                continue
+            if p.id in seen_ids:
+                continue
+            seen_ids.add(p.id)
+            out.append(p)
+
+    # 1) narrow
+    for q in queries_narrow:
+        if len(out) >= target:
+            break
+        add_many(search(q, limit=min(100, target - len(out))))
+
+    # 2) wide
+    if len(out) < target:
+        for q in queries_wide:
+            if len(out) >= target:
                 break
-            uri = item.get("uri", "") or ""
-            cid = item.get("cid", "") or ""
-            record = item.get("record") or {}
-            text = (record.get("text") or item.get("text") or "").strip()
-            author = ((item.get("author") or {}).get("handle") or "unknown").strip()
-            created_at = (record.get("createdAt") or item.get("indexedAt") or now_iso())
+            add_many(search(q, limit=min(100, target - len(out))))
 
-            if not text or adult_or_sensitive(text):
-                continue
-
-            post_url = ""
-            if uri:
-                try:
-                    rkey = uri.split("/")[-1]
-                    post_url = f"https://bsky.app/profile/{author}/post/{rkey}"
-                except Exception:
-                    post_url = uri
-
-            if not post_url:
-                continue
-
-            pid = sha1(f"bsky:{uri}:{cid}:{post_url}")
-            out.append(Post(
-                source="bluesky",
-                id=pid,
-                url=post_url,
-                text=text,
-                author=author,
-                created_at=created_at,
-                meta={"query": q, "uri": uri, "cid": cid},
-            ))
+    # 3) very wide (last resort)
+    if len(out) < target:
+        for q in queries_very_wide:
+            if len(out) >= target:
+                break
+            add_many(search(q, limit=min(100, target - len(out))))
 
     logging.info("Bluesky: collected %d", len(out))
     return out
@@ -570,14 +609,21 @@ def collect_mastodon(max_items: int = 120) -> List[Post]:
       - public timeline: /api/v1/timelines/public?limit=
       - tag timeline: /api/v1/timelines/tag/{tag}?limit=
       - search: /api/v2/search?q=...&type=statuses&resolve=true
+    Notes:
+      - If token is missing, we try public timeline/search without auth (instance-dependent).
+      - We widen queries if we get 0.
     """
-    if not (MASTODON_BASE and MASTODON_TOKEN):
-        logging.info("Mastodon: skipped (missing MASTODON_BASE/MASTODON_TOKEN)")
+    target = max(0, int(max_items))
+    if target <= 0:
         return []
 
-    base = MASTODON_BASE.rstrip("/")
-    headers = {"Authorization": f"Bearer {MASTODON_TOKEN}", "Accept": "application/json"}
-    logging.info("Mastodon: collecting up to %d from %s", max_items, base)
+    base = (MASTODON_BASE or "https://mastodon.social").rstrip("/")
+    headers = {"Accept": "application/json"}
+    if MASTODON_TOKEN:
+        headers["Authorization"] = f"Bearer {MASTODON_TOKEN}"
+
+    authed = "Authorization" in headers
+    logging.info("Mastodon: collecting up to %d from %s (auth=%s)", target, base, "yes" if authed else "no")
 
     tags = [
         # tech
@@ -587,75 +633,113 @@ def collect_mastodon(max_items: int = 120) -> List[Post]:
         "travel", "itinerary", "packing", "cooking", "mealprep", "fitness", "sleep",
         "studytips", "productivity", "personalfinance", "career", "relationships",
     ]
-    queries = [
-        # tech + life triggers
+    queries_narrow = [
         "need help", "how to fix", "error", "cannot", "failed", "issue", "bug",
         "itinerary", "packing list", "meal prep", "workout plan", "sleep schedule",
         "study plan", "resume", "interview", "budget template", "compare", "recommend",
     ]
+    queries_wide = ["help", "how to", "problem", "issue", "fix", "template", "checklist", "plan"]
 
     out: List[Post] = []
+    seen = set()
 
-    def add_statuses(statuses: List[Dict[str, Any]], hint: str) -> None:
+    def add_statuses(statuses: List[Dict[str, Any]], via: str) -> None:
         nonlocal out
-        for s in statuses:
-            if len(out) >= max_items:
+        for s in statuses or []:
+            if len(out) >= target:
                 return
-            sid = s.get("id", "") or ""
-            url = (s.get("url") or "").strip()
-            created_at = (s.get("created_at") or now_iso())
-            acct = ((s.get("account") or {}).get("acct") or "unknown").strip()
-            content = (s.get("content") or "")
-            text = re.sub(r"<[^>]+>", " ", content)
-            text = html.unescape(text).strip()
-
-            if not url or not text or adult_or_sensitive(text):
+            try:
+                sid = str(s.get("id") or "")
+                url = s.get("url") or ""
+                content = s.get("content") or ""
+                # strip html tags (cheap)
+                content_txt = re.sub(r"<[^>]+>", " ", content)
+                content_txt = re.sub(r"\s+", " ", content_txt).strip()
+                if not content_txt:
+                    continue
+                author = ((s.get("account") or {}).get("acct") or "").strip()
+                created = (s.get("created_at") or "").strip()
+                pid = sha1(f"{sid}|{url}|{author}|{created}|{content_txt}")[:16]
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                out.append(Post(
+                    source="mastodon",
+                    id=pid,
+                    url=url,
+                    text=content_txt,
+                    author=author,
+                    created_at=created,
+                    lang_hint="",
+                    meta={"via": via, "sid": sid},
+                ))
+            except Exception:
                 continue
 
-            pid = sha1(f"mstdn:{sid}:{url}")
-            out.append(Post(
-                source="mastodon",
-                id=pid,
-                url=url,
-                text=text,
-                author=acct,
-                created_at=created_at,
-                meta={"hint": hint},
-            ))
-
-    st, body = http_get(f"{base}/api/v1/timelines/public?limit=40", headers=headers, timeout=20)
-    if st == 200:
-        try:
-            add_statuses(json.loads(body), "public")
-        except Exception:
-            pass
-
-    for tag in tags:
-        if len(out) >= max_items:
-            break
-        st, body = http_get(f"{base}/api/v1/timelines/tag/{quote(tag)}?limit=30", headers=headers, timeout=20)
-        if st != 200:
-            continue
-        try:
-            add_statuses(json.loads(body), f"tag:{tag}")
-        except Exception:
-            continue
-
-    for q in queries:
-        if len(out) >= max_items:
-            break
-        url = f"{base}/api/v2/search?" + urlencode({"q": q, "type": "statuses", "resolve": "true", "limit": "20"})
+    def get_json(url: str) -> Any:
         st, body = http_get(url, headers=headers, timeout=20)
         if st != 200:
-            continue
+            return None
         try:
-            data = json.loads(body)
-            add_statuses(data.get("statuses", []) or [], f"search:{q}")
+            return json.loads(body)
         except Exception:
-            continue
+            return None
+
+    # 1) public timeline (paged)
+    max_id = None
+    for _ in range(6):
+        if len(out) >= target:
+            break
+        params = {"limit": "40", "local": "false"}
+        if max_id:
+            params["max_id"] = str(max_id)
+        url = f"{base}/api/v1/timelines/public?" + urlencode(params)
+        data = get_json(url)
+        if not isinstance(data, list) or not data:
+            break
+        add_statuses(data, "public")
+        # next page: use the smallest id we saw
+        ids = [int(x.get("id")) for x in data if str(x.get("id") or "").isdigit()]
+        max_id = min(ids) if ids else None
+        if not max_id:
+            break
+
+    # 2) tags
+    for tag in tags:
+        if len(out) >= target:
+            break
+        url = f"{base}/api/v1/timelines/tag/{quote(tag)}?limit=30"
+        data = get_json(url)
+        if isinstance(data, list):
+            add_statuses(data, f"tag:{tag}")
+
+    # 3) search (narrow then wide)
+    def search_q(q: str) -> None:
+        if len(out) >= target:
+            return
+        if not q:
+            return
+        url = f"{base}/api/v2/search?" + urlencode({"q": q, "type": "statuses", "resolve": "true", "limit": "30"})
+        data = get_json(url)
+        if not isinstance(data, dict):
+            return
+        statuses = data.get("statuses") or []
+        if isinstance(statuses, list):
+            add_statuses(statuses, f"search:{q}")
+
+    for q in queries_narrow:
+        if len(out) >= target:
+            break
+        search_q(q)
+
+    if len(out) == 0:
+        for q in queries_wide:
+            if len(out) >= target:
+                break
+            search_q(q)
 
     logging.info("Mastodon: collected %d", len(out))
-    return out
+    return out[:target]
 
 
 def reddit_oauth_token() -> Optional[str]:
@@ -1475,216 +1559,177 @@ def build_shortlink_page(target_url: str, code: str) -> Tuple[str, str]:
 # =============================================================================
 # i18n dictionaries (core UI strings)
 # =============================================================================
-I18N = {'en': {'home': 'Home',
-        'about': 'About Us',
-        'all_tools': 'All Tools',
-        'language': 'Language',
-        'share': 'Share',
-        'problems': 'Problems this tool can help with',
-        'tool': 'Tool',
-        'quick_answer': 'Quick answer',
-        'causes': 'Common causes',
-        'steps': 'Step-by-step checklist',
-        'pitfalls': 'Common pitfalls & how to avoid them',
-        'next': 'If it still doesn’t work',
-        'faq': 'FAQ',
-        'references': 'Reference links',
-        'supplement': 'Supplementary resources',
-        'related': 'Related tools',
-        'popular': 'Popular tools',
-        'disclaimer': 'Disclaimer',
-        'terms': 'Terms',
-        'privacy': 'Privacy',
-        'contact': 'Contact',
-        'footer_note': 'Practical, fast, and respectful guides—built to reduce wasted trial-and-error.',
-        'aff_title': 'Recommended',
-        'copy': 'Copy',
-        'copied': 'Copied',
-        'short_value': 'Do it in 3 seconds',
-        'tool_input': 'Input',
-        'tool_input_hint': '(paste your details)',
-        'tool_placeholder': 'Example: dates, constraints, what you tried, what you need…',
-        'tool_generate': 'Generate',
-        'tool_clear': 'Clear',
-        'tool_tip': 'Tip: include the exact error message and what changed recently.'},
- 'ja': {'home': 'Home',
-        'about': 'About Us',
-        'all_tools': 'All Tools',
-        'language': '言語',
-        'share': '共有',
-        'problems': 'このツールが助ける悩み一覧',
-        'tool': 'ツール',
-        'quick_answer': '結論（最短で直す方針）',
-        'causes': '原因のパターン分け',
-        'steps': '手順（チェックリスト）',
-        'pitfalls': 'よくある失敗と回避策',
-        'next': '直らない場合の次の手',
-        'faq': 'FAQ',
-        'references': '参考URL',
-        'supplement': '補助資料',
-        'related': '関連ツール',
-        'popular': '人気のツール',
-        'disclaimer': '免責事項',
-        'terms': '利用規約',
-        'privacy': 'プライバシーポリシー',
-        'contact': 'お問い合わせ',
-        'footer_note': '実務で使える手順に寄せて、短時間で解決できる形を目指しています。',
-        'aff_title': 'おすすめ',
-        'copy': 'コピー',
-        'copied': 'コピーしました',
-        'short_value': '3秒でできる',
-        'tool_input': '入力',
-        'tool_input_hint': '（状況を貼り付け）',
-        'tool_placeholder': '例：日時、制約、試したこと、必要なこと…',
-        'tool_generate': '生成',
-        'tool_clear': 'クリア',
-        'tool_tip': 'コツ：エラーメッセージ全文と「最近変えたこと」を入れると精度が上がります。'},
- 'ko': {'home': 'Home',
-        'about': 'About Us',
-        'all_tools': 'All Tools',
-        'language': '언어',
-        'share': '공유',
-        'problems': '이 도구가 해결할 수 있는 고민',
-        'tool': '도구',
-        'quick_answer': '결론(가장 빠른 해결 방향)',
-        'causes': '원인 패턴',
-        'steps': '체크리스트(단계별)',
-        'pitfalls': '자주 하는 실수와 회피법',
-        'next': '계속 안 될 때',
-        'faq': 'FAQ',
-        'references': '참고 링크',
-        'supplement': '추가 자료',
-        'related': '관련 도구',
-        'popular': '인기 도구',
-        'disclaimer': '면책',
-        'terms': '이용약관',
-        'privacy': '개인정보 처리방침',
-        'contact': '문의',
-        'footer_note': '바로 실행 가능한 가이드를 목표로 합니다.',
-        'aff_title': '추천',
-        'copy': '복사',
-        'copied': '복사됨',
-        'short_value': '3초면 끝',
-        'tool_input': '입력',
-        'tool_input_hint': '(상황을 붙여넣기)',
-        'tool_placeholder': '예: 날짜/제약/시도한 것/원하는 것…',
-        'tool_generate': '생성',
-        'tool_clear': '지우기',
-        'tool_tip': '팁: 정확한 오류 메시지와 최근 변경점을 포함하세요.'},
- 'zh': {'home': 'Home',
-        'about': 'About Us',
-        'all_tools': 'All Tools',
-        'language': '语言',
-        'share': '分享',
-        'problems': '本工具可帮助解决的问题',
-        'tool': '工具',
-        'quick_answer': '结论（最快修复方向）',
-        'causes': '常见原因分类',
-        'steps': '步骤清单',
-        'pitfalls': '常见坑与规避方法',
-        'next': '仍无法解决时',
-        'faq': 'FAQ',
-        'references': '参考链接',
-        'supplement': '补充资料',
-        'related': '相关工具',
-        'popular': '热门工具',
-        'disclaimer': '免责声明',
-        'terms': '条款',
-        'privacy': '隐私政策',
-        'contact': '联系',
-        'footer_note': '提供可落地、快速、尊重用户的排障指南。',
-        'aff_title': '推荐',
-        'copy': '复制',
-        'copied': '已复制',
-        'short_value': '3秒搞定',
-        'tool_input': '输入',
-        'tool_input_hint': '（粘贴你的情况）',
-        'tool_placeholder': '例如：日期、限制、已尝试内容、目标…',
-        'tool_generate': '生成',
-        'tool_clear': '清空',
-        'tool_tip': '提示：请包含完整报错信息以及最近变更点。'}}
+I18N = {
+    "en": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "Language",
+        "share": "Share",
+        "problems": "Problems this tool can help with",
+        "tool": "Tool",
+        "quick_answer": "Quick answer",
+        "causes": "Common causes",
+        "steps": "Step-by-step checklist",
+        "pitfalls": "Common pitfalls & how to avoid them",
+        "next": "If it still doesn’t work",
+        "faq": "FAQ",
+        "references": "Reference links",
+        "supplement": "Supplementary resources",
+        "related": "Related tools",
+        "popular": "Popular tools",
+        "disclaimer": "Disclaimer",
+        "terms": "Terms",
+        "privacy": "Privacy",
+        "contact": "Contact",
+        "footer_note": "Practical, fast, and respectful guides—built to reduce wasted trial-and-error.",
+        "aff_title": "Recommended",
+        "copy": "Copy",
+        "open": "Open",
+        "copy_result": "Copy result",
+        "clear": "Clear",
+        "input": "Input",
+        "output": "Output",
+        "generate": "Generate",
+        "tool_hint": "Paste your situation and click Generate.",
+        "copied": "Copied",
+        "short_value": "Do it in 3 seconds",
+    },
+    "ja": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "言語",
+        "share": "共有",
+        "problems": "このツールが助ける悩み一覧",
+        "tool": "ツール",
+        "quick_answer": "結論（最短で直す方針）",
+        "causes": "原因のパターン分け",
+        "steps": "手順（チェックリスト）",
+        "pitfalls": "よくある失敗と回避策",
+        "next": "直らない場合の次の手",
+        "faq": "FAQ",
+        "references": "参考URL",
+        "supplement": "補助資料",
+        "related": "関連ツール",
+        "popular": "人気のツール",
+        "disclaimer": "免責事項",
+        "terms": "利用規約",
+        "privacy": "プライバシーポリシー",
+        "contact": "お問い合わせ",
+        "footer_note": "実務で使える手順に寄せて、短時間で解決できる形を目指しています。",
+        "aff_title": "おすすめ",
+        "copy": "コピー",
+        "open": "開く",
+        "copy_result": "結果をコピー",
+        "clear": "クリア",
+        "input": "入力",
+        "output": "出力",
+        "generate": "生成",
+        "tool_hint": "状況を貼り付けて「生成」を押してください。",
+        "copied": "コピーしました",
+        "short_value": "3秒でできる",
+    },
+    "ko": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "언어",
+        "share": "공유",
+        "problems": "이 도구가 해결할 수 있는 고민",
+        "tool": "도구",
+        "quick_answer": "결론(가장 빠른 해결 방향)",
+        "causes": "원인 패턴",
+        "steps": "체크리스트(단계별)",
+        "pitfalls": "자주 하는 실수와 회피법",
+        "next": "계속 안 될 때",
+        "faq": "FAQ",
+        "references": "참고 링크",
+        "supplement": "추가 자료",
+        "related": "관련 도구",
+        "popular": "인기 도구",
+        "disclaimer": "면책",
+        "terms": "이용약관",
+        "privacy": "개인정보 처리방침",
+        "contact": "문의",
+        "footer_note": "바로 실행 가능한 가이드를 목표로 합니다.",
+        "aff_title": "추천",
+        "copy": "복사",
+        "open": "열기",
+        "copy_result": "결과 복사",
+        "clear": "지우기",
+        "input": "입력",
+        "output": "출력",
+        "generate": "생성",
+        "tool_hint": "상황을 붙여넣고 ‘생성’을 누르세요.",
+        "copied": "복사됨",
+        "short_value": "3초면 끝",
+    },
+    "zh": {
+        "home": "Home",
+        "about": "About Us",
+        "all_tools": "All Tools",
+        "language": "语言",
+        "share": "分享",
+        "problems": "本工具可帮助解决的问题",
+        "tool": "工具",
+        "quick_answer": "结论（最快修复方向）",
+        "causes": "常见原因分类",
+        "steps": "步骤清单",
+        "pitfalls": "常见坑与规避方法",
+        "next": "仍无法解决时",
+        "faq": "FAQ",
+        "references": "参考链接",
+        "supplement": "补充资料",
+        "related": "相关工具",
+        "popular": "热门工具",
+        "disclaimer": "免责声明",
+        "terms": "条款",
+        "privacy": "隐私政策",
+        "contact": "联系",
+        "footer_note": "提供可落地、快速、尊重用户的排障指南。",
+        "aff_title": "推荐",
+        "copy": "复制",
+        "open": "打开",
+        "copy_result": "复制结果",
+        "clear": "清空",
+        "input": "输入",
+        "output": "输出",
+        "generate": "生成",
+        "tool_hint": "粘贴你的情况并点击“生成”。",
+        "copied": "已复制",
+        "short_value": "3秒搞定",
+    },
+}
 
-
-def build_i18n_script(default_lang: str) -> str:
-    """
-    Returns a <script> block that:
-      - Applies i18n to all [data-i18n] nodes
-      - Applies i18n to placeholders via [data-i18n-placeholder]
-      - Persists language/theme to localStorage
-      - Supports light/dark toggle (class-based Tailwind dark mode)
-    """
+def build_i18n_script(default_lang: str = "en") -> str:
     i18n_json = json.dumps(I18N, ensure_ascii=False)
-    langs_json = json.dumps(sorted(list(I18N.keys())), ensure_ascii=False)
-
+    langs_json = json.dumps(LANGS)
     return f"""<script>
 const I18N = {i18n_json};
 const LANGS = {langs_json};
-
-function t(lang, key) {{
-  return (I18N[lang] && I18N[lang][key]) || (I18N[\"{default_lang}\"] && I18N[\"{default_lang}\"][key]) || key;
-}}
-
 function setLang(lang) {{
-  if (!LANGS.includes(lang)) lang = \"{default_lang}\";
-  document.documentElement.setAttribute(\"lang\", lang);
-  localStorage.setItem(\"lang\", lang);
-
-  document.querySelectorAll(\"[data-i18n]\").forEach(el => {{
-    const key = el.getAttribute(\"data-i18n\");
-    el.textContent = t(lang, key);
-  }});
-
-  document.querySelectorAll(\"[data-i18n-placeholder]\").forEach(el => {{
-    const key = el.getAttribute(\"data-i18n-placeholder\");
-    el.setAttribute(\"placeholder\", t(lang, key));
-  }});
-
-  document.querySelectorAll(\"[data-i18n-value]\").forEach(el => {{
-    const key = el.getAttribute(\"data-i18n-value\");
-    el.value = t(lang, key);
+  if (!LANGS.includes(lang)) lang = "{default_lang}";
+  document.documentElement.setAttribute("lang", lang);
+  localStorage.setItem("lang", lang);
+  document.querySelectorAll("[data-i18n]").forEach(el => {{
+    const key = el.getAttribute("data-i18n");
+    const v = (I18N[lang] && I18N[lang][key]) || (I18N["{default_lang}"][key]) || key;
+    el.textContent = v;
   }});
 }}
-
 function initLang() {{
-  const saved = localStorage.getItem(\"lang\");
-  const lang = saved || \"{default_lang}\";
+  const saved = localStorage.getItem("lang");
+  const lang = saved || "{default_lang}";
   setLang(lang);
-  const sel = document.getElementById(\"langSel\");
+  const sel = document.getElementById("langSel");
   if (sel) {{
     sel.value = lang;
-    sel.addEventListener(\"change\", (e) => setLang(e.target.value));
+    sel.addEventListener("change", (e) => setLang(e.target.value));
   }}
 }}
-
-function setTheme(mode) {{
-  if (mode === \"dark\") {{
-    document.documentElement.classList.add(\"dark\");
-  }} else {{
-    document.documentElement.classList.remove(\"dark\");
-  }}
-  localStorage.setItem(\"theme\", mode);
-}}
-
-function initTheme() {{
-  const saved = localStorage.getItem(\"theme\");
-  const prefersDark = window.matchMedia && window.matchMedia(\"(prefers-color-scheme: dark)\").matches;
-  const mode = saved || (prefersDark ? \"dark\" : \"light\");
-  setTheme(mode);
-
-  const btn = document.getElementById(\"themeBtn\");
-  if (btn) {{
-    btn.addEventListener(\"click\", () => {{
-      const isDark = document.documentElement.classList.contains(\"dark\");
-      setTheme(isDark ? \"light\" : \"dark\");
-    }});
-  }}
-}}
-
-document.addEventListener(\"DOMContentLoaded\", () => {{
-  initTheme();
-  initLang();
-}});
-</script>"""
+document.addEventListener("DOMContentLoaded", initLang);
+</script>""".strip()
 
 
 # =============================================================================
@@ -2206,79 +2251,187 @@ def short_value_line(category: str) -> str:
 # =============================================================================
 def build_tool_ui(theme: Theme) -> str:
     """
-    In-page "tool" block (simple + fast):
-      - Problems this tool can help solve
-      - A lightweight checklist
-      - Minimal JS (none) to keep PageSpeed high
+    In-page tool (no external API):
+      - user enters their situation
+      - tool outputs a structured action plan / checklist
     """
-    title_raw = getattr(theme, "search_title", None) or getattr(theme, "title", None) or "Tool"
-    cat_raw = getattr(theme, "category", None) or "Dev/Tools"
-    page_title = html.escape(str(title_raw))
-    cat = html.escape(str(cat_raw))
+    cat = (theme.category or "").strip()
+    title = html_escape(theme.search_title)
+    short_url = html_escape(getattr(theme, "short_code", "") or "")  # may be empty before allocation
 
-    problems = getattr(theme, "problem_list", None) or []
-    if not isinstance(problems, list):
-        problems = [problems]
+    problems = theme.problem_list or []
+    problems_html = "\n".join([f"<li class='py-1'>{html_escape(str(p))}</li>" for p in problems[:12]]) or "<li class='py-1'>—</li>"
 
-    problems_html_items: List[str] = []
-    for p in problems:
-        if p is None:
-            continue
-        s = str(p).strip()
-        if not s:
-            continue
-        problems_html_items.append(f"<li class='leading-relaxed'>{html.escape(s)}</li>")
-    if not problems_html_items:
-        problems_html_items = ["<li class='text-slate-500'>(no items)</li>"]
-    problems_html = "\n".join(problems_html_items)
-
-    # Checklist steps (keep short; long explanation is in the article section)
-    steps: List[str] = []
-    if "build_steps" in globals():
-        try:
-            steps = build_steps(getattr(theme, "category", "")) or []
-        except Exception:
-            # build_steps is optional; keep UI usable
-            steps = []
-    if not steps:
-        steps = [
-            "Reproduce the issue with the same inputs",
-            "Collect exact error messages + timestamps",
-            "Try the smallest safe change first",
-            "Verify the fix and document what changed",
-        ]
-
-    steps_html = "\n".join(
-        f"<li class='leading-relaxed'>{html.escape(str(s))}</li>" for s in steps if str(s).strip()
-    ) or "<li class='text-slate-500'>(no steps)</li>"
+    # Category is used only for template switching; keep a safe JS literal
+    cat_js = json.dumps(cat)
+    title_js = json.dumps(theme.search_title or "")
 
     return f"""
-<section class="rounded-2xl border border-slate-200 bg-white/80 backdrop-blur p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
-  <div class="flex items-start justify-between gap-4">
+<div class="rounded-3xl border border-white/10 bg-white/5 p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
     <div>
-      <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-white/50">{cat}</div>
-      <h2 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white" data-i18n="tool">Tool</h2>
-      <p class="mt-1 text-sm text-slate-600 dark:text-white/70">{page_title}</p>
+      <div class="text-xs text-white/70" data-i18n="tool">Tool</div>
+      <h2 class="mt-1 text-lg md:text-xl font-semibold text-white">{title}</h2>
+      <p class="mt-1 text-sm text-white/70" data-i18n="tool_hint">Paste your situation and click Generate.</p>
+    </div>
+
+    <div class="w-full md:w-[340px] rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div class="text-xs text-white/70" data-i18n="short_url">Short URL</div>
+      <input id="shortUrlInput"
+        class="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+        value="{html_escape(SITE_DOMAIN.rstrip('/') + '/goliath/go/' + (theme.short_code or '')) if getattr(theme,'short_code','') else ''}"
+        readonly
+        placeholder="(available after publish)">
+      <div class="mt-2 flex gap-2">
+        <button id="copyShortBtn" class="flex-1 rounded-xl bg-white/90 text-slate-900 px-3 py-2 text-sm font-medium hover:bg-white" type="button" data-i18n="copy">
+          Copy
+        </button>
+        <button id="openShortBtn" class="flex-1 rounded-xl border border-white/15 bg-white/0 text-white px-3 py-2 text-sm font-medium hover:bg-white/10" type="button" data-i18n="open">
+          Open
+        </button>
+      </div>
     </div>
   </div>
 
-  <div class="mt-5 grid gap-4 md:grid-cols-2">
-    <div class="rounded-xl border border-slate-200 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
-      <div class="text-sm font-semibold text-slate-900 dark:text-white" data-i18n="problems">Problems this tool can help solve</div>
-      <ul class="mt-2 list-disc pl-5 text-sm text-slate-700 dark:text-white/75">
+  <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div class="text-sm font-semibold text-white" data-i18n="problems">Problems this tool helps solve</div>
+      <ul class="mt-2 text-sm text-white/80 list-disc pl-5">
         {problems_html}
       </ul>
+      <div class="mt-3 text-xs text-white/60">
+        <span data-i18n="category">Category</span>: <span class="text-white/80">{html_escape(cat)}</span>
+      </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
-      <div class="text-sm font-semibold text-slate-900 dark:text-white" data-i18n="quick_answer">Quick checklist</div>
-      <ol class="mt-2 list-decimal pl-5 text-sm text-slate-700 dark:text-white/75">
-        {steps_html}
-      </ol>
+    <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <label class="block text-sm font-semibold text-white" for="input" data-i18n="input">Input</label>
+      <textarea id="input" rows="8"
+        class="mt-2 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+        placeholder="e.g., what you tried, what error you see, constraints (budget/time), your goal"></textarea>
+
+      <div class="mt-3 flex flex-col sm:flex-row gap-2">
+        <button id="genBtn" class="flex-1 rounded-xl bg-blue-500/90 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-500" type="button" data-i18n="generate">
+          Generate
+        </button>
+        <button id="copyBtn" class="flex-1 rounded-xl bg-white/90 text-slate-900 px-4 py-2 text-sm font-semibold hover:bg-white" type="button" data-i18n="copy_result">
+          Copy result
+        </button>
+        <button id="clearBtn" class="flex-1 rounded-xl border border-white/15 bg-white/0 text-white px-4 py-2 text-sm font-semibold hover:bg-white/10" type="button" data-i18n="clear">
+          Clear
+        </button>
+      </div>
     </div>
   </div>
-</section>
-""".strip()
+
+  <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div class="text-sm font-semibold text-white" data-i18n="output">Output</div>
+    <pre id="out" class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/90"></pre>
+  </div>
+</div>
+
+<script>
+(() => {{
+  const CAT = {cat_js};
+  const TITLE = {title_js};
+
+  const input = document.getElementById("input");
+  const out = document.getElementById("out");
+  const genBtn = document.getElementById("genBtn");
+  const copyBtn = document.getElementById("copyBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const copyShortBtn = document.getElementById("copyShortBtn");
+  const openShortBtn = document.getElementById("openShortBtn");
+  const shortUrlInput = document.getElementById("shortUrlInput");
+
+  function normalize(text) {{
+    return (text || "").replace(/\\s+/g, " ").trim();
+  }}
+
+  function header(title) {{
+    return `# ${title}\\n\\n`;
+  }}
+
+  function planTemplate(userText) {{
+    const t = normalize(userText);
+    const lines = [];
+    lines.push(header(TITLE || "Plan"));
+    lines.push("## 1) Summary");
+    lines.push("- Goal:");
+    lines.push("- Current state:");
+    lines.push("- Constraints (budget/time/tools):");
+    lines.push(t ? `\\n> ${t}` : "");
+    lines.push("\\n## 2) Quick diagnosis");
+    lines.push("- What is most likely happening:");
+    lines.push("- What is *not* likely (avoid rabbit holes):");
+    lines.push("\\n## 3) Step-by-step");
+    lines.push("1. ");
+    lines.push("2. ");
+    lines.push("3. ");
+    lines.push("\\n## 4) Checklist");
+    lines.push("- [ ] Reproduce / confirm");
+    lines.push("- [ ] Gather logs/screenshots");
+    lines.push("- [ ] Apply fix");
+    lines.push("- [ ] Verify");
+    lines.push("\\n## 5) If still stuck");
+    lines.push("- What to try next:");
+    lines.push("- What to share when asking for help:");
+    return lines.join("\\n");
+  }}
+
+  function categoryNudge(cat) {{
+    const c = (cat || "").toLowerCase();
+    if (c.includes("pdf")) return "\\n\\n(Extra) For PDF: check file size, fonts, encryption, and try a different converter.";
+    if (c.includes("spreadsheet")) return "\\n\\n(Extra) For spreadsheets: confirm locale (comma vs dot), and validate formulas with a small sample.";
+    if (c.includes("web") || c.includes("hosting")) return "\\n\\n(Extra) For web/hosting: verify DNS, HTTPS cert, cache, and deployment logs.";
+    if (c.includes("security") || c.includes("privacy")) return "\\n\\n(Extra) For security/privacy: rotate credentials and check permissions/audit logs.";
+    if (c.includes("travel")) return "\\n\\n(Extra) For travel planning: lock dates, budget, transit constraints, and create a day-by-day timetable.";
+    return "";
+  }}
+
+  function generate() {{
+    const txt = input.value || "";
+    let s = planTemplate(txt);
+    s += categoryNudge(CAT);
+    out.textContent = s;
+  }}
+
+  function copyText(text) {{
+    if (!text) return;
+    navigator.clipboard?.writeText(text).catch(() => {{
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }});
+  }}
+
+  genBtn?.addEventListener("click", generate);
+  copyBtn?.addEventListener("click", () => copyText(out.textContent || ""));
+  clearBtn?.addEventListener("click", () => {{
+    input.value = "";
+    out.textContent = "";
+  }});
+
+  copyShortBtn?.addEventListener("click", () => copyText(shortUrlInput?.value || ""));
+  openShortBtn?.addEventListener("click", () => {{
+    const v = (shortUrlInput?.value || "").trim();
+    if (v) window.open(v, "_blank", "noopener,noreferrer");
+  }});
+
+  // auto-generate once for convenience (empty input is fine)
+  generate();
+}})();
+</script>
+"""
+
+
+def html_escape(s: str) -> str:
+    return html.escape(s or "", quote=True)
+
 
 def render_affiliate_block(affiliate: Dict[str, Any]) -> str:
     if affiliate.get("html"):
@@ -2343,9 +2496,9 @@ def build_page_html(
 
     faq_html = "\n".join([
         f"""
-        <details class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
+        <details class="rounded-2xl border border-white/10 bg-white/5 p-4">
           <summary class="cursor-pointer font-medium">{html_escape(q)}</summary>
-          <div class="mt-2 text-slate-900 dark:text-slate-700 dark:text-white/80 leading-relaxed">{html_escape(a)}</div>
+          <div class="mt-2 text-white/80 leading-relaxed">{html_escape(a)}</div>
         </details>
         """.strip()
         for q, a in faq
@@ -2362,40 +2515,42 @@ def build_page_html(
         if not block:
             continue
         aff_blocks.append(f"""
-        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
-          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2">{title}</div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div class="text-sm text-white/70 mb-2">{title}</div>
           <div class="prose prose-invert max-w-none">{block}</div>
         </div>
         """.strip())
     if not aff_blocks:
         aff_blocks = ["""
-        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
-          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2">Recommended</div>
-          <div class="text-slate-900 dark:text-slate-600 dark:text-white/70">No affiliate available for this category.</div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div class="text-sm text-white/70 mb-2">Recommended</div>
+          <div class="text-white/70">No affiliate available for this category.</div>
         </div>
         """.strip()]
     aff_html = "\n".join(aff_blocks)
 
     related_html = "\n".join([
         f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
-        f"<span class='text-slate-900 dark:text-slate-500 dark:text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in related_tools
     ])
 
     popular_html = "\n".join([
         f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
-        f"<span class='text-slate-900 dark:text-slate-500 dark:text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in popular_sites
     ])
 
     canonical = tool_url if tool_url.startswith("http") else (SITE_DOMAIN.rstrip("/") + "/" + theme.slug + "/")
 
-    article_html = "<p class='leading-relaxed whitespace-pre-wrap text-slate-900 dark:text-white/85'>" + html_escape(article_ja) + "</p>"
+    article_html = "<p class='leading-relaxed whitespace-pre-wrap text-white/85'>" + html_escape(article_ja) + "</p>"
     try:
         tool_ui = build_tool_ui(theme)
-    except Exception:
-        logging.exception("build_tool_ui failed")
-        raise
+    except Exception as e:
+        logging.exception("build_tool_ui failed: %s", e)
+        tool_ui = "<div class='rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80'>Tool UI rendering failed. Please refresh later.</div>"
+
+
     # internal linking: ALWAYS provide a path back to /hub/
     hub_url = SITE_DOMAIN.rstrip("/") + "/hub/"
 
@@ -2426,12 +2581,12 @@ function copyTextFrom(id, btnId){
         bg_css = f"""
   <div class="pointer-events-none fixed inset-0 opacity-40">
     <div class="absolute inset-0 bg-cover bg-center" style="background-image:url('{html_escape(hero_bg_url)}')"></div>
-    <div class="absolute inset-0 bg-slate-50 dark:bg-zinc-950/70"></div>
+    <div class="absolute inset-0 bg-zinc-950/70"></div>
   </div>
         """.strip()
     else:
         bg_css = """
-  <div class="pointer-events-none fixed inset-0 opacity-80 dark:opacity-70">
+  <div class="pointer-events-none fixed inset-0 opacity-70">
     <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-500/35 to-cyan-400/20 blur-3xl"></div>
     <div class="absolute top-40 -right-24 h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500/25 to-lime-400/10 blur-3xl"></div>
     <div class="absolute bottom-0 left-1/4 h-96 w-96 rounded-full bg-gradient-to-br from-fuchsia-500/20 to-rose-400/10 blur-3xl"></div>
@@ -2451,7 +2606,6 @@ function copyTextFrom(id, btnId){
   <meta property="og:type" content="website">
   <meta property="og:url" content="{html_escape(canonical)}">
   <meta name="twitter:card" content="summary_large_image">
-  <script>tailwind = window.tailwind || {{}}; tailwind.config = {{ darkMode: "class" }};</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {{ color-scheme: dark; }}
@@ -2462,25 +2616,24 @@ function copyTextFrom(id, btnId){
     .glass {{ backdrop-filter: blur(10px); }}
   </style>
 </head>
-<body class="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-white">
+<body class="min-h-screen bg-zinc-950 text-white">
   {bg_css}
 
   <header class="relative z-10 mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
       <a href="{html_escape(hub_url)}" class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-2xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 flex items-center justify-center font-bold">🍊</div>
+        <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
         <div>
           <div class="font-semibold leading-tight">{html_escape(SITE_BRAND)}</div>
-          <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Hub → categories / popular / new</div>
+          <div class="text-xs text-white/60">Hub → categories / popular / new</div>
         </div>
       </a>
 
       <nav class="flex items-center gap-3 text-sm">
-        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
-        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
-        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
-        <button id="themeBtn" type="button" class="ml-2 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs" aria-label="Theme">🌓</button>
-        <select id="langSel" class="ml-2 rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs">
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
+        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
+        <select id="langSel" class="ml-2 rounded-xl bg-white/10 border border-white/10 px-2 py-1 text-xs">
           <option value="en">EN</option>
           <option value="ja">JA</option>
           <option value="ko">KO</option>
@@ -2491,28 +2644,28 @@ function copyTextFrom(id, btnId){
   </header>
 
   <main class="relative z-10 mx-auto max-w-6xl px-4 pb-16">
-    <section class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 glass p-6 md:p-8">
+    <section class="rounded-3xl border border-white/10 bg-white/5 glass p-6 md:p-8">
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h1 class="text-2xl md:text-3xl font-semibold leading-tight">{html_escape(theme.search_title)}</h1>
-          <p class="mt-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
-            Category: <span class="text-slate-900 dark:text-slate-900 dark:text-white/90">{html_escape(theme.category)}</span> ·
-            Updated: <span class="text-slate-900 dark:text-slate-900 dark:text-white/90">{html_escape(now_iso())}</span>
+          <p class="mt-2 text-white/70">
+            Category: <span class="text-white/90">{html_escape(theme.category)}</span> ·
+            Updated: <span class="text-white/90">{html_escape(now_iso())}</span>
           </p>
         </div>
-        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-black/20 p-4 w-full md:w-[360px]">
-          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2" data-i18n="share">Share</div>
+        <div class="rounded-2xl border border-white/10 bg-black/20 p-4 w-full md:w-[360px]">
+          <div class="text-sm text-white/70 mb-2" data-i18n="share">Share</div>
           <div class="space-y-2">
-            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Short URL (for posts)</div>
+            <div class="text-xs text-white/60">Short URL (for posts)</div>
             <div class="flex items-center gap-2">
-              <input id="shortUrl" value="{html_escape(short_url)}" class="w-full rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" readonly>
-              <button id="copyBtnShort" class="rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('shortUrl','copyBtnShort')">Copy</button>
+              <input id="shortUrl" value="{html_escape(short_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnShort" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('shortUrl','copyBtnShort')">Copy</button>
             </div>
 
-            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Full URL</div>
+            <div class="text-xs text-white/60">Full URL</div>
             <div class="flex items-center gap-2">
-              <input id="fullUrl" value="{html_escape(tool_url)}" class="w-full rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" readonly>
-              <button id="copyBtnFull" class="rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('fullUrl','copyBtnFull')">Copy</button>
+              <input id="fullUrl" value="{html_escape(tool_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnFull" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('fullUrl','copyBtnFull')">Copy</button>
             </div>
           </div>
         </div>
@@ -2558,73 +2711,73 @@ function copyTextFrom(inputId, btnId) {{
 
     <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="problems">Problems this tool can help with</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {problems_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="quick_answer">Quick answer</h2>
-          <pre class="mt-3 text-slate-900 dark:text-white/85 whitespace-pre-wrap leading-relaxed">{html_escape(quick_answer)}</pre>
+          <pre class="mt-3 text-white/85 whitespace-pre-wrap leading-relaxed">{html_escape(quick_answer)}</pre>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="causes">Common causes</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {causes_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="steps">Step-by-step checklist</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {steps_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="pitfalls">Common pitfalls & how to avoid them</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {pitfalls_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="next">If it still doesn’t work</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {next_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold">Long guide (JP, 2500+ chars)</h2>
           <div class="mt-3">{article_html}</div>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="faq">FAQ</h2>
           <div class="mt-3 space-y-3">{faq_html}</div>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="references">Reference links</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {ref_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="supplement">Supplementary resources</h2>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {sup_html}
           </ul>
         </div>
       </div>
 
       <aside class="space-y-6">
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="aff_title">Recommended</h3>
           <div class="mt-3 space-y-3">
             <!-- AFF_SLOT (top2 injected) -->
@@ -2632,16 +2785,16 @@ function copyTextFrom(inputId, btnId) {{
           </div>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="related">Related tools</h3>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {related_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="popular">Popular tools</h3>
-          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-white/85 list-disc list-inside">
             {popular_html}
           </ul>
         </div>
@@ -2649,22 +2802,22 @@ function copyTextFrom(inputId, btnId) {{
     </section>
   </main>
 
-  <footer class="relative z-10 mt-10 bg-zinc-900/60 border-t border-slate-200/70 dark:border-white/10">
+  <footer class="relative z-10 mt-10 bg-zinc-900/60 border-t border-white/10">
     <div class="mx-auto max-w-6xl px-4 py-10 grid grid-cols-1 md:grid-cols-4 gap-8">
       <div class="md:col-span-2">
         <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-2xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 flex items-center justify-center font-bold">🍊</div>
+          <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
           <div>
             <div class="font-semibold">{html_escape(SITE_BRAND)}</div>
-            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60" data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</div>
+            <div class="text-xs text-white/60" data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</div>
           </div>
         </div>
-        <div class="mt-3 text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
+        <div class="mt-3 text-xs text-white/60">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
       </div>
 
       <div class="text-sm">
         <div class="font-semibold mb-2">Legal</div>
-        <ul class="space-y-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
+        <ul class="space-y-2 text-white/70">
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/privacy.html')}" data-i18n="privacy">Privacy</a></li>
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/terms.html')}" data-i18n="terms">Terms</a></li>
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/contact.html')}" data-i18n="contact">Contact</a></li>
@@ -2673,7 +2826,7 @@ function copyTextFrom(inputId, btnId) {{
 
       <div class="text-sm">
         <div class="font-semibold mb-2">Hub</div>
-        <ul class="space-y-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
+        <ul class="space-y-2 text-white/70">
           <li><a class="underline" href="{html_escape(hub_url)}">/hub/</a></li>
           <li><a class="underline" href="{html_escape(hub_url)}#tools">All tools</a></li>
         </ul>
@@ -2746,210 +2899,88 @@ def compute_popular_sites(all_sites: List[Dict[str, Any]], n: int = 6) -> List[D
 # =============================================================================
 # Policies (legal fortress) - /policies/ only (allowed)
 # =============================================================================
-
 def ensure_policies() -> List[str]:
     """
     Create/overwrite policies pages (privacy/terms/contact) under /policies/.
-    Pages are styled consistently with tool pages (light + dark, i18n switch).
-    Returns absolute URLs for sitemap.
+    Returns list of relative URLs for sitemap.
     """
     os.makedirs(POLICIES_DIR, exist_ok=True)
     privacy_path = os.path.join(POLICIES_DIR, "privacy.html")
     terms_path = os.path.join(POLICIES_DIR, "terms.html")
     contact_path = os.path.join(POLICIES_DIR, "contact.html")
 
-    hub_url = SITE_DOMAIN.rstrip("/") + "/hub/"
-    i18n_json = json.dumps(I18N, ensure_ascii=False)
-    langs_json = json.dumps(sorted(list(I18N.keys())), ensure_ascii=False)
+    base_css = """
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", Arial; }
+</style>
+""".strip()
 
-    # Full text per language (keep it static & AdSense-friendly)
-    POLICY_TEXT = {
-        "privacy": {
-            "en": [
-                "This site uses cookies and similar technologies to improve usability and measure performance.",
-                "We may use Google AdSense to display ads. Third-party vendors, including Google, may use cookies to serve ads based on a user’s prior visits.",
-                "You can control cookies in your browser settings. Disabling cookies may affect site features.",
-            ],
-            "ja": [
-                "当サイトは利便性向上・計測のため、Cookie等の技術を使用する場合があります。",
-                "当サイトでは Google AdSense を利用して広告を配信する場合があります。第三者配信事業者（Google等）が Cookie を使用し、過去のアクセス情報に基づいて広告を表示することがあります。",
-                "Cookie はブラウザ設定で無効化できますが、一部機能が利用できなくなる場合があります。",
-            ],
-            "ko": [
-                "이 사이트는 사용성 개선 및 성능 측정을 위해 쿠키 등 유사 기술을 사용할 수 있습니다.",
-                "이 사이트는 Google AdSense를 사용하여 광고를 게재할 수 있습니다. Google 등 제3자 공급업체는 사용자의 이전 방문 정보를 기반으로 쿠키를 사용할 수 있습니다.",
-                "쿠키는 브라우저 설정에서 관리/비활성화할 수 있으나 일부 기능이 제한될 수 있습니다.",
-            ],
-            "zh": [
-                "本网站可能使用 Cookie 等技术以提升可用性并进行性能统计。",
-                "本网站可能使用 Google AdSense 投放广告。包括 Google 在内的第三方供应商可能会使用 Cookie，根据用户以往访问记录投放广告。",
-                "您可以在浏览器设置中管理/禁用 Cookie，但可能会影响部分功能。",
-            ],
-        },
-        "terms": {
-            "en": [
-                "Use of this site is at your own risk. The information and tools are provided “as is” without warranties.",
-                "We are not liable for any loss or damage arising from use of calculations, checklists, or recommendations.",
-                "You are responsible for verifying results and complying with applicable laws and service terms.",
-            ],
-            "ja": [
-                "当サイトの情報・ツールは現状有姿で提供されます。利用は自己責任でお願いします。",
-                "計算結果・チェックリスト・提案内容を利用したことにより生じた損害について、当サイトは責任を負いません。",
-                "最終判断はご自身で行い、各種規約・法律を遵守してください。",
-            ],
-            "ko": [
-                "본 사이트의 정보/도구는 “있는 그대로” 제공되며 이용은 사용자 책임입니다.",
-                "계산 결과, 체크리스트, 권고사항 사용으로 발생한 손해에 대해 당사는 책임을 지지 않습니다.",
-                "결과를 검증하고 관련 법/서비스 약관을 준수할 책임은 사용자에게 있습니다.",
-            ],
-            "zh": [
-                "本网站的信息与工具按“现状”提供，使用风险由您自行承担。",
-                "因使用计算结果、清单或建议造成的任何损失，本网站不承担责任。",
-                "请自行核对结果并遵守相关法律及服务条款。",
-            ],
-        },
-        "contact": {
-            "en": [
-                f"Operator: {SITE_BRAND}",
-                f"Contact: {SITE_CONTACT_EMAIL}",
-                "For inquiries about ads, content, or corrections, please email us.",
-            ],
-            "ja": [
-                f"運営者: {SITE_BRAND}",
-                f"連絡先: {SITE_CONTACT_EMAIL}",
-                "広告・内容・訂正のご連絡はメールでお願いします。",
-            ],
-            "ko": [
-                f"운영자: {SITE_BRAND}",
-                f"연락처: {SITE_CONTACT_EMAIL}",
-                "광고/콘텐츠/정정 문의는 이메일로 연락해 주세요.",
-            ],
-            "zh": [
-                f"运营者: {SITE_BRAND}",
-                f"联系方式: {SITE_CONTACT_EMAIL}",
-                "关于广告、内容或更正等咨询请发送邮件。",
-            ],
-        },
-    }
-
-    def build_policy_html(page_key: str) -> str:
-        title = {"privacy": "privacy", "terms": "terms", "contact": "contact"}[page_key]
-        # page titles: use data-i18n
-        body_json = json.dumps(POLICY_TEXT[page_key], ensure_ascii=False)
-
-        return f"""<!doctype html>
-<html lang="{html_escape(DEFAULT_LANG)}" class="">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html_escape(SITE_BRAND)} | {title}</title>
-  <script>tailwind = window.tailwind || {{}}; tailwind.config = {{ darkMode: "class" }};</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root {{ color-scheme: light; }}
-    html.dark {{ color-scheme: dark; }}
-    body {{
-      font-family: ui-sans-serif, system-ui, -apple-system, "Inter", Segoe UI, Roboto,
-        "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
-    }}
-  </style>
-</head>
-<body class="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-white">
-  <header class="border-b border-slate-200/70 dark:border-white/10">
-    <div class="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
-      <a href="{html_escape(hub_url)}" class="flex items-center gap-2">
-        <span class="text-lg">{html_escape(SITE_LOGO)}</span>
-        <span class="font-semibold">{html_escape(SITE_BRAND)}</span>
-      </a>
-      <nav class="flex items-center gap-4 text-sm">
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
-        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
-        <button id="themeBtn" type="button" class="ml-2 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs" aria-label="Theme">🌓</button>
-        <select id="langSel" class="ml-2 rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs">
-          <option value="en">EN</option>
-          <option value="ja">JA</option>
-          <option value="ko">KO</option>
-          <option value="zh">ZH</option>
-        </select>
-      </nav>
-    </div>
-  </header>
-
+    privacy = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
   <main class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="text-2xl font-semibold" data-i18n="{title}">{title.capitalize()}</h1>
-    <div id="policyBody" class="mt-6 space-y-3 text-slate-700 dark:text-white/70 leading-relaxed"></div>
+    <h1 class="text-2xl font-semibold">Privacy Policy</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      This site may use Google AdSense and similar advertising services. These services may use cookies and/or
+      device identifiers to show ads and measure performance.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Cookies</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      Cookies may be used to store preferences and improve user experience. You can manage cookies via your browser settings.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Analytics</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      We may collect aggregated usage data to improve the site. We do not intentionally collect sensitive personal information.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Contact</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      If you have questions about this policy, contact: {html_escape(SITE_CONTACT_EMAIL)}
+    </p>
   </main>
+</body></html>
+"""
 
-  <footer class="border-t border-slate-200/70 dark:border-white/10">
-    <div class="mx-auto max-w-5xl px-4 py-8 text-xs text-slate-500 dark:text-white/60">
-      <div>{html_escape(SITE_BRAND)} · <span data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</span></div>
-    </div>
-  </footer>
+    terms = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms & Disclaimer | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-semibold">Terms & Disclaimer</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      This site provides informational tools and guides. Results may vary based on inputs and environment.
+      You are responsible for verifying outputs before using them in important decisions.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">No Warranty</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      The site is provided "as is" without warranties of any kind. We do not guarantee completeness, accuracy, or availability.
+    </p>
+    <h2 class="text-xl font-semibold mt-8">Limitation of Liability</h2>
+    <p class="text-white/80 mt-2 leading-relaxed">
+      We are not liable for any damages resulting from the use of this site or its outputs, to the fullest extent permitted by law.
+    </p>
+  </main>
+</body></html>
+"""
 
-  <script>
-  const I18N = {i18n_json};
-  const LANGS = {langs_json};
-  const BODY = {body_json};
-
-  function t(lang, key) {{
-    return (I18N[lang] && I18N[lang][key]) || (I18N["{DEFAULT_LANG}"][key]) || key;
-  }}
-
-  function setLang(lang) {{
-    if (!LANGS.includes(lang)) lang = "{DEFAULT_LANG}";
-    document.documentElement.setAttribute("lang", lang);
-    localStorage.setItem("lang", lang);
-
-    document.querySelectorAll("[data-i18n]").forEach(el => {{
-      const key = el.getAttribute("data-i18n");
-      el.textContent = t(lang, key);
-    }});
-
-    const container = document.getElementById("policyBody");
-    if (container) {{
-      const ps = (BODY[lang] || BODY["{DEFAULT_LANG}"] || []);
-      container.innerHTML = ps.map(p => `<p>${{p}}</p>`).join("");
-    }}
-  }}
-
-  function setTheme(mode) {{
-    if (mode === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-    localStorage.setItem("theme", mode);
-  }}
-
-  function init() {{
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setTheme(savedTheme || (prefersDark ? "dark" : "light"));
-
-    const savedLang = localStorage.getItem("lang") || "{DEFAULT_LANG}";
-    setLang(savedLang);
-
-    const sel = document.getElementById("langSel");
-    if (sel) {{
-      sel.value = savedLang;
-      sel.addEventListener("change", (e) => setLang(e.target.value));
-    }}
-
-    const btn = document.getElementById("themeBtn");
-    if (btn) {{
-      btn.addEventListener("click", () => {{
-        const isDark = document.documentElement.classList.contains("dark");
-        setTheme(isDark ? "light" : "dark");
-      }});
-    }}
-  }}
-
-  document.addEventListener("DOMContentLoaded", init);
-  </script>
-</body>
-</html>"""
-
-    privacy = build_policy_html("privacy")
-    terms = build_policy_html("terms")
-    contact = build_policy_html("contact")
+    contact = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact & Operator | {html_escape(SITE_BRAND)}</title>{base_css}</head>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-semibold">Contact & Operator</h1>
+    <p class="text-white/80 mt-4 leading-relaxed">
+      Operator: {html_escape(SITE_BRAND)} (mikanntool.com owner)<br>
+      Contact: {html_escape(SITE_CONTACT_EMAIL)}
+    </p>
+    <p class="text-white/70 mt-4 leading-relaxed">
+      If you found an issue or want to request improvements, please email us with the page URL and a short description.
+    </p>
+  </main>
+</body></html>
+"""
 
     write_text(privacy_path, privacy)
     write_text(terms_path, terms)
@@ -3131,39 +3162,203 @@ def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> 
 # Orchestration
 # =============================================================================
 def collect_all() -> List[Post]:
-    # per spec targets:
-    # Bluesky 50, Mastodon 100, Reddit 20, X 1(mentions), HN (rest)
-    bs = collect_bluesky(max_items=50)
-    ms = collect_mastodon(max_items=100)
-    rd = collect_reddit(max_items=20)
-    xx = collect_x_mentions(max_items=max(1, min(X_MAX, 5)))
-    hn = collect_hn(max_items=HN_MAX)
+    """
+    Collect posts with per-spec targets (defaults):
+      - Bluesky: 50
+      - Mastodon: 100
+      - Reddit: 20
+      - X: 1 (MUST remain 1 call)
+      - HN: HN_MAX
+    Hard rule:
+      - If we cannot reach LEADS_TOTAL after widening + retries + cache, we FAIL (non-zero),
+        because we should not build themes/pages from insufficient signal.
+    """
+    os.makedirs(STATE_DIR, exist_ok=True)
+    cache_path = os.path.join(STATE_DIR, "leads_cache.jsonl")
 
-    all_posts = bs + ms + rd + xx + hn
-    # filter dup urls
-    seen = set()
-    out: List[Post] = []
-    for p in all_posts:
-        if not p.url:
-            continue
-        if adult_or_sensitive(p.text):
-            continue
-        key = sha1(p.url)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(p)
+    BS_TARGET = int(os.environ.get("BLUESKY_TARGET", "50"))
+    MS_TARGET = int(os.environ.get("MASTODON_TARGET", "100"))
+    RD_TARGET = int(os.environ.get("REDDIT_TARGET", "20"))
+    X_TARGET  = int(os.environ.get("X_TARGET", "1"))
+    HN_TARGET = int(os.environ.get("HN_TARGET", str(HN_MAX)))
 
-    # cap MAX_COLLECT
-    out = out[:MAX_COLLECT]
-    logging.info("Collected total=%d (Bluesky=%d, Mastodon=%d, Reddit=%d, X=%d, HN=%d)",
-                 len(out), len(bs), len(ms), len(rd), len(xx), len(hn))
-    return out
+    floor_total = max(1, int(LEADS_TOTAL))
+
+    def load_cache(max_items: int = 6000, max_age_days: int = 21) -> List[Post]:
+        if not os.path.exists(cache_path):
+            return []
+        now = dt.datetime.utcnow()
+        out: List[Post] = []
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        ts = obj.get("_ts") or ""
+                        if ts:
+                            try:
+                                t = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                                if (now - t).days > max_age_days:
+                                    continue
+                            except Exception:
+                                pass
+                        out.append(Post(
+                            source=obj.get("source") or "",
+                            id=obj.get("id") or "",
+                            url=obj.get("url") or "",
+                            text=obj.get("text") or "",
+                            author=obj.get("author") or "",
+                            created_at=obj.get("created_at") or "",
+                            lang_hint=obj.get("lang_hint") or "",
+                            meta=obj.get("meta") if isinstance(obj.get("meta"), dict) else None,
+                        ))
+                        if len(out) >= max_items:
+                            break
+                    except Exception:
+                        continue
+        except Exception:
+            return []
+        return out
+
+    def append_cache(posts: List[Post], max_write: int = 1200) -> None:
+        try:
+            with open(cache_path, "a", encoding="utf-8") as f:
+                for p in posts[:max_write]:
+                    obj = {
+                        "_ts": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                        "source": p.source,
+                        "id": p.id,
+                        "url": p.url,
+                        "text": p.text,
+                        "author": p.author,
+                        "created_at": p.created_at,
+                        "lang_hint": p.lang_hint,
+                        "meta": p.meta if isinstance(p.meta, dict) else None,
+                    }
+                    f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        except Exception:
+            return
+
+    def dedup(posts: List[Post]) -> List[Post]:
+        seen = set()
+        out: List[Post] = []
+        for p in posts:
+            if not p or not p.text:
+                continue
+            key = p.url or (p.source + "|" + p.id) or sha1(p.text)[:16]
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(p)
+        return out
+
+    def by_source(posts: List[Post], source: str) -> List[Post]:
+        return [p for p in posts if p.source == source]
+
+    # X MUST be called exactly once per run
+    xx = collect_x_mentions(max_items=X_TARGET)
+
+    # Primary collection
+    bs = collect_bluesky(max_items=BS_TARGET)
+    ms = collect_mastodon(max_items=MS_TARGET)
+    rd = collect_reddit(max_items=RD_TARGET)
+    hn = collect_hn(max_items=HN_TARGET)
+
+    all_posts = dedup(bs + ms + rd + xx + hn)
+
+    # Top-up (non-X) if per-source targets not met
+    # (Collectors already widen internally; this is an extra safety net.)
+    for _ in range(2):
+        bs_now = len(by_source(all_posts, "bluesky"))
+        ms_now = len(by_source(all_posts, "mastodon"))
+        rd_now = len(by_source(all_posts, "reddit"))
+        hn_now = len(by_source(all_posts, "hn"))
+
+        need_any = (bs_now < BS_TARGET) or (ms_now < MS_TARGET) or (rd_now < RD_TARGET) or (hn_now < HN_TARGET)
+        if not need_any:
+            break
+
+        logging.warning("Top-up retry: bs=%d/%d ms=%d/%d rd=%d/%d hn=%d/%d",
+                        bs_now, BS_TARGET, ms_now, MS_TARGET, rd_now, RD_TARGET, hn_now, HN_TARGET)
+
+        if bs_now < BS_TARGET:
+            all_posts = dedup(all_posts + collect_bluesky(max_items=BS_TARGET))
+        if ms_now < MS_TARGET:
+            all_posts = dedup(all_posts + collect_mastodon(max_items=MS_TARGET))
+        if rd_now < RD_TARGET:
+            all_posts = dedup(all_posts + collect_reddit(max_items=max(RD_TARGET, 40)))
+        if hn_now < HN_TARGET:
+            all_posts = dedup(all_posts + collect_hn(max_items=HN_TARGET))
+
+    # If overall still too low, do one broader pass (non-X) + cache
+    if len(all_posts) < floor_total:
+        logging.warning("Collected total %d < LEADS_TOTAL %d. Retrying non-X collectors once more.", len(all_posts), floor_total)
+        all_posts = dedup(all_posts + collect_bluesky(max_items=BS_TARGET))
+        all_posts = dedup(all_posts + collect_mastodon(max_items=MS_TARGET))
+        all_posts = dedup(all_posts + collect_reddit(max_items=max(RD_TARGET, 60)))
+        all_posts = dedup(all_posts + collect_hn(max_items=HN_TARGET))
+
+    if len(all_posts) < floor_total:
+        cached = load_cache(max_items=6000, max_age_days=30)
+        if cached:
+            logging.warning("Top-up from cache: +%d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
+            all_posts = dedup(all_posts + cached)
+
+    # Hard enforcement: do not proceed if we still cannot meet the required minimum.
+    if len(all_posts) < floor_total:
+        raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
+
+    append_cache(all_posts)
+
+    logging.info("Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
+                 len(all_posts),
+                 len(by_source(all_posts, "bluesky")),
+                 len(by_source(all_posts, "mastodon")),
+                 len(by_source(all_posts, "reddit")),
+                 len(by_source(all_posts, "x")),
+                 len(by_source(all_posts, "hn")))
+    return all_posts
 
 
 def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
+    """
+    Build themes from collected posts.
+    If clustering yields 0 themes, progressively relax the clustering threshold
+    and finally fall back to single-post themes (still "from collected posts").
+    """
+    max_themes = max(1, int(max_themes))
+
+    # 1) default clustering
     clusters = cluster_posts(posts, threshold=0.22)
     themes = [make_theme(c) for c in clusters if len(c) >= 2]
+    themes.sort(key=lambda t: t.score, reverse=True)
+    if themes:
+        return themes[:max_themes]
+
+    # 2) relaxed clustering (allow smaller similarity)
+    for thr in (0.18, 0.14, 0.10):
+        clusters = cluster_posts(posts, threshold=thr)
+        themes = [make_theme(c) for c in clusters if len(c) >= 2]
+        themes.sort(key=lambda t: t.score, reverse=True)
+        if themes:
+            logging.warning("Themes: fallback clustering threshold=%.2f", thr)
+            return themes[:max_themes]
+
+    # 3) last resort: single-post themes (top scored posts)
+    logging.warning("Themes: fallback to single-post themes (clusters=0)")
+    uniq: List[Post] = []
+    seen = set()
+    for p in posts:
+        pid = p.id or sha1(p.url + "|" + p.text)[:16]
+        if pid in seen:
+            continue
+        seen.add(pid)
+        uniq.append(p)
+    uniq = uniq[: max_themes]
+    themes = [make_theme([p]) for p in uniq]
     themes.sort(key=lambda t: t.score, reverse=True)
     return themes[:max_themes]
 
