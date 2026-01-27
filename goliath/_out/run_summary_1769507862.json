@@ -1,0 +1,57 @@
+{
+  "run_id": "1769507862",
+  "counts": {
+    "Bluesky": 50,
+    "Mastodon": 100,
+    "Reddit": 0,
+    "X": 0,
+    "HN": 0,
+    "Total": 150
+  },
+  "reply_candidates": 100,
+  "affiliates_audit": {
+    "missing": [],
+    "extra": [],
+    "ok": true
+  },
+  "sitemap_url": "https://mikann20041029.github.io/goliath/_out/sitemap.xml",
+  "post_drafts": [
+    {
+      "category": "Dev/Tools",
+      "search_title": "engine idle affected: fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/4CunaL0/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/4CunaL0/"
+    },
+    {
+      "category": "Business/Accounting/Tax",
+      "search_title": "immigration system. how fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/b0FmSRp/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/b0FmSRp/"
+    },
+    {
+      "category": "Dev/Tools",
+      "search_title": "engine acceleration affected: fix guide checklist tool",
+      "short_url": "https://mikann20041029.github.io/goliath/go/9sUDKqw/",
+      "text": "Get a clean checklist + next steps in seconds.\nhttps://mikann20041029.github.io/goliath/go/9sUDKqw/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "activitypub amp flipboard DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/9K5jfls/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/9K5jfls/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "サイト サービス ニュースリリース DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/eRCD0ev/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/eRCD0ev/"
+    },
+    {
+      "category": "Home/Life Admin",
+      "search_title": "ishowspeed africa africatour moving checklist + life admin planner",
+      "short_url": "https://mikann20041029.github.io/goliath/go/b1N3Rmc/",
+      "text": "Create a moving/life-admin checklist in seconds.\nhttps://mikann20041029.github.io/goliath/go/b1N3Rmc/"
+    }
+  ],
+  "updated_at": "2026-01-27T09:57:49+00:00"
+}

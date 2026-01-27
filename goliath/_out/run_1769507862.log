@@ -1,0 +1,41 @@
+2026-01-27 09:57:42,472 | INFO | RUN_ID=1769507862
+2026-01-27 09:57:42,472 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 09:57:42,472 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 09:57:42,472 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 09:57:42,472 | INFO | LEADS_TOTAL=100
+2026-01-27 09:57:42,473 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 09:57:42,473 | INFO | HN_MAX=70
+2026-01-27 09:57:42,575 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 09:57:42,575 | INFO | Bluesky: collecting up to 50
+2026-01-27 09:57:42,825 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 09:57:43,728 | INFO | Bluesky: collected 50
+2026-01-27 09:57:43,729 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-27 09:57:46,643 | INFO | Mastodon: collected 100
+2026-01-27 09:57:46,644 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 09:57:47,187 | INFO | Reddit: collected 0
+2026-01-27 09:57:47,521 | INFO | HN: collected 0
+2026-01-27 09:57:47,522 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 09:57:47,522 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 09:57:48,037 | INFO | Reddit: collected 0
+2026-01-27 09:57:48,290 | INFO | HN: collected 0
+2026-01-27 09:57:48,290 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 09:57:48,290 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 09:57:48,822 | INFO | Reddit: collected 0
+2026-01-27 09:57:49,022 | INFO | HN: collected 0
+2026-01-27 09:57:49,024 | INFO | Collected total: 150 (bs=50 ms=100 rd=0 x=0 hn=0)
+2026-01-27 09:57:49,025 | INFO | Clustering 150 posts (threshold=0.22)
+2026-01-27 09:57:49,047 | INFO | Clusters: 130 (top sizes=[5, 4, 3, 3, 3, 2, 2, 2])
+2026-01-27 09:57:49,051 | INFO | Chosen themes=6
+2026-01-27 09:57:49,186 | INFO | Unsplash hero bg enabled.
+2026-01-27 09:57:49,188 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-idle-affected-fix-guide-checklist-tool-2/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/4CunaL0/
+2026-01-27 09:57:49,189 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/immigration-system-how-fix-guide-checklist-tool-2/ (Business/Accounting/Tax) short=https://mikann20041029.github.io/goliath/go/b0FmSRp/
+2026-01-27 09:57:49,190 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-acceleration-affected-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/9sUDKqw/
+2026-01-27 09:57:49,191 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/activitypub-amp-flipboard-dns-ssl-fix-checklist-2/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/9K5jfls/
+2026-01-27 09:57:49,192 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/dns-ssl-fix-checklist-3/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/eRCD0ev/
+2026-01-27 09:57:49,193 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/ishowspeed-africa-africatour-moving-checklist-life-admin-planner/ (Home/Life Admin) short=https://mikann20041029.github.io/goliath/go/b1N3Rmc/
+2026-01-27 09:57:49,198 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769507862.json
+2026-01-27 09:57:49,199 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 09:57:49,199 | INFO | Self-check: counts={'Bluesky': 50, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 150}
+2026-01-27 09:57:49,199 | INFO | Self-check: reply_candidates=100
+2026-01-27 09:57:49,199 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 09:57:49,199 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
