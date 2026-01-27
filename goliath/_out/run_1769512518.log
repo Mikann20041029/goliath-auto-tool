@@ -1,0 +1,41 @@
+2026-01-27 11:15:18,946 | INFO | RUN_ID=1769512518
+2026-01-27 11:15:18,946 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 11:15:18,946 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 11:15:18,946 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 11:15:18,946 | INFO | LEADS_TOTAL=100
+2026-01-27 11:15:18,946 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 11:15:18,946 | INFO | HN_MAX=70
+2026-01-27 11:15:19,027 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 11:15:19,027 | INFO | Bluesky: collecting up to 50
+2026-01-27 11:15:19,285 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 11:15:19,931 | INFO | Bluesky: collected 50
+2026-01-27 11:15:19,931 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-27 11:15:21,986 | INFO | Mastodon: collected 100
+2026-01-27 11:15:21,986 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 11:15:22,505 | INFO | Reddit: collected 0
+2026-01-27 11:15:22,835 | INFO | HN: collected 0
+2026-01-27 11:15:22,835 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 11:15:22,835 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 11:15:23,361 | INFO | Reddit: collected 0
+2026-01-27 11:15:23,545 | INFO | HN: collected 0
+2026-01-27 11:15:23,545 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 11:15:23,545 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 11:15:24,053 | INFO | Reddit: collected 0
+2026-01-27 11:15:24,261 | INFO | HN: collected 0
+2026-01-27 11:15:24,263 | INFO | Collected total: 150 (bs=50 ms=100 rd=0 x=0 hn=0)
+2026-01-27 11:15:24,264 | INFO | Clustering 150 posts (threshold=0.22)
+2026-01-27 11:15:24,288 | INFO | Clusters: 127 (top sizes=[8, 6, 4, 3, 3, 2, 2, 2])
+2026-01-27 11:15:24,292 | INFO | Chosen themes=6
+2026-01-27 11:15:24,688 | INFO | Unsplash hero bg enabled.
+2026-01-27 11:15:24,690 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-affected-fix-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/4JvE7jO/
+2026-01-27 11:15:24,691 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/el-andaluc-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/7dGYEQ4/
+2026-01-27 11:15:24,691 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/gt-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/24ZZCto/
+2026-01-27 11:15:24,692 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/immigration-system-ice-fix-guide-checklist-tool/ (Business/Accounting/Tax) short=https://mikann20041029.github.io/goliath/go/dvOWoZV/
+2026-01-27 11:15:24,693 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/pompeji-wurde-auriga-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/hRgL45R/
+2026-01-27 11:15:24,694 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/affected-fix-how-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/8GR3an2/
+2026-01-27 11:15:24,699 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769512518.json
+2026-01-27 11:15:24,700 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 11:15:24,700 | INFO | Self-check: counts={'Bluesky': 50, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 150}
+2026-01-27 11:15:24,700 | INFO | Self-check: reply_candidates=100
+2026-01-27 11:15:24,700 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 11:15:24,700 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
