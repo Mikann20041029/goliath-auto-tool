@@ -21,6 +21,8 @@ Goliath Auto Tool System - main.py (single-file)
 from __future__ import annotations
 
 import base64
+import gzip
+import zlib
 import datetime as dt
 import hashlib
 import html
@@ -316,14 +318,41 @@ def is_frozen_path(path: str) -> bool:
 
 
 def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Tuple[int, str]:
-    h = dict(headers or {})
-    if "User-Agent" not in h:
-        h["User-Agent"] = DEFAULT_UA
+    # NOTE: Some endpoints (including Bluesky public XRPC) may return compressed bodies or
+    # HTML error pages unless Accept / UA / encoding are set. We default to safe headers and
+    # transparently decompress gzip/deflate when indicated.
+    h: Dict[str, str] = {
+        "User-Agent": DEFAULT_UA,
+        "Accept": "application/json, text/plain;q=0.9, */*;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
+    }
+    if headers:
+        h.update(headers)
+
     req = Request(url, headers=h, method="GET")
     try:
         with urlopen(req, timeout=timeout) as resp:
             status = resp.status
-            data = resp.read()
+            data = resp.read()  # bytes
+            enc = (resp.headers.get("Content-Encoding") or "").lower()
+
+            # Decompress when server indicates it (urllib does not always do this automatically).
+            try:
+                if "gzip" in enc:
+                    data = gzip.decompress(data)
+                elif "deflate" in enc:
+                    data = zlib.decompress(data)
+                elif "br" in enc:
+                    # Optional: brotli is not in stdlib. If installed, use it.
+                    try:
+                        import brotli  # type: ignore
+                        data = brotli.decompress(data)
+                    except Exception:
+                        pass
+            except Exception:
+                # If decompression fails, fall back to raw bytes (decode with errors="replace" below).
+                pass
+
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError:
@@ -331,14 +360,12 @@ def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 
             return status, text
     except HTTPError as e:
         try:
-            body = e.read().decode("utf-8", errors="replace")
+            raw = e.read().decode("utf-8", errors="replace")
         except Exception:
-            body = ""
-        return e.code, body
+            raw = str(e)
+        return int(getattr(e, "code", 0) or 0), raw
     except URLError as e:
         return 0, str(e)
-
-
 def http_post_json(
     url: str,
     payload: Dict[str, Any],
@@ -540,16 +567,22 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
 
         body = ""
         st = 0
+        last_base = ""
         for b in bases:
+            last_base = b
             url = f"{b}/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": str(limit)})
             st, body = http_get(url, headers=headers, timeout=20)
             if st == 200 and body:
                 break
+
         if st != 200:
+            logging.warning("Bluesky: searchPosts failed st=%s base=%s body_prefix=%s", st, last_base, (body or "")[:200].replace("\n", " "))
             return []
+
         try:
             data = json.loads(body)
         except Exception:
+            logging.warning("Bluesky: searchPosts non-JSON response base=%s body_prefix=%s", last_base, (body or "")[:200].replace("\n", " "))
             return []
         posts = data.get("posts") or []
         out_local: List[Post] = []
