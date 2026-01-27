@@ -21,8 +21,6 @@ Goliath Auto Tool System - main.py (single-file)
 from __future__ import annotations
 
 import base64
-import gzip
-import zlib
 import datetime as dt
 import hashlib
 import html
@@ -318,41 +316,14 @@ def is_frozen_path(path: str) -> bool:
 
 
 def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Tuple[int, str]:
-    # NOTE: Some endpoints (including Bluesky public XRPC) may return compressed bodies or
-    # HTML error pages unless Accept / UA / encoding are set. We default to safe headers and
-    # transparently decompress gzip/deflate when indicated.
-    h: Dict[str, str] = {
-        "User-Agent": DEFAULT_UA,
-        "Accept": "application/json, text/plain;q=0.9, */*;q=0.8",
-        "Accept-Encoding": "gzip, deflate",
-    }
-    if headers:
-        h.update(headers)
-
+    h = dict(headers or {})
+    if "User-Agent" not in h:
+        h["User-Agent"] = DEFAULT_UA
     req = Request(url, headers=h, method="GET")
     try:
         with urlopen(req, timeout=timeout) as resp:
             status = resp.status
-            data = resp.read()  # bytes
-            enc = (resp.headers.get("Content-Encoding") or "").lower()
-
-            # Decompress when server indicates it (urllib does not always do this automatically).
-            try:
-                if "gzip" in enc:
-                    data = gzip.decompress(data)
-                elif "deflate" in enc:
-                    data = zlib.decompress(data)
-                elif "br" in enc:
-                    # Optional: brotli is not in stdlib. If installed, use it.
-                    try:
-                        import brotli  # type: ignore
-                        data = brotli.decompress(data)
-                    except Exception:
-                        pass
-            except Exception:
-                # If decompression fails, fall back to raw bytes (decode with errors="replace" below).
-                pass
-
+            data = resp.read()
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError:
@@ -360,12 +331,14 @@ def http_get(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 
             return status, text
     except HTTPError as e:
         try:
-            raw = e.read().decode("utf-8", errors="replace")
+            body = e.read().decode("utf-8", errors="replace")
         except Exception:
-            raw = str(e)
-        return int(getattr(e, "code", 0) or 0), raw
+            body = ""
+        return e.code, body
     except URLError as e:
         return 0, str(e)
+
+
 def http_post_json(
     url: str,
     payload: Dict[str, Any],
@@ -554,35 +527,46 @@ def collect_bluesky(max_items: int = 60) -> List[Post]:
         headers = {"Accept": "application/json"}
         logging.info("Bluesky: using public endpoint (no credentials/session). collecting up to %d", target)
 
+    bsky_state = {"public_blocked": False, "public_block_warned": False}
     def search(q: str, limit: int) -> List[Post]:
         if not q:
             return []
         limit = max(1, min(int(limit), 100))
-        bases = [base]
-        # public endpoint can occasionally fail; try the other base as fallback (Bluesky is free-ish; cost concern is X only)
-        if base != "https://public.api.bsky.app":
-            bases.append("https://public.api.bsky.app")
-        if base != "https://bsky.social":
-            bases.append("https://bsky.social")
+        have_auth = "Authorization" in headers
+        public_bases = ["https://public.api.bsky.app", "https://api.bsky.app"]
+        auth_bases = ["https://bsky.social"]
+
+        if (not have_auth) and bsky_state.get("public_blocked"):
+            return []
+
+        bases = (auth_bases + public_bases) if have_auth else public_bases
+        pub_headers = {"Accept": "application/json"}
 
         body = ""
         st = 0
-        last_base = ""
+        used_base = ""
+        body_prefix = ""
         for b in bases:
-            last_base = b
+            used_base = b
             url = f"{b}/xrpc/app.bsky.feed.searchPosts?" + urlencode({"q": q, "limit": str(limit)})
-            st, body = http_get(url, headers=headers, timeout=20)
+            h = headers if (have_auth and b in auth_bases) else pub_headers
+            st, body = http_get(url, headers=h, timeout=20)
             if st == 200 and body:
                 break
-
+            if st == 429:
+                time.sleep(1.0)
+            if st == 403 and (not have_auth):
+                bsky_state["public_blocked"] = True
+        body_prefix = (body or "")[:120].replace("\n", " ")
         if st != 200:
-            logging.warning("Bluesky: searchPosts failed st=%s base=%s body_prefix=%s", st, last_base, (body or "")[:200].replace("\n", " "))
+            log.warning("Bluesky: searchPosts failed st=%s base=%s body_prefix=%s", st, used_base, body_prefix)
+            if bsky_state.get("public_blocked") and (not bsky_state.get("public_block_warned")) and (not have_auth):
+                log.warning("Bluesky: public endpoint returned 403 in this environment. Set BLUESKY_HANDLE/BLUESKY_APP_PASSWORD to use an authenticated session.")
+                bsky_state["public_block_warned"] = True
             return []
-
         try:
             data = json.loads(body)
         except Exception:
-            logging.warning("Bluesky: searchPosts non-JSON response base=%s body_prefix=%s", last_base, (body or "")[:200].replace("\n", " "))
             return []
         posts = data.get("posts") or []
         out_local: List[Post] = []
