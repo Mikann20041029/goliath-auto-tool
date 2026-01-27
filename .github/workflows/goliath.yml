@@ -150,3 +150,58 @@ jobs:
         with:
           name: goliath-run-log
           path: run_log.txt
+      - name: Find issues payload json
+        id: find_payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="$(ls -t goliath/_out/issues_payload_*.json 2>/dev/null | head -n 1 || true)"
+          echo "payload=$f" >> "$GITHUB_OUTPUT"
+          if [ -z "$f" ]; then
+            echo "No issues_payload_*.json found under goliath/_out/"
+          else
+            echo "Found payload: $f"
+          fi
+
+      - name: Create GitHub Issue from payload
+        uses: actions/github-script@v7
+        env:
+          PAYLOAD_JSON: ${{ steps.find_payload.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+          script: |
+            const core = require('@actions/core');
+            const fs = require('fs');
+
+            const p = process.env.PAYLOAD_JSON;
+            if (!p) {
+              core.warning('PAYLOAD_JSON is empty. Skip creating issue.');
+              return;
+            }
+            if (!fs.existsSync(p)) {
+              core.setFailed(`Payload not found: ${p}`);
+              return;
+            }
+
+            const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+            const runId = data.run_id ?? 'unknown';
+            const count = data.count ?? 0;
+            const issues = Array.isArray(data.issues) ? data.issues : [];
+
+            if (issues.length === 0) {
+              core.warning(`No issues in payload: ${p}`);
+              return;
+            }
+
+            // 1つのIssueにまとめて「羅列」する（スパム防止）
+            const title = `Goliath candidates (RUN_ID=${runId}) count=${count}`;
+            const body = issues.map(x => `## ${x.title}\n\n${x.body}`).join('\n\n---\n\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body
+            });
+
+            core.info(`Created 1 issue from ${p} (parts=${issues.length})`);
