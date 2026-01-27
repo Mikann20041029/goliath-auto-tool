@@ -1,0 +1,65 @@
+2026-01-27 07:50:56,526 | INFO | RUN_ID=1769500256
+2026-01-27 07:50:56,526 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 07:50:56,526 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 07:50:56,526 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 07:50:56,526 | INFO | LEADS_TOTAL=100
+2026-01-27 07:50:56,526 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 07:50:56,526 | INFO | HN_MAX=70
+2026-01-27 07:50:56,630 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 07:50:56,630 | INFO | Bluesky: collecting up to 50
+2026-01-27 07:50:56,740 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 07:50:58,067 | INFO | Bluesky: collected 0
+2026-01-27 07:50:58,067 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-27 07:51:01,285 | INFO | Mastodon: collected 100
+2026-01-27 07:51:01,286 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 07:51:01,850 | INFO | Reddit: collected 0
+2026-01-27 07:51:02,210 | INFO | HN: collected 0
+2026-01-27 07:51:02,211 | WARNING | Top-up retry: bs=0/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 07:51:02,211 | INFO | Bluesky: collecting up to 50
+2026-01-27 07:51:02,255 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 07:51:03,507 | INFO | Bluesky: collected 0
+2026-01-27 07:51:03,508 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 07:51:04,058 | INFO | Reddit: collected 0
+2026-01-27 07:51:04,232 | INFO | HN: collected 0
+2026-01-27 07:51:04,232 | WARNING | Top-up retry: bs=0/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 07:51:04,232 | INFO | Bluesky: collecting up to 50
+2026-01-27 07:51:04,720 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 07:51:05,954 | INFO | Bluesky: collected 0
+2026-01-27 07:51:05,954 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 07:51:06,490 | INFO | Reddit: collected 0
+2026-01-27 07:51:06,668 | INFO | HN: collected 0
+2026-01-27 07:51:06,670 | INFO | Collected total: 100 (bs=0 ms=100 rd=0 x=0 hn=0)
+2026-01-27 07:51:06,670 | INFO | Clustering 100 posts (threshold=0.22)
+2026-01-27 07:51:06,683 | INFO | Clusters: 97 (top sizes=[2, 2, 2, 1, 1, 1, 1, 1])
+2026-01-27 07:51:06,684 | INFO | Chosen themes=3
+2026-01-27 07:51:06,826 | INFO | Unsplash hero bg enabled.
+2026-01-27 07:51:06,827 | ERROR | build_tool_ui failed: name 't' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2548, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2363, in build_tool_ui
+    lines.push(t ? `\\n> ${t}` : "");
+NameError: name 't' is not defined
+2026-01-27 07:51:06,829 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/travel-activitypub-amp-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/ioDqymG/
+2026-01-27 07:51:06,829 | ERROR | build_tool_ui failed: name 't' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2548, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2363, in build_tool_ui
+    lines.push(t ? `\\n> ${t}` : "");
+NameError: name 't' is not defined
+2026-01-27 07:51:06,830 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/0-0-26-climate-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/hAVTWHA/
+2026-01-27 07:51:06,830 | ERROR | build_tool_ui failed: name 't' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2548, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2363, in build_tool_ui
+    lines.push(t ? `\\n> ${t}` : "");
+NameError: name 't' is not defined
+2026-01-27 07:51:06,831 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/amp-jetpack-social-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/8hZXFLf/
+2026-01-27 07:51:06,835 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769500256.json
+2026-01-27 07:51:06,835 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 07:51:06,835 | INFO | Self-check: counts={'Bluesky': 0, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 100}
+2026-01-27 07:51:06,836 | INFO | Self-check: reply_candidates=100
+2026-01-27 07:51:06,836 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 07:51:06,836 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
