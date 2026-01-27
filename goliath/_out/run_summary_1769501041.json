@@ -1,0 +1,33 @@
+{
+  "run_id": "1769501041",
+  "counts": {
+    "Bluesky": 0,
+    "Mastodon": 100,
+    "Reddit": 0,
+    "X": 0,
+    "HN": 0,
+    "Total": 100
+  },
+  "reply_candidates": 100,
+  "affiliates_audit": {
+    "missing": [],
+    "extra": [],
+    "ok": true
+  },
+  "sitemap_url": "https://mikann20041029.github.io/goliath/_out/sitemap.xml",
+  "post_drafts": [
+    {
+      "category": "Web/Hosting",
+      "search_title": "de la en DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/gAEBtTj/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/gAEBtTj/"
+    },
+    {
+      "category": "Web/Hosting",
+      "search_title": "https:// DNS/SSL fix checklist",
+      "short_url": "https://mikann20041029.github.io/goliath/go/9cBoo2H/",
+      "text": "Get a DNS/SSL checklist + quick tests in seconds.\nhttps://mikann20041029.github.io/goliath/go/9cBoo2H/"
+    }
+  ],
+  "updated_at": "2026-01-27T08:04:27+00:00"
+}

@@ -1,0 +1,43 @@
+2026-01-27 08:04:01,842 | INFO | RUN_ID=1769501041
+2026-01-27 08:04:01,842 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 08:04:01,842 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 08:04:01,842 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 08:04:01,842 | INFO | LEADS_TOTAL=100
+2026-01-27 08:04:01,842 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 08:04:01,842 | INFO | HN_MAX=70
+2026-01-27 08:04:01,981 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 08:04:01,982 | INFO | Bluesky: collecting up to 50
+2026-01-27 08:04:02,083 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 08:04:09,908 | INFO | Bluesky: collected 0
+2026-01-27 08:04:09,909 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-27 08:04:11,862 | INFO | Mastodon: collected 100
+2026-01-27 08:04:11,862 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 08:04:12,396 | INFO | Reddit: collected 0
+2026-01-27 08:04:12,796 | INFO | HN: collected 0
+2026-01-27 08:04:12,796 | WARNING | Top-up retry: bs=0/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 08:04:12,796 | INFO | Bluesky: collecting up to 50
+2026-01-27 08:04:12,877 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 08:04:19,379 | INFO | Bluesky: collected 0
+2026-01-27 08:04:19,380 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 08:04:19,891 | INFO | Reddit: collected 0
+2026-01-27 08:04:20,201 | INFO | HN: collected 0
+2026-01-27 08:04:20,202 | WARNING | Top-up retry: bs=0/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-27 08:04:20,202 | INFO | Bluesky: collecting up to 50
+2026-01-27 08:04:20,284 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-27 08:04:26,752 | INFO | Bluesky: collected 0
+2026-01-27 08:04:26,752 | INFO | Reddit: public mode collecting up to 40
+2026-01-27 08:04:27,244 | INFO | Reddit: collected 0
+2026-01-27 08:04:27,451 | INFO | HN: collected 0
+2026-01-27 08:04:27,453 | INFO | Collected total: 100 (bs=0 ms=100 rd=0 x=0 hn=0)
+2026-01-27 08:04:27,453 | INFO | Clustering 100 posts (threshold=0.22)
+2026-01-27 08:04:27,467 | INFO | Clusters: 97 (top sizes=[3, 2, 1, 1, 1, 1, 1, 1])
+2026-01-27 08:04:27,468 | INFO | Chosen themes=2
+2026-01-27 08:04:27,577 | INFO | Unsplash hero bg enabled.
+2026-01-27 08:04:27,578 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/de-la-en-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/gAEBtTj/
+2026-01-27 08:04:27,579 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/9cBoo2H/
+2026-01-27 08:04:27,583 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769501041.json
+2026-01-27 08:04:27,583 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 08:04:27,583 | INFO | Self-check: counts={'Bluesky': 0, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 100}
+2026-01-27 08:04:27,584 | INFO | Self-check: reply_candidates=100
+2026-01-27 08:04:27,584 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 08:04:27,584 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
