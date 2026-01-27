@@ -1,0 +1,74 @@
+2026-01-27 07:30:17,666 | INFO | RUN_ID=1769499017
+2026-01-27 07:30:17,667 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-27 07:30:17,667 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-27 07:30:17,667 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-27 07:30:17,667 | INFO | LEADS_TOTAL=100
+2026-01-27 07:30:17,667 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-27 07:30:17,667 | INFO | HN_MAX=70
+2026-01-27 07:30:17,668 | INFO | Bluesky: collecting up to 50
+2026-01-27 07:30:18,068 | WARNING | Bluesky: session failed status=401 body={"error":"AuthenticationRequired","message":"Invalid identifier or password"}
+2026-01-27 07:30:18,068 | INFO | Mastodon: collecting up to 100 from https://mastodon.social
+2026-01-27 07:30:21,554 | INFO | Mastodon: collected 100
+2026-01-27 07:30:21,554 | INFO | Reddit: public mode collecting up to 20
+2026-01-27 07:30:22,108 | INFO | Reddit: collected 0
+2026-01-27 07:30:22,246 | WARNING | X: search failed status=402 body={"account_id":2014321677820387328,"title":"CreditsDepleted","detail":"Your enrolled account [2014321677820387328] does not have any credits to fulfill this request.","type":"https://api.twitter.com/2/
+2026-01-27 07:30:22,522 | INFO | HN: collected 0
+2026-01-27 07:30:22,523 | INFO | Collected total=100 (Bluesky=0, Mastodon=100, Reddit=0, X=0, HN=0)
+2026-01-27 07:30:22,523 | INFO | Clustering 100 posts (threshold=0.22)
+2026-01-27 07:30:22,538 | INFO | Clusters: 77 (top sizes=[7, 4, 4, 3, 3, 3, 3, 2])
+2026-01-27 07:30:22,545 | INFO | Chosen themes=6
+2026-01-27 07:30:22,801 | INFO | Unsplash hero bg enabled.
+2026-01-27 07:30:22,802 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,804 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/alertcalifornia-cam-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/6m9mxRt/
+2026-01-27 07:30:22,804 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,805 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/servant-all-forgive-conversation-templates-awkwardness-fixes/ (Relationships/Communication) short=https://mikann20041029.github.io/goliath/go/gw3raX1/
+2026-01-27 07:30:22,805 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,806 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/food-please-compassion-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/fICfoZK/
+2026-01-27 07:30:22,806 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,807 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/forgive-help-lord-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/eYXce0l/
+2026-01-27 07:30:22,807 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,808 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/forgive-lord-help-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/6JaPzE/
+2026-01-27 07:30:22,808 | ERROR | build_tool_ui failed: name 'p' is not defined
+Traceback (most recent call last):
+  File "goliath/main.py", line 2892, in build_page_html
+    tool_ui = build_tool_ui(theme)
+  File "goliath/main.py", line 2283, in build_tool_ui
+    problems_html_items.append(f"<li>{html.escape(str(p))}</li>")
+NameError: name 'p' is not defined
+2026-01-27 07:30:22,808 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/montreal-emergency-outages-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/4r0sYgW/
+2026-01-27 07:30:22,813 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769499017.json
+2026-01-27 07:30:22,814 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-27 07:30:22,814 | INFO | Self-check: counts={'Bluesky': 0, 'Mastodon': 100, 'Reddit': 0, 'X': 0, 'HN': 0, 'Total': 100}
+2026-01-27 07:30:22,814 | INFO | Self-check: reply_candidates=100
+2026-01-27 07:30:22,814 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-27 07:30:22,814 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
