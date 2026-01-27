@@ -168,6 +168,7 @@ ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for l
 # Branding / canonical
 # Branding / canonical
 SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
+SITE_LOGO = os.environ.get("SITE_LOGO", "🧰")
 
 SITE_DOMAIN = env_first("SITE_DOMAIN", default=PUBLIC_BASE_URL)
 HUB_BASE_URL = env_first("HUB_BASE_URL", default=PUBLIC_BASE_URL.rstrip("/") + "/hub/")
@@ -1474,149 +1475,216 @@ def build_shortlink_page(target_url: str, code: str) -> Tuple[str, str]:
 # =============================================================================
 # i18n dictionaries (core UI strings)
 # =============================================================================
-I18N = {
-    "en": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "Language",
-        "share": "Share",
-        "problems": "Problems this tool can help with",
-        "tool": "Tool",
-        "quick_answer": "Quick answer",
-        "causes": "Common causes",
-        "steps": "Step-by-step checklist",
-        "pitfalls": "Common pitfalls & how to avoid them",
-        "next": "If it still doesn’t work",
-        "faq": "FAQ",
-        "references": "Reference links",
-        "supplement": "Supplementary resources",
-        "related": "Related tools",
-        "popular": "Popular tools",
-        "disclaimer": "Disclaimer",
-        "terms": "Terms",
-        "privacy": "Privacy",
-        "contact": "Contact",
-        "footer_note": "Practical, fast, and respectful guides—built to reduce wasted trial-and-error.",
-        "aff_title": "Recommended",
-        "copy": "Copy",
-        "copied": "Copied",
-        "short_value": "Do it in 3 seconds",
-    },
-    "ja": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "言語",
-        "share": "共有",
-        "problems": "このツールが助ける悩み一覧",
-        "tool": "ツール",
-        "quick_answer": "結論（最短で直す方針）",
-        "causes": "原因のパターン分け",
-        "steps": "手順（チェックリスト）",
-        "pitfalls": "よくある失敗と回避策",
-        "next": "直らない場合の次の手",
-        "faq": "FAQ",
-        "references": "参考URL",
-        "supplement": "補助資料",
-        "related": "関連ツール",
-        "popular": "人気のツール",
-        "disclaimer": "免責事項",
-        "terms": "利用規約",
-        "privacy": "プライバシーポリシー",
-        "contact": "お問い合わせ",
-        "footer_note": "実務で使える手順に寄せて、短時間で解決できる形を目指しています。",
-        "aff_title": "おすすめ",
-        "copy": "コピー",
-        "copied": "コピーしました",
-        "short_value": "3秒でできる",
-    },
-    "ko": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "언어",
-        "share": "공유",
-        "problems": "이 도구가 해결할 수 있는 고민",
-        "tool": "도구",
-        "quick_answer": "결론(가장 빠른 해결 방향)",
-        "causes": "원인 패턴",
-        "steps": "체크리스트(단계별)",
-        "pitfalls": "자주 하는 실수와 회피법",
-        "next": "계속 안 될 때",
-        "faq": "FAQ",
-        "references": "참고 링크",
-        "supplement": "추가 자료",
-        "related": "관련 도구",
-        "popular": "인기 도구",
-        "disclaimer": "면책",
-        "terms": "이용약관",
-        "privacy": "개인정보 처리방침",
-        "contact": "문의",
-        "footer_note": "바로 실행 가능한 가이드를 목표로 합니다.",
-        "aff_title": "추천",
-        "copy": "복사",
-        "copied": "복사됨",
-        "short_value": "3초면 끝",
-    },
-    "zh": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "语言",
-        "share": "分享",
-        "problems": "本工具可帮助解决的问题",
-        "tool": "工具",
-        "quick_answer": "结论（最快修复方向）",
-        "causes": "常见原因分类",
-        "steps": "步骤清单",
-        "pitfalls": "常见坑与规避方法",
-        "next": "仍无法解决时",
-        "faq": "FAQ",
-        "references": "参考链接",
-        "supplement": "补充资料",
-        "related": "相关工具",
-        "popular": "热门工具",
-        "disclaimer": "免责声明",
-        "terms": "条款",
-        "privacy": "隐私政策",
-        "contact": "联系",
-        "footer_note": "提供可落地、快速、尊重用户的排障指南。",
-        "aff_title": "推荐",
-        "copy": "复制",
-        "copied": "已复制",
-        "short_value": "3秒搞定",
-    },
-}
+I18N = {'en': {'home': 'Home',
+        'about': 'About Us',
+        'all_tools': 'All Tools',
+        'language': 'Language',
+        'share': 'Share',
+        'problems': 'Problems this tool can help with',
+        'tool': 'Tool',
+        'quick_answer': 'Quick answer',
+        'causes': 'Common causes',
+        'steps': 'Step-by-step checklist',
+        'pitfalls': 'Common pitfalls & how to avoid them',
+        'next': 'If it still doesn’t work',
+        'faq': 'FAQ',
+        'references': 'Reference links',
+        'supplement': 'Supplementary resources',
+        'related': 'Related tools',
+        'popular': 'Popular tools',
+        'disclaimer': 'Disclaimer',
+        'terms': 'Terms',
+        'privacy': 'Privacy',
+        'contact': 'Contact',
+        'footer_note': 'Practical, fast, and respectful guides—built to reduce wasted trial-and-error.',
+        'aff_title': 'Recommended',
+        'copy': 'Copy',
+        'copied': 'Copied',
+        'short_value': 'Do it in 3 seconds',
+        'tool_input': 'Input',
+        'tool_input_hint': '(paste your details)',
+        'tool_placeholder': 'Example: dates, constraints, what you tried, what you need…',
+        'tool_generate': 'Generate',
+        'tool_clear': 'Clear',
+        'tool_tip': 'Tip: include the exact error message and what changed recently.'},
+ 'ja': {'home': 'Home',
+        'about': 'About Us',
+        'all_tools': 'All Tools',
+        'language': '言語',
+        'share': '共有',
+        'problems': 'このツールが助ける悩み一覧',
+        'tool': 'ツール',
+        'quick_answer': '結論（最短で直す方針）',
+        'causes': '原因のパターン分け',
+        'steps': '手順（チェックリスト）',
+        'pitfalls': 'よくある失敗と回避策',
+        'next': '直らない場合の次の手',
+        'faq': 'FAQ',
+        'references': '参考URL',
+        'supplement': '補助資料',
+        'related': '関連ツール',
+        'popular': '人気のツール',
+        'disclaimer': '免責事項',
+        'terms': '利用規約',
+        'privacy': 'プライバシーポリシー',
+        'contact': 'お問い合わせ',
+        'footer_note': '実務で使える手順に寄せて、短時間で解決できる形を目指しています。',
+        'aff_title': 'おすすめ',
+        'copy': 'コピー',
+        'copied': 'コピーしました',
+        'short_value': '3秒でできる',
+        'tool_input': '入力',
+        'tool_input_hint': '（状況を貼り付け）',
+        'tool_placeholder': '例：日時、制約、試したこと、必要なこと…',
+        'tool_generate': '生成',
+        'tool_clear': 'クリア',
+        'tool_tip': 'コツ：エラーメッセージ全文と「最近変えたこと」を入れると精度が上がります。'},
+ 'ko': {'home': 'Home',
+        'about': 'About Us',
+        'all_tools': 'All Tools',
+        'language': '언어',
+        'share': '공유',
+        'problems': '이 도구가 해결할 수 있는 고민',
+        'tool': '도구',
+        'quick_answer': '결론(가장 빠른 해결 방향)',
+        'causes': '원인 패턴',
+        'steps': '체크리스트(단계별)',
+        'pitfalls': '자주 하는 실수와 회피법',
+        'next': '계속 안 될 때',
+        'faq': 'FAQ',
+        'references': '참고 링크',
+        'supplement': '추가 자료',
+        'related': '관련 도구',
+        'popular': '인기 도구',
+        'disclaimer': '면책',
+        'terms': '이용약관',
+        'privacy': '개인정보 처리방침',
+        'contact': '문의',
+        'footer_note': '바로 실행 가능한 가이드를 목표로 합니다.',
+        'aff_title': '추천',
+        'copy': '복사',
+        'copied': '복사됨',
+        'short_value': '3초면 끝',
+        'tool_input': '입력',
+        'tool_input_hint': '(상황을 붙여넣기)',
+        'tool_placeholder': '예: 날짜/제약/시도한 것/원하는 것…',
+        'tool_generate': '생성',
+        'tool_clear': '지우기',
+        'tool_tip': '팁: 정확한 오류 메시지와 최근 변경점을 포함하세요.'},
+ 'zh': {'home': 'Home',
+        'about': 'About Us',
+        'all_tools': 'All Tools',
+        'language': '语言',
+        'share': '分享',
+        'problems': '本工具可帮助解决的问题',
+        'tool': '工具',
+        'quick_answer': '结论（最快修复方向）',
+        'causes': '常见原因分类',
+        'steps': '步骤清单',
+        'pitfalls': '常见坑与规避方法',
+        'next': '仍无法解决时',
+        'faq': 'FAQ',
+        'references': '参考链接',
+        'supplement': '补充资料',
+        'related': '相关工具',
+        'popular': '热门工具',
+        'disclaimer': '免责声明',
+        'terms': '条款',
+        'privacy': '隐私政策',
+        'contact': '联系',
+        'footer_note': '提供可落地、快速、尊重用户的排障指南。',
+        'aff_title': '推荐',
+        'copy': '复制',
+        'copied': '已复制',
+        'short_value': '3秒搞定',
+        'tool_input': '输入',
+        'tool_input_hint': '（粘贴你的情况）',
+        'tool_placeholder': '例如：日期、限制、已尝试内容、目标…',
+        'tool_generate': '生成',
+        'tool_clear': '清空',
+        'tool_tip': '提示：请包含完整报错信息以及最近变更点。'}}
 
-def build_i18n_script(default_lang: str = "en") -> str:
+
+def build_i18n_script(default_lang: str) -> str:
+    """
+    Returns a <script> block that:
+      - Applies i18n to all [data-i18n] nodes
+      - Applies i18n to placeholders via [data-i18n-placeholder]
+      - Persists language/theme to localStorage
+      - Supports light/dark toggle (class-based Tailwind dark mode)
+    """
     i18n_json = json.dumps(I18N, ensure_ascii=False)
-    langs_json = json.dumps(LANGS)
+    langs_json = json.dumps(sorted(list(I18N.keys())), ensure_ascii=False)
+
     return f"""<script>
 const I18N = {i18n_json};
 const LANGS = {langs_json};
+
+function t(lang, key) {{
+  return (I18N[lang] && I18N[lang][key]) || (I18N[\"{default_lang}\"] && I18N[\"{default_lang}\"][key]) || key;
+}}
+
 function setLang(lang) {{
-  if (!LANGS.includes(lang)) lang = "{default_lang}";
-  document.documentElement.setAttribute("lang", lang);
-  localStorage.setItem("lang", lang);
-  document.querySelectorAll("[data-i18n]").forEach(el => {{
-    const key = el.getAttribute("data-i18n");
-    const v = (I18N[lang] && I18N[lang][key]) || (I18N["{default_lang}"][key]) || key;
-    el.textContent = v;
+  if (!LANGS.includes(lang)) lang = \"{default_lang}\";
+  document.documentElement.setAttribute(\"lang\", lang);
+  localStorage.setItem(\"lang\", lang);
+
+  document.querySelectorAll(\"[data-i18n]\").forEach(el => {{
+    const key = el.getAttribute(\"data-i18n\");
+    el.textContent = t(lang, key);
+  }});
+
+  document.querySelectorAll(\"[data-i18n-placeholder]\").forEach(el => {{
+    const key = el.getAttribute(\"data-i18n-placeholder\");
+    el.setAttribute(\"placeholder\", t(lang, key));
+  }});
+
+  document.querySelectorAll(\"[data-i18n-value]\").forEach(el => {{
+    const key = el.getAttribute(\"data-i18n-value\");
+    el.value = t(lang, key);
   }});
 }}
+
 function initLang() {{
-  const saved = localStorage.getItem("lang");
-  const lang = saved || "{default_lang}";
+  const saved = localStorage.getItem(\"lang\");
+  const lang = saved || \"{default_lang}\";
   setLang(lang);
-  const sel = document.getElementById("langSel");
+  const sel = document.getElementById(\"langSel\");
   if (sel) {{
     sel.value = lang;
-    sel.addEventListener("change", (e) => setLang(e.target.value));
+    sel.addEventListener(\"change\", (e) => setLang(e.target.value));
   }}
 }}
-document.addEventListener("DOMContentLoaded", initLang);
-</script>""".strip()
+
+function setTheme(mode) {{
+  if (mode === \"dark\") {{
+    document.documentElement.classList.add(\"dark\");
+  }} else {{
+    document.documentElement.classList.remove(\"dark\");
+  }}
+  localStorage.setItem(\"theme\", mode);
+}}
+
+function initTheme() {{
+  const saved = localStorage.getItem(\"theme\");
+  const prefersDark = window.matchMedia && window.matchMedia(\"(prefers-color-scheme: dark)\").matches;
+  const mode = saved || (prefersDark ? \"dark\" : \"light\");
+  setTheme(mode);
+
+  const btn = document.getElementById(\"themeBtn\");
+  if (btn) {{
+    btn.addEventListener(\"click\", () => {{
+      const isDark = document.documentElement.classList.contains(\"dark\");
+      setTheme(isDark ? \"light\" : \"dark\");
+    }});
+  }}
+}}
+
+document.addEventListener(\"DOMContentLoaded\", () => {{
+  initTheme();
+  initLang();
+}});
+</script>"""
 
 
 # =============================================================================
@@ -2149,37 +2217,37 @@ def build_tool_ui(theme: Theme) -> str:
 
     # Templates (client-side)
     return f"""
-<div class="rounded-3xl border border-white/10 bg-white/5 p-5 md:p-6">
+<div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-5 md:p-6">
   <div class="flex items-start justify-between gap-4">
     <div>
       <h2 class="text-xl font-semibold" data-i18n="tool">Tool</h2>
-      <p class="text-white/70 mt-1">Category: <span class="text-white/90">{cat}</span></p>
+      <p class="text-slate-900 dark:text-slate-600 dark:text-white/70 mt-1">Category: <span class="text-slate-900 dark:text-slate-900 dark:text-white/90">{cat}</span></p>
     </div>
     <div class="text-right">
-      <div class="text-xs text-white/60" data-i18n="short_value">Do it in 3 seconds</div>
+      <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60" data-i18n="short_value">Do it in 3 seconds</div>
     </div>
   </div>
 
   <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div class="text-sm text-white/70 mb-2">Input (paste your details)</div>
-      <textarea id="inp" class="w-full h-36 rounded-xl bg-black/40 border border-white/10 p-3 text-sm text-white/90"
-        placeholder="Example: dates, constraints, what you tried, what you need…"></textarea>
+    <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-black/20 p-4">
+      <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2"><span data-i18n="tool_input">Input</span> <span class="text-slate-500 dark:text-white/60" data-i18n="tool_input_hint">(paste your details)</span></div>
+      <textarea id="inp" class="w-full h-36 rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 p-3 text-sm text-slate-900 dark:text-slate-900 dark:text-white/90"
+        data-i18n-placeholder="tool_placeholder" placeholder=""></textarea>
       <div class="mt-3 flex items-center gap-2">
-        <button id="genBtn" class="rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">Generate</button>
-        <button id="clearBtn" class="rounded-xl bg-white/10 border border-white/10 px-4 py-2 text-sm">Clear</button>
+        <button id="genBtn" class="rounded-xl bg-sky-600 text-white px-4 py-2 text-sm font-semibold hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600" data-i18n="tool_generate">Generate</button>
+        <button id="clearBtn" class="rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-4 py-2 text-sm" data-i18n="tool_clear">Clear</button>
       </div>
-      <p class="text-xs text-white/60 mt-2">Tip: include constraints (time, budget, device, deadline). Output improves.</p>
+      <p class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60 mt-2">Tip: include constraints (time, budget, device, deadline). Output improves.</p>
     </div>
 
-    <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+    <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-black/20 p-4">
       <div class="flex items-center justify-between gap-2">
-        <div class="text-sm text-white/70">Output (copy/paste)</div>
+        <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70">Output (copy/paste)</div>
         <div class="flex items-center gap-2">
-          <button id="copyOutBtn" class="rounded-xl bg-white/10 border border-white/10 px-3 py-1.5 text-xs" data-i18n="copy">Copy</button>
+          <button id="copyOutBtn" class="rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-3 py-1.5 text-xs" data-i18n="copy">Copy</button>
         </div>
       </div>
-      <textarea id="out" class="mt-2 w-full h-44 rounded-xl bg-black/40 border border-white/10 p-3 text-sm text-white/90"
+      <textarea id="out" class="mt-2 w-full h-44 rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 p-3 text-sm text-slate-900 dark:text-slate-900 dark:text-white/90"
         placeholder="Generated plan/checklist will appear here."></textarea>
     </div>
   </div>
@@ -2261,7 +2329,7 @@ __tool_card_html = f"""
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <div class="text-sm text-slate-500 dark:text-slate-300" data-i18n="tool">Tool</div>
-      <div class="text-base font-semibold text-slate-900 dark:text-white">{__safe_title}</div>
+      <div class="text-base font-semibold text-slate-900 dark:text-slate-900 dark:text-white">{__safe_title}</div>
     </div>
     <button id="copyShortBtn"
       class="inline-flex items-center gap-2 rounded-xl border border-slate-200/70 dark:border-slate-700/70 px-3 py-2 text-sm
@@ -2274,7 +2342,7 @@ __tool_card_html = f"""
     <div class="text-xs text-slate-500 dark:text-slate-300">Short URL</div>
     <input id="shortUrlInput"
       class="w-full rounded-xl border border-slate-200/70 dark:border-slate-700/70 bg-white/60 dark:bg-slate-900/40 px-3 py-2 text-sm
-             text-slate-900 dark:text-white"
+             text-slate-900 dark:text-slate-900 dark:text-white"
       value="{html.escape(__short_url or '', quote=True)}"
       readonly>
     <div class="text-xs text-slate-500 dark:text-slate-300">
@@ -2772,9 +2840,9 @@ def build_page_html(
 
     faq_html = "\n".join([
         f"""
-        <details class="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <details class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
           <summary class="cursor-pointer font-medium">{html_escape(q)}</summary>
-          <div class="mt-2 text-white/80 leading-relaxed">{html_escape(a)}</div>
+          <div class="mt-2 text-slate-900 dark:text-slate-700 dark:text-white/80 leading-relaxed">{html_escape(a)}</div>
         </details>
         """.strip()
         for q, a in faq
@@ -2791,40 +2859,40 @@ def build_page_html(
         if not block:
             continue
         aff_blocks.append(f"""
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-white/70 mb-2">{title}</div>
+        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
+          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2">{title}</div>
           <div class="prose prose-invert max-w-none">{block}</div>
         </div>
         """.strip())
     if not aff_blocks:
         aff_blocks = ["""
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-white/70 mb-2">Recommended</div>
-          <div class="text-white/70">No affiliate available for this category.</div>
+        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
+          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2">Recommended</div>
+          <div class="text-slate-900 dark:text-slate-600 dark:text-white/70">No affiliate available for this category.</div>
         </div>
         """.strip()]
     aff_html = "\n".join(aff_blocks)
 
     related_html = "\n".join([
         f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
-        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<span class='text-slate-900 dark:text-slate-500 dark:text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in related_tools
     ])
 
     popular_html = "\n".join([
         f"<li class='py-1'><a class='underline' href='{html_escape(t.get('url','#'))}'>{html_escape(t.get('title','Tool'))}</a> "
-        f"<span class='text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
+        f"<span class='text-slate-900 dark:text-slate-500 dark:text-white/50 text-xs'>({html_escape(t.get('category',''))})</span></li>"
         for t in popular_sites
     ])
 
     canonical = tool_url if tool_url.startswith("http") else (SITE_DOMAIN.rstrip("/") + "/" + theme.slug + "/")
 
-    article_html = "<p class='leading-relaxed whitespace-pre-wrap text-white/85'>" + html_escape(article_ja) + "</p>"
+    article_html = "<p class='leading-relaxed whitespace-pre-wrap text-slate-900 dark:text-white/85'>" + html_escape(article_ja) + "</p>"
     try:
         tool_ui = build_tool_ui(theme)
     except Exception as e:
         logging.exception("build_tool_ui failed: %s", e)
-        tool_ui = "<div class='rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80'>Tool UI rendering failed. Please refresh later.</div>"
+        tool_ui = "<div class='rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4 text-sm text-slate-900 dark:text-slate-700 dark:text-white/80'>Tool UI rendering failed. Please refresh later.</div>"
 
 
     # internal linking: ALWAYS provide a path back to /hub/
@@ -2857,12 +2925,12 @@ function copyTextFrom(id, btnId){
         bg_css = f"""
   <div class="pointer-events-none fixed inset-0 opacity-40">
     <div class="absolute inset-0 bg-cover bg-center" style="background-image:url('{html_escape(hero_bg_url)}')"></div>
-    <div class="absolute inset-0 bg-zinc-950/70"></div>
+    <div class="absolute inset-0 bg-slate-50 dark:bg-zinc-950/70"></div>
   </div>
         """.strip()
     else:
         bg_css = """
-  <div class="pointer-events-none fixed inset-0 opacity-70">
+  <div class="pointer-events-none fixed inset-0 opacity-80 dark:opacity-70">
     <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-500/35 to-cyan-400/20 blur-3xl"></div>
     <div class="absolute top-40 -right-24 h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500/25 to-lime-400/10 blur-3xl"></div>
     <div class="absolute bottom-0 left-1/4 h-96 w-96 rounded-full bg-gradient-to-br from-fuchsia-500/20 to-rose-400/10 blur-3xl"></div>
@@ -2882,6 +2950,7 @@ function copyTextFrom(id, btnId){
   <meta property="og:type" content="website">
   <meta property="og:url" content="{html_escape(canonical)}">
   <meta name="twitter:card" content="summary_large_image">
+  <script>tailwind = window.tailwind || {{}}; tailwind.config = {{ darkMode: "class" }};</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {{ color-scheme: dark; }}
@@ -2892,24 +2961,25 @@ function copyTextFrom(id, btnId){
     .glass {{ backdrop-filter: blur(10px); }}
   </style>
 </head>
-<body class="min-h-screen bg-zinc-950 text-white">
+<body class="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-white">
   {bg_css}
 
   <header class="relative z-10 mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
       <a href="{html_escape(hub_url)}" class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
+        <div class="h-10 w-10 rounded-2xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 flex items-center justify-center font-bold">🍊</div>
         <div>
           <div class="font-semibold leading-tight">{html_escape(SITE_BRAND)}</div>
-          <div class="text-xs text-white/60">Hub → categories / popular / new</div>
+          <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Hub → categories / popular / new</div>
         </div>
       </a>
 
       <nav class="flex items-center gap-3 text-sm">
-        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
-        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
-        <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
-        <select id="langSel" class="ml-2 rounded-xl bg-white/10 border border-white/10 px-2 py-1 text-xs">
+        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
+        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
+        <a class="text-slate-900 dark:text-slate-700 dark:text-white/80 hover:text-slate-900 dark:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
+        <button id="themeBtn" type="button" class="ml-2 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs" aria-label="Theme">🌓</button>
+        <select id="langSel" class="ml-2 rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs">
           <option value="en">EN</option>
           <option value="ja">JA</option>
           <option value="ko">KO</option>
@@ -2920,28 +2990,28 @@ function copyTextFrom(id, btnId){
   </header>
 
   <main class="relative z-10 mx-auto max-w-6xl px-4 pb-16">
-    <section class="rounded-3xl border border-white/10 bg-white/5 glass p-6 md:p-8">
+    <section class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 glass p-6 md:p-8">
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h1 class="text-2xl md:text-3xl font-semibold leading-tight">{html_escape(theme.search_title)}</h1>
-          <p class="mt-2 text-white/70">
-            Category: <span class="text-white/90">{html_escape(theme.category)}</span> ·
-            Updated: <span class="text-white/90">{html_escape(now_iso())}</span>
+          <p class="mt-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
+            Category: <span class="text-slate-900 dark:text-slate-900 dark:text-white/90">{html_escape(theme.category)}</span> ·
+            Updated: <span class="text-slate-900 dark:text-slate-900 dark:text-white/90">{html_escape(now_iso())}</span>
           </p>
         </div>
-        <div class="rounded-2xl border border-white/10 bg-black/20 p-4 w-full md:w-[360px]">
-          <div class="text-sm text-white/70 mb-2" data-i18n="share">Share</div>
+        <div class="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-black/20 p-4 w-full md:w-[360px]">
+          <div class="text-sm text-slate-900 dark:text-slate-600 dark:text-white/70 mb-2" data-i18n="share">Share</div>
           <div class="space-y-2">
-            <div class="text-xs text-white/60">Short URL (for posts)</div>
+            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Short URL (for posts)</div>
             <div class="flex items-center gap-2">
-              <input id="shortUrl" value="{html_escape(short_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
-              <button id="copyBtnShort" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('shortUrl','copyBtnShort')">Copy</button>
+              <input id="shortUrl" value="{html_escape(short_url)}" class="w-full rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnShort" class="rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('shortUrl','copyBtnShort')">Copy</button>
             </div>
 
-            <div class="text-xs text-white/60">Full URL</div>
+            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Full URL</div>
             <div class="flex items-center gap-2">
-              <input id="fullUrl" value="{html_escape(tool_url)}" class="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs" readonly>
-              <button id="copyBtnFull" class="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('fullUrl','copyBtnFull')">Copy</button>
+              <input id="fullUrl" value="{html_escape(tool_url)}" class="w-full rounded-xl bg-white/80 dark:bg-black/40 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" readonly>
+              <button id="copyBtnFull" class="rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-xs" data-i18n="copy" onclick="copyTextFrom('fullUrl','copyBtnFull')">Copy</button>
             </div>
           </div>
         </div>
@@ -2987,73 +3057,73 @@ function copyTextFrom(inputId, btnId) {{
 
     <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="problems">Problems this tool can help with</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {problems_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="quick_answer">Quick answer</h2>
-          <pre class="mt-3 text-white/85 whitespace-pre-wrap leading-relaxed">{html_escape(quick_answer)}</pre>
+          <pre class="mt-3 text-slate-900 dark:text-white/85 whitespace-pre-wrap leading-relaxed">{html_escape(quick_answer)}</pre>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="causes">Common causes</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {causes_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="steps">Step-by-step checklist</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {steps_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="pitfalls">Common pitfalls & how to avoid them</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {pitfalls_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="next">If it still doesn’t work</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {next_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold">Long guide (JP, 2500+ chars)</h2>
           <div class="mt-3">{article_html}</div>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="faq">FAQ</h2>
           <div class="mt-3 space-y-3">{faq_html}</div>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="references">Reference links</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {ref_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h2 class="text-xl font-semibold" data-i18n="supplement">Supplementary resources</h2>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {sup_html}
           </ul>
         </div>
       </div>
 
       <aside class="space-y-6">
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="aff_title">Recommended</h3>
           <div class="mt-3 space-y-3">
             <!-- AFF_SLOT (top2 injected) -->
@@ -3061,16 +3131,16 @@ function copyTextFrom(inputId, btnId) {{
           </div>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="related">Related tools</h3>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {related_html}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6">
           <h3 class="text-lg font-semibold" data-i18n="popular">Popular tools</h3>
-          <ul class="mt-3 text-white/85 list-disc list-inside">
+          <ul class="mt-3 text-slate-900 dark:text-white/85 list-disc list-inside">
             {popular_html}
           </ul>
         </div>
@@ -3078,22 +3148,22 @@ function copyTextFrom(inputId, btnId) {{
     </section>
   </main>
 
-  <footer class="relative z-10 mt-10 bg-zinc-900/60 border-t border-white/10">
+  <footer class="relative z-10 mt-10 bg-zinc-900/60 border-t border-slate-200/70 dark:border-white/10">
     <div class="mx-auto max-w-6xl px-4 py-10 grid grid-cols-1 md:grid-cols-4 gap-8">
       <div class="md:col-span-2">
         <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-bold">🍊</div>
+          <div class="h-10 w-10 rounded-2xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 flex items-center justify-center font-bold">🍊</div>
           <div>
             <div class="font-semibold">{html_escape(SITE_BRAND)}</div>
-            <div class="text-xs text-white/60" data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</div>
+            <div class="text-xs text-slate-900 dark:text-slate-500 dark:text-white/60" data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</div>
           </div>
         </div>
-        <div class="mt-3 text-xs text-white/60">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
+        <div class="mt-3 text-xs text-slate-900 dark:text-slate-500 dark:text-white/60">Contact: {html_escape(SITE_CONTACT_EMAIL)}</div>
       </div>
 
       <div class="text-sm">
         <div class="font-semibold mb-2">Legal</div>
-        <ul class="space-y-2 text-white/70">
+        <ul class="space-y-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/privacy.html')}" data-i18n="privacy">Privacy</a></li>
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/terms.html')}" data-i18n="terms">Terms</a></li>
           <li><a class="underline" href="{html_escape(SITE_DOMAIN.rstrip('/') + '/policies/contact.html')}" data-i18n="contact">Contact</a></li>
@@ -3102,7 +3172,7 @@ function copyTextFrom(inputId, btnId) {{
 
       <div class="text-sm">
         <div class="font-semibold mb-2">Hub</div>
-        <ul class="space-y-2 text-white/70">
+        <ul class="space-y-2 text-slate-900 dark:text-slate-600 dark:text-white/70">
           <li><a class="underline" href="{html_escape(hub_url)}">/hub/</a></li>
           <li><a class="underline" href="{html_escape(hub_url)}#tools">All tools</a></li>
         </ul>
@@ -3175,88 +3245,210 @@ def compute_popular_sites(all_sites: List[Dict[str, Any]], n: int = 6) -> List[D
 # =============================================================================
 # Policies (legal fortress) - /policies/ only (allowed)
 # =============================================================================
+
 def ensure_policies() -> List[str]:
     """
     Create/overwrite policies pages (privacy/terms/contact) under /policies/.
-    Returns list of relative URLs for sitemap.
+    Pages are styled consistently with tool pages (light + dark, i18n switch).
+    Returns absolute URLs for sitemap.
     """
     os.makedirs(POLICIES_DIR, exist_ok=True)
     privacy_path = os.path.join(POLICIES_DIR, "privacy.html")
     terms_path = os.path.join(POLICIES_DIR, "terms.html")
     contact_path = os.path.join(POLICIES_DIR, "contact.html")
 
-    base_css = """
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-  :root { color-scheme: dark; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", Arial; }
-</style>
-""".strip()
+    hub_url = SITE_DOMAIN.rstrip("/") + "/hub/"
+    i18n_json = json.dumps(I18N, ensure_ascii=False)
+    langs_json = json.dumps(sorted(list(I18N.keys())), ensure_ascii=False)
 
-    privacy = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Privacy Policy | {html_escape(SITE_BRAND)}</title>{base_css}</head>
-<body class="min-h-screen bg-zinc-950 text-white">
-  <main class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="text-2xl font-semibold">Privacy Policy</h1>
-    <p class="text-white/80 mt-4 leading-relaxed">
-      This site may use Google AdSense and similar advertising services. These services may use cookies and/or
-      device identifiers to show ads and measure performance.
-    </p>
-    <h2 class="text-xl font-semibold mt-8">Cookies</h2>
-    <p class="text-white/80 mt-2 leading-relaxed">
-      Cookies may be used to store preferences and improve user experience. You can manage cookies via your browser settings.
-    </p>
-    <h2 class="text-xl font-semibold mt-8">Analytics</h2>
-    <p class="text-white/80 mt-2 leading-relaxed">
-      We may collect aggregated usage data to improve the site. We do not intentionally collect sensitive personal information.
-    </p>
-    <h2 class="text-xl font-semibold mt-8">Contact</h2>
-    <p class="text-white/80 mt-2 leading-relaxed">
-      If you have questions about this policy, contact: {html_escape(SITE_CONTACT_EMAIL)}
-    </p>
-  </main>
-</body></html>
-"""
+    # Full text per language (keep it static & AdSense-friendly)
+    POLICY_TEXT = {
+        "privacy": {
+            "en": [
+                "This site uses cookies and similar technologies to improve usability and measure performance.",
+                "We may use Google AdSense to display ads. Third-party vendors, including Google, may use cookies to serve ads based on a user’s prior visits.",
+                "You can control cookies in your browser settings. Disabling cookies may affect site features.",
+            ],
+            "ja": [
+                "当サイトは利便性向上・計測のため、Cookie等の技術を使用する場合があります。",
+                "当サイトでは Google AdSense を利用して広告を配信する場合があります。第三者配信事業者（Google等）が Cookie を使用し、過去のアクセス情報に基づいて広告を表示することがあります。",
+                "Cookie はブラウザ設定で無効化できますが、一部機能が利用できなくなる場合があります。",
+            ],
+            "ko": [
+                "이 사이트는 사용성 개선 및 성능 측정을 위해 쿠키 등 유사 기술을 사용할 수 있습니다.",
+                "이 사이트는 Google AdSense를 사용하여 광고를 게재할 수 있습니다. Google 등 제3자 공급업체는 사용자의 이전 방문 정보를 기반으로 쿠키를 사용할 수 있습니다.",
+                "쿠키는 브라우저 설정에서 관리/비활성화할 수 있으나 일부 기능이 제한될 수 있습니다.",
+            ],
+            "zh": [
+                "本网站可能使用 Cookie 等技术以提升可用性并进行性能统计。",
+                "本网站可能使用 Google AdSense 投放广告。包括 Google 在内的第三方供应商可能会使用 Cookie，根据用户以往访问记录投放广告。",
+                "您可以在浏览器设置中管理/禁用 Cookie，但可能会影响部分功能。",
+            ],
+        },
+        "terms": {
+            "en": [
+                "Use of this site is at your own risk. The information and tools are provided “as is” without warranties.",
+                "We are not liable for any loss or damage arising from use of calculations, checklists, or recommendations.",
+                "You are responsible for verifying results and complying with applicable laws and service terms.",
+            ],
+            "ja": [
+                "当サイトの情報・ツールは現状有姿で提供されます。利用は自己責任でお願いします。",
+                "計算結果・チェックリスト・提案内容を利用したことにより生じた損害について、当サイトは責任を負いません。",
+                "最終判断はご自身で行い、各種規約・法律を遵守してください。",
+            ],
+            "ko": [
+                "본 사이트의 정보/도구는 “있는 그대로” 제공되며 이용은 사용자 책임입니다.",
+                "계산 결과, 체크리스트, 권고사항 사용으로 발생한 손해에 대해 당사는 책임을 지지 않습니다.",
+                "결과를 검증하고 관련 법/서비스 약관을 준수할 책임은 사용자에게 있습니다.",
+            ],
+            "zh": [
+                "本网站的信息与工具按“现状”提供，使用风险由您自行承担。",
+                "因使用计算结果、清单或建议造成的任何损失，本网站不承担责任。",
+                "请自行核对结果并遵守相关法律及服务条款。",
+            ],
+        },
+        "contact": {
+            "en": [
+                f"Operator: {SITE_BRAND}",
+                f"Contact: {SITE_CONTACT_EMAIL}",
+                "For inquiries about ads, content, or corrections, please email us.",
+            ],
+            "ja": [
+                f"運営者: {SITE_BRAND}",
+                f"連絡先: {SITE_CONTACT_EMAIL}",
+                "広告・内容・訂正のご連絡はメールでお願いします。",
+            ],
+            "ko": [
+                f"운영자: {SITE_BRAND}",
+                f"연락처: {SITE_CONTACT_EMAIL}",
+                "광고/콘텐츠/정정 문의는 이메일로 연락해 주세요.",
+            ],
+            "zh": [
+                f"运营者: {SITE_BRAND}",
+                f"联系方式: {SITE_CONTACT_EMAIL}",
+                "关于广告、内容或更正等咨询请发送邮件。",
+            ],
+        },
+    }
 
-    terms = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Terms & Disclaimer | {html_escape(SITE_BRAND)}</title>{base_css}</head>
-<body class="min-h-screen bg-zinc-950 text-white">
-  <main class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="text-2xl font-semibold">Terms & Disclaimer</h1>
-    <p class="text-white/80 mt-4 leading-relaxed">
-      This site provides informational tools and guides. Results may vary based on inputs and environment.
-      You are responsible for verifying outputs before using them in important decisions.
-    </p>
-    <h2 class="text-xl font-semibold mt-8">No Warranty</h2>
-    <p class="text-white/80 mt-2 leading-relaxed">
-      The site is provided "as is" without warranties of any kind. We do not guarantee completeness, accuracy, or availability.
-    </p>
-    <h2 class="text-xl font-semibold mt-8">Limitation of Liability</h2>
-    <p class="text-white/80 mt-2 leading-relaxed">
-      We are not liable for any damages resulting from the use of this site or its outputs, to the fullest extent permitted by law.
-    </p>
-  </main>
-</body></html>
-"""
+    def build_policy_html(page_key: str) -> str:
+        title = {"privacy": "privacy", "terms": "terms", "contact": "contact"}[page_key]
+        # page titles: use data-i18n
+        body_json = json.dumps(POLICY_TEXT[page_key], ensure_ascii=False)
 
-    contact = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Contact & Operator | {html_escape(SITE_BRAND)}</title>{base_css}</head>
-<body class="min-h-screen bg-zinc-950 text-white">
+        return f"""<!doctype html>
+<html lang="{html_escape(DEFAULT_LANG)}" class="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html_escape(SITE_BRAND)} | {title}</title>
+  <script>tailwind = window.tailwind || {{}}; tailwind.config = {{ darkMode: "class" }};</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {{ color-scheme: light; }}
+    html.dark {{ color-scheme: dark; }}
+    body {{
+      font-family: ui-sans-serif, system-ui, -apple-system, "Inter", Segoe UI, Roboto,
+        "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }}
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-white">
+  <header class="border-b border-slate-200/70 dark:border-white/10">
+    <div class="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
+      <a href="{html_escape(hub_url)}" class="flex items-center gap-2">
+        <span class="text-lg">{html_escape(SITE_LOGO)}</span>
+        <span class="font-semibold">{html_escape(SITE_BRAND)}</span>
+      </a>
+      <nav class="flex items-center gap-4 text-sm">
+        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}" data-i18n="home">Home</a>
+        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}#about" data-i18n="about">About Us</a>
+        <a class="text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
+        <button id="themeBtn" type="button" class="ml-2 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/10 dark:hover:bg-white/20 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs" aria-label="Theme">🌓</button>
+        <select id="langSel" class="ml-2 rounded-xl bg-slate-100/80 dark:bg-white/10 border border-slate-200/70 dark:border-white/10 px-2 py-1 text-xs">
+          <option value="en">EN</option>
+          <option value="ja">JA</option>
+          <option value="ko">KO</option>
+          <option value="zh">ZH</option>
+        </select>
+      </nav>
+    </div>
+  </header>
+
   <main class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="text-2xl font-semibold">Contact & Operator</h1>
-    <p class="text-white/80 mt-4 leading-relaxed">
-      Operator: {html_escape(SITE_BRAND)} (mikanntool.com owner)<br>
-      Contact: {html_escape(SITE_CONTACT_EMAIL)}
-    </p>
-    <p class="text-white/70 mt-4 leading-relaxed">
-      If you found an issue or want to request improvements, please email us with the page URL and a short description.
-    </p>
+    <h1 class="text-2xl font-semibold" data-i18n="{title}">{title.capitalize()}</h1>
+    <div id="policyBody" class="mt-6 space-y-3 text-slate-700 dark:text-white/70 leading-relaxed"></div>
   </main>
-</body></html>
-"""
+
+  <footer class="border-t border-slate-200/70 dark:border-white/10">
+    <div class="mx-auto max-w-5xl px-4 py-8 text-xs text-slate-500 dark:text-white/60">
+      <div>{html_escape(SITE_BRAND)} · <span data-i18n="footer_note">Practical, fast, and respectful guides—built to reduce wasted trial-and-error.</span></div>
+    </div>
+  </footer>
+
+  <script>
+  const I18N = {i18n_json};
+  const LANGS = {langs_json};
+  const BODY = {body_json};
+
+  function t(lang, key) {{
+    return (I18N[lang] && I18N[lang][key]) || (I18N["{DEFAULT_LANG}"][key]) || key;
+  }}
+
+  function setLang(lang) {{
+    if (!LANGS.includes(lang)) lang = "{DEFAULT_LANG}";
+    document.documentElement.setAttribute("lang", lang);
+    localStorage.setItem("lang", lang);
+
+    document.querySelectorAll("[data-i18n]").forEach(el => {{
+      const key = el.getAttribute("data-i18n");
+      el.textContent = t(lang, key);
+    }});
+
+    const container = document.getElementById("policyBody");
+    if (container) {{
+      const ps = (BODY[lang] || BODY["{DEFAULT_LANG}"] || []);
+      container.innerHTML = ps.map(p => `<p>${{p}}</p>`).join("");
+    }}
+  }}
+
+  function setTheme(mode) {{
+    if (mode === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+    localStorage.setItem("theme", mode);
+  }}
+
+  function init() {{
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setTheme(savedTheme || (prefersDark ? "dark" : "light"));
+
+    const savedLang = localStorage.getItem("lang") || "{DEFAULT_LANG}";
+    setLang(savedLang);
+
+    const sel = document.getElementById("langSel");
+    if (sel) {{
+      sel.value = savedLang;
+      sel.addEventListener("change", (e) => setLang(e.target.value));
+    }}
+
+    const btn = document.getElementById("themeBtn");
+    if (btn) {{
+      btn.addEventListener("click", () => {{
+        const isDark = document.documentElement.classList.contains("dark");
+        setTheme(isDark ? "light" : "dark");
+      }});
+    }}
+  }}
+
+  document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>"""
+
+    privacy = build_policy_html("privacy")
+    terms = build_policy_html("terms")
+    contact = build_policy_html("contact")
 
     write_text(privacy_path, privacy)
     write_text(terms_path, terms)
