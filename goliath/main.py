@@ -181,7 +181,8 @@ ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for l
 # Branding / canonical
 SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
 
-SITE_DOMAIN = env_first("SITE_DOMAIN", default=PUBLIC_BASE_URL)
+SITE_DOMAIN = "https://mikanntool.com"
+
 HUB_BASE_URL = env_first("HUB_BASE_URL", default=PUBLIC_BASE_URL.rstrip("/") + "/hub/")
 
 
