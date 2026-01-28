@@ -1033,7 +1033,8 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 # =============================================================================
 
 
-def load_last_seen() -> Dict[str, Any]:)
+def load_last_seen():
+
 
 def collect_x_mentions(max_items: int = 1) -> List[Post]:
     """
