@@ -15,7 +15,8 @@ Goliath Auto Tool System - main.py (single-file)
     - Reply (EN, empathy + “made a one-page guide” + tool URL last line)
   Minimum 100 leads per run (stub fill if needed)
 - 22 categories (fixed) -> affiliates.json top2 -> inject to AFF_SLOT
-- SaaS-like design, Tailwind, dark mode, i18n (EN/JA/KO/ZH), 2500+ chars JP article + FAQ + references + legal pages
+- SaaS-like design, Tailwind, dark mode, i18n (EN/JP/ES/PT-BR/AR/FR/DE/TR/IT), 2500+ chars JP article + FAQ + references + legal pages
+
 """
 
 from __future__ import annotations
