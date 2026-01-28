@@ -2655,6 +2655,17 @@ function copyTextFrom(id, btnId){
         "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
     }}
     .glass {{ backdrop-filter: blur(10px); }}
+    .aff-slot{
+  width:100%;
+  max-width:720px;
+  margin:24px auto;
+  padding:16px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  overflow:hidden;
+}
+
   </style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-white">
