@@ -183,7 +183,7 @@ SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
 
 SITE_DOMAIN = "https://mikanntool.com"
 
-HUB_BASE_URL = env_first("HUB_BASE_URL", default=PUBLIC_BASE_URL.rstrip("/") + "/hub/")
+HUB_BASE_URL = "https://mikanntool.com/hub/"
 
 
 SITE_CONTACT_EMAIL = os.environ.get("SITE_CONTACT_EMAIL", "contact@mikanntool.com")
