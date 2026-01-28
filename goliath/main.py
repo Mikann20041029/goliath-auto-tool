@@ -2722,6 +2722,11 @@ function copyTextFrom(id, btnId){
     <section class="mt-6">
   {tool_ui}
 </section>
+<!-- AFF_SLOT_MID: BEGIN -->
+<section id="aff-slot-mid" data-aff-slot="mid" aria-label="Sponsored" class="aff-slot">
+  <!-- AFF_SLOT_MID -->
+</section>
+<!-- AFF_SLOT_MID: END -->
 
 <script>
 function copyTextFrom(inputId, btnId) {{
