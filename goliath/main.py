@@ -1032,6 +1032,28 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 
 
 def load_last_seen() -> Dict[str, Any]:
+    def load_author_seen() -> dict:
+    data = read_json(AUTHOR_SEEN_PATH, default={})
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+def save_author_seen(data: dict) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    write_json(AUTHOR_SEEN_PATH, data)
+
+def is_author_recent(author: str, now: float, days: int) -> bool:
+    seen = load_author_seen()
+    ts = seen.get(author)
+    if not ts:
+        return False
+    return (now - ts) < days * 86400
+
+def mark_author(author: str, now: float) -> None:
+    seen = load_author_seen()
+    seen[author] = now
+    save_author_seen(seen)
+
     d = read_json(LAST_SEEN_PATH, default={})
     if not isinstance(d, dict):
         d = {}
