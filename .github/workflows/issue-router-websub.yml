@@ -1,10 +1,11 @@
-name: Issue Router - WebSub Publish
+name: Issue Router - WebSub (feed update + publish)
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 permissions:
+  contents: write
   issues: write
 
 concurrency:
@@ -17,6 +18,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Publish WebSub
+      - name: WebSub: update feed + publish
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -36,11 +40,20 @@ jobs:
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
 
-          # 必須ではない（未設定ならデフォルトを使う）
-          WEBSUB_HUB_URL: ${{ vars.WEBSUB_HUB_URL }}
-          WEBSUB_TOPIC_URL: ${{ vars.WEBSUB_TOPIC_URL }}
+          # あなたの公開ベースURL（例: https://mikanntool.com）
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+
+          # 省略OK。未設定なら pubsubhubbub.appspot.com を使う
+          WEBSUB_HUB_URL: ${{ vars.WEBSUB_HUB_URL }}
+
+          # feed.xmlの配置先（デフォルトは repo 直下の feed.xml）
+          FEED_PATH: ${{ vars.FEED_PATH }}
 
         run: |
           set -euo pipefail
-          python websub_publish.py --title "$ISSUE_TITLE" --issue-body "$ISSUE_BODY" --issue-number "$ISSUE_NUMBER" --repo "$REPO"
+          python websub_layer1.py \
+            --title "$ISSUE_TITLE" \
+            --issue-body "$ISSUE_BODY" \
+            --issue-number "$ISSUE_NUMBER" \
+            --repo "$REPO" \
+            --do-git
