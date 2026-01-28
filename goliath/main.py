@@ -3433,7 +3433,8 @@ RUN_TOOL_URL = None
 def build_issue_items(posts: List[Post], post_to_tool_url: Dict[str, str]) -> List[Dict[str, str]]:
     items: List[Dict[str, str]] = []
     for p in posts:
-        tool_url = post_to_tool_url.get(p.id, "")
+        tool_url = RUN_TOOL_URL
+
         if not tool_url:
             continue
         reply = openai_generate_reply_stub(p, tool_url)
