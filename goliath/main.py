@@ -4003,6 +4003,21 @@ def main() -> int:
         mapped_posts.extend(stubs)
 
     mapped_posts = mapped_posts[: max(LEADS_TOTAL, 100)]
+    # --- persist author_seen (avoid same author for next 7 days; except X) ---
+    try:
+        last_seen = load_last_seen()
+        author_days = getenv_int("AUTHOR_SEEN_DAYS", 7)
+        now_ts = int(time.time())
+        cutoff_ts = now_ts - author_days * 86400
+        prune_author_seen(last_seen, cutoff_ts)
+
+        # mapped_post_ids は「本物の投稿だけ」のID集合（stubは入らない）なので安全
+        used_real_posts = [p for p in mapped_posts if p.id in mapped_post_ids]
+
+        mark_author_seen(last_seen, used_real_posts, now_ts)
+        save_last_seen(last_seen)
+    except Exception as ex:
+        eprint(f"[warn] author_seen update failed: {ex}")
 
     issue_items = build_issue_items(mapped_posts, post_to_tool_url)
 
