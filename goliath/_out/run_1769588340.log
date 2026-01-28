@@ -1,0 +1,46 @@
+2026-01-28 08:19:00,543 | INFO | RUN_ID=1769588340
+2026-01-28 08:19:00,543 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-28 08:19:00,543 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-28 08:19:00,543 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-28 08:19:00,543 | INFO | LEADS_TOTAL=100
+2026-01-28 08:19:00,543 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-28 08:19:00,543 | INFO | HN_MAX=70
+2026-01-28 08:19:00,704 | INFO | X: collected 1 (picked 1)
+2026-01-28 08:19:00,705 | INFO | Bluesky: collecting up to 50
+2026-01-28 08:19:01,384 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 08:19:01,932 | INFO | Bluesky: collected 49
+2026-01-28 08:19:01,932 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-28 08:19:05,250 | INFO | Mastodon: collected 100
+2026-01-28 08:19:05,251 | INFO | Reddit: public mode collecting up to 20
+2026-01-28 08:19:05,783 | INFO | Reddit: collected 0
+2026-01-28 08:19:06,082 | INFO | HN: collected 0
+2026-01-28 08:19:06,082 | WARNING | Top-up retry: bs=49/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 08:19:06,083 | INFO | Bluesky: collecting up to 50
+2026-01-28 08:19:06,334 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 08:19:06,847 | INFO | Bluesky: collected 49
+2026-01-28 08:19:06,847 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 08:19:07,349 | INFO | Reddit: collected 0
+2026-01-28 08:19:07,547 | INFO | HN: collected 0
+2026-01-28 08:19:07,547 | WARNING | Top-up retry: bs=49/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 08:19:07,548 | INFO | Bluesky: collecting up to 50
+2026-01-28 08:19:07,792 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 08:19:08,226 | INFO | Bluesky: collected 49
+2026-01-28 08:19:08,226 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 08:19:08,718 | INFO | Reddit: collected 0
+2026-01-28 08:19:08,916 | INFO | HN: collected 0
+2026-01-28 08:19:08,918 | INFO | Collected total: 150 (bs=49 ms=100 rd=0 x=1 hn=0)
+2026-01-28 08:19:08,918 | INFO | Clustering 150 posts (threshold=0.22)
+2026-01-28 08:19:08,942 | INFO | Clusters: 140 (top sizes=[7, 2, 2, 2, 2, 1, 1, 1])
+2026-01-28 08:19:08,943 | INFO | Chosen themes=5
+2026-01-28 08:19:09,508 | INFO | Unsplash hero bg enabled.
+2026-01-28 08:19:09,510 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-fix-how-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/4N3WjzQ/
+2026-01-28 08:19:09,510 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/2024-present-affected-departure-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/cj50RbO/
+2026-01-28 08:19:09,511 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/flex-grown-haha-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/esJ0UgE/
+2026-01-28 08:19:09,512 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/amp-chemie-800-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/50yaxK8/
+2026-01-28 08:19:09,513 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/dns-ssl-fix-checklist-5/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/4yjkNGw/
+2026-01-28 08:19:09,518 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769588340.json
+2026-01-28 08:19:09,519 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-28 08:19:09,519 | INFO | Self-check: counts={'Bluesky': 49, 'Mastodon': 100, 'Reddit': 0, 'X': 1, 'HN': 0, 'Total': 150}
+2026-01-28 08:19:09,519 | INFO | Self-check: reply_candidates=100
+2026-01-28 08:19:09,519 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-28 08:19:09,519 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
