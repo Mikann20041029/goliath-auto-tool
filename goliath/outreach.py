@@ -429,7 +429,7 @@ def main():
 if __name__ == "__main__":
     main()
 # === Social-only outreach collection (no HN), with "days" filter ===
-from __future__ import annotations
+
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
