@@ -2974,6 +2974,14 @@ function copyTextFrom(id, btnId){
 </head>
 <body class="min-h-screen bg-zinc-950 text-white">
   {bg_css}
+  <!-- ===== Ezoic Placement (example 101) ===== -->
+<div id="ezoic-pub-ad-placeholder-101"></div>
+<script>
+  ezstandalone.cmd.push(function () {
+    ezstandalone.showAds(101);
+  });
+</script>
+
 
   <header class="relative z-10 mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
