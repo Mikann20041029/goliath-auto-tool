@@ -1,0 +1,50 @@
+name: Issue Router - IndexNow
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue-router-indexnow
+  cancel-in-progress: false
+
+jobs:
+  indexnow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: IndexNow submit (indexnow_layer1.py)
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+
+          # 任意：固定したいなら
+          INDEXNOW_ENDPOINT: https://api.indexnow.org/indexnow
+        run: |
+          set -euo pipefail
+          python indexnow_layer1.py --do-comment
