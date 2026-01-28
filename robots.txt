@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
-Sitemap: https://mikann20041029.github.io/goliath-auto-tool/sitemap.xml
+Sitemap: https://mikanntool.com/sitemap.xml
+
