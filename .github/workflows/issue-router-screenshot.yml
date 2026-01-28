@@ -1,0 +1,52 @@
+name: Issue Router - Screenshot (Playwright)
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue-router-screenshot
+  cancel-in-progress: false
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Screenshot (Layer1)
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+          # 任意：未設定なら script 側でデフォルト使用
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          SHOTS_MAX: ${{ vars.SHOTS_MAX }}
+          SHOTS_QUALITY: ${{ vars.SHOTS_QUALITY }}
+
+        run: |
+          set -euo pipefail
+          python screenshot_layer1.py \
+            --repo "$REPO" \
+            --issue-number "$ISSUE_NUMBER" \
+            --do-git
