@@ -52,7 +52,8 @@ def env_first(*names: str, default: str = "") -> str:
 # ---- Public base (link生成はここ基準) ----
 # 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
 # 例: https://mikann20041029.github.io
-PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL", "").strip() or "https://mikanntool.com")
+PUBLIC_BASE_URL = "https://mikanntool.com"
+
 
 
 # ---- Bluesky ----
