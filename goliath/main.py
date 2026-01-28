@@ -3307,12 +3307,14 @@ def collect_all() -> List[Post]:
             return
 
     def dedup(posts: List[Post]) -> List[Post]:
-    """
-    Dedupe after URL normalization:
-      - remove utm_* params
-      - normalize trailing slash
-    Also drop URLs containing "mikanntool" (case-insensitive).
-    """
+       pass
+
+        # Dedupe after URL normalization:
+    #   - remove utm_* params
+    #   - normalize trailing slash
+    # Also drop URLs containing "mikanntool" (case-insensitive).
+
+    
     from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
     def norm_url(u: str) -> str:
