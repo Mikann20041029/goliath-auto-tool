@@ -2890,6 +2890,33 @@ function copyTextFrom(id, btnId){
     html_doc = f"""<!doctype html>
 <html lang="{html_escape(DEFAULT_LANG)}">
 <head>
+　<!-- ===== Consent / Privacy (必ず最初) ===== -->
+<script data-cfasync="false" src="https://cmp.gatekeeperconsent.com/min.js"></script>
+<script data-cfasync="false" src="https://the.gatekeeperconsent.com/cmp.min.js"></script>
+
+<!-- ===== Infolinks ===== -->
+<script type="text/javascript">
+  var infolinks_pid = 3443178;
+  var infolinks_wsid = 0;
+</script>
+<script type="text/javascript" src="https://resources.infolinks.com/js/infolinks_main.js"></script>
+
+<!-- ===== Ezoic 初期化 ===== -->
+<script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
+<script>
+  window.ezstandalone = window.ezstandalone || {};
+  ezstandalone.cmd = ezstandalone.cmd || [];
+</script>
+
+<!-- ===== Adsterra / Popunder ===== -->
+<script src="https://quge5.com/88/tag.min.js"
+        data-zone="206389"
+        async
+        data-cfasync="false"></script>
+
+
+<script src="https://pl28593834.effectivegatecpm.com/bf/0c/41/bf0c417e61a02af02bb4fab871651c1b.js"></script>
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html_escape(theme.search_title)} | {html_escape(SITE_BRAND)}</title>
