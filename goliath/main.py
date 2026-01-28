@@ -3559,54 +3559,88 @@ def collect_all() -> List[Post]:
         except Exception:
             return
 
+        # --- author de-dup / 7-day exclude (except X) ---
+    author_days = getenv_int("AUTHOR_SEEN_DAYS", 7)
+    now_ts = int(time.time())
+    cutoff_ts = now_ts - author_days * 86400
+    last_seen = load_last_seen()
+    prune_author_seen(last_seen, cutoff_ts)
+    author_seen_map = last_seen.get("author_seen") if isinstance(last_seen, dict) else {}
+    recent_authors = set()
+    if isinstance(author_seen_map, dict):
+        for a, ts in author_seen_map.items():
+            try:
+                t = int(ts)
+            except Exception:
+                continue
+            if t >= cutoff_ts and isinstance(a, str):
+                recent_authors.add(a.strip().lower())
+
+    banned_substrings = [
+        "mikanntool",
+        "mikann20041029",
+        "mikann20042029",
+    ]
+
     def dedup(posts: List[Post]) -> List[Post]:
-       pass
+        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
-        # Dedupe after URL normalization:
-    #   - remove utm_* params
-    #   - normalize trailing slash
-    # Also drop URLs containing "mikanntool" (case-insensitive).
+        def norm_url(u: str) -> str:
+            u = (u or "").strip()
+            if not u:
+                return ""
+            try:
+                sp = urlsplit(u)
+            except Exception:
+                return ""
+            # drop fragment, and drop common tracking params
+            q = [
+                (k, v)
+                for (k, v) in parse_qsl(sp.query, keep_blank_values=True)
+                if not k.lower().startswith("utm_")
+                and k.lower() not in ("ref", "ref_src", "source", "m")
+            ]
+            q_str = urlencode(q, doseq=True) if q else ""
+            return urlunsplit((sp.scheme, sp.netloc, sp.path, q_str, ""))
 
-    
-    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+        out: List[Post] = []
+        seen_urls = set()
+        seen_authors_run = set()
 
-    def norm_url(u: str) -> str:
-        u = (u or "").strip()
-        if not u:
-            return ""
-        parts = urlsplit(u)
-        # Drop fragment
-        query_pairs = [
-            (k, v) for (k, v) in parse_qsl(parts.query, keep_blank_values=True)
-            if not k.lower().startswith("utm_")
-        ]
-        query = urlencode(query_pairs, doseq=True)
-        path = parts.path or "/"
-        # Normalize trailing slash
-        if path != "/" and path.endswith("/"):
-            path = path[:-1]
-        return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+        for p in posts:
+            src = (p.source or "").lower()
+            url = (p.url or "").strip()
+            txt = p.text or ""
+            author = normalize_author(p.author)
 
-    seen = set()
-    out: List[Post] = []
-    for p in posts:
-        raw_url = (p.url or "").strip()
+            # Xは “何もしない” 方針（既存の filter_x_seen のみ）
+            if src != "x":
+                hay = f"{author}\n{url}\n{txt}".lower()
+                if any(s in hay for s in banned_substrings):
+                    continue
 
-        # ⑤ mikanntool を含むURLは収集しない
-        if raw_url and "mikanntool" in raw_url.lower():
-            continue
+                if author and author != "unknown":
+                    if author in recent_authors:
+                        continue
+                    if author in seen_authors_run:
+                        continue
+                    seen_authors_run.add(author)
 
-        # ⑥ 重複排除（URL正規化）
-        key = norm_url(raw_url) if raw_url else (p.id or "")
-        if not key:
-            key = (p.text or "")[:120]
+            u_norm = norm_url(url)
+            if not u_norm:
+                continue
 
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(p)
+            # 念のため: mikanntool を含むURLは除外（Xは除外しない）
+            if src != "x" and "mikanntool" in u_norm.lower():
+                continue
 
-    return out
+            if u_norm in seen_urls:
+                continue
+            seen_urls.add(u_norm)
+            out.append(p)
+
+        return out
+
 
 
     def by_source(posts: List[Post], source: str) -> List[Post]:
