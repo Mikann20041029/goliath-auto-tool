@@ -2750,7 +2750,8 @@ function copyTextFrom(inputId, btnId) {{
   const done = () => {{
     if (!btn) return;
     const prev = btn.textContent;
-    btn.textContent = "Copied";
+    btn.textContent = t('copied');
+
     setTimeout(() => {{ btn.textContent = prev; }}, 1200);
   }};
 
