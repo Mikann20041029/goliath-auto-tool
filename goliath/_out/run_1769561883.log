@@ -1,0 +1,47 @@
+2026-01-28 00:58:03,226 | INFO | RUN_ID=1769561883
+2026-01-28 00:58:03,226 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-28 00:58:03,226 | INFO | SITE_DOMAIN=https://mikann20041029.github.io
+2026-01-28 00:58:03,227 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-28 00:58:03,227 | INFO | LEADS_TOTAL=100
+2026-01-28 00:58:03,227 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-28 00:58:03,227 | INFO | HN_MAX=70
+2026-01-28 00:58:03,424 | INFO | X: collected 1 (picked 1)
+2026-01-28 00:58:03,424 | INFO | Bluesky: collecting up to 50
+2026-01-28 00:58:03,757 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 00:58:04,329 | INFO | Bluesky: collected 49
+2026-01-28 00:58:04,330 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-28 00:58:06,466 | INFO | Mastodon: collected 100
+2026-01-28 00:58:06,466 | INFO | Reddit: public mode collecting up to 20
+2026-01-28 00:58:06,993 | INFO | Reddit: collected 0
+2026-01-28 00:58:07,369 | INFO | HN: collected 0
+2026-01-28 00:58:07,370 | WARNING | Top-up retry: bs=49/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 00:58:07,370 | INFO | Bluesky: collecting up to 50
+2026-01-28 00:58:07,603 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 00:58:08,024 | INFO | Bluesky: collected 49
+2026-01-28 00:58:08,024 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 00:58:08,518 | INFO | Reddit: collected 0
+2026-01-28 00:58:08,722 | INFO | HN: collected 0
+2026-01-28 00:58:08,722 | WARNING | Top-up retry: bs=49/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 00:58:08,722 | INFO | Bluesky: collecting up to 50
+2026-01-28 00:58:08,957 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 00:58:09,365 | INFO | Bluesky: collected 49
+2026-01-28 00:58:09,365 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 00:58:09,838 | INFO | Reddit: collected 0
+2026-01-28 00:58:10,054 | INFO | HN: collected 0
+2026-01-28 00:58:10,056 | INFO | Collected total: 150 (bs=49 ms=100 rd=0 x=1 hn=0)
+2026-01-28 00:58:10,057 | INFO | Clustering 150 posts (threshold=0.22)
+2026-01-28 00:58:10,078 | INFO | Clusters: 131 (top sizes=[4, 4, 4, 4, 3, 2, 2, 2])
+2026-01-28 00:58:10,081 | INFO | Chosen themes=6
+2026-01-28 00:58:10,501 | INFO | Unsplash hero bg enabled.
+2026-01-28 00:58:10,503 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-acceleration-check-pdf-convert-merge-checklist/ (PDF/Docs) short=https://mikann20041029.github.io/goliath/go/eWpAyG7/
+2026-01-28 00:58:10,504 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/engine-how-affected-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/cEdWkGs/
+2026-01-28 00:58:10,505 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/affected-fix-how-fix-guide-checklist-tool-2/ (Dev/Tools) short=https://mikann20041029.github.io/goliath/go/haeRCSA/
+2026-01-28 00:58:10,506 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/activitypub-amp-flipboard-dns-ssl-fix-checklist-4/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/hsAeKf6/
+2026-01-28 00:58:10,506 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/de-activitypub-amp-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikann20041029.github.io/goliath/go/5WZDCaN/
+2026-01-28 00:58:10,507 | INFO | Built site: https://mikann20041029.github.io/goliath/pages/acceleration-affected-during-resume-checklist-interview-prep/ (Career/Work) short=https://mikann20041029.github.io/goliath/go/ajtl96B/
+2026-01-28 00:58:10,513 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769561883.json
+2026-01-28 00:58:10,514 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-28 00:58:10,514 | INFO | Self-check: counts={'Bluesky': 49, 'Mastodon': 100, 'Reddit': 0, 'X': 1, 'HN': 0, 'Total': 150}
+2026-01-28 00:58:10,514 | INFO | Self-check: reply_candidates=100
+2026-01-28 00:58:10,514 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-28 00:58:10,514 | INFO | Self-check: sitemap=https://mikann20041029.github.io/goliath/_out/sitemap.xml
