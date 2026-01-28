@@ -4095,6 +4095,42 @@ def main() -> int:
     extra_notes = "\n".join(notes).strip()
 
     issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
+    # ✅ B) 今回使った author を state に保存（次回以降 7日避けるため）
+try:
+    state = load_last_seen()
+    now_ts = int(time.time())
+    cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
+    keep_sec = int((cooldown_days + 3) * 86400)  # 少し余裕
+
+    author_seen = state.get("author_seen", {})
+    if not isinstance(author_seen, dict):
+        author_seen = {}
+
+    # 古いものを整理
+    pruned = {}
+    for k, v in author_seen.items():
+        try:
+            v_int = int(v)
+        except Exception:
+            continue
+        if now_ts - v_int <= keep_sec:
+            pruned[str(k)] = v_int
+    author_seen = pruned
+
+    for p in mapped_posts:
+        if getattr(p, "source", "") == "stub":
+            continue
+        a = (getattr(p, "author", "") or "").strip().lower()
+        if not a:
+            continue
+        author_seen[f"{p.source}:{a}"] = now_ts
+
+    state["author_seen"] = author_seen
+    save_last_seen(state)
+    log(f"Saved author_seen: {len(author_seen)} authors (cooldown={cooldown_days}d)")
+except Exception as e:
+    log(f"WARN: failed to update author_seen state: {e}")
+
     logging.info("Wrote issues payload: %s", issues_path)
 
     # post drafts (short URL + one-line value)
