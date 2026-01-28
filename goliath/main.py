@@ -3283,17 +3283,52 @@ def collect_all() -> List[Post]:
             return
 
     def dedup(posts: List[Post]) -> List[Post]:
-        seen = set()
-        out: List[Post] = []
-        for p in posts:
-            if not p or not p.text:
-                continue
-            key = p.url or (p.source + "|" + p.id) or sha1(p.text)[:16]
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(p)
-        return out
+    """
+    Dedupe after URL normalization:
+      - remove utm_* params
+      - normalize trailing slash
+    Also drop URLs containing "mikanntool" (case-insensitive).
+    """
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+    def norm_url(u: str) -> str:
+        u = (u or "").strip()
+        if not u:
+            return ""
+        parts = urlsplit(u)
+        # Drop fragment
+        query_pairs = [
+            (k, v) for (k, v) in parse_qsl(parts.query, keep_blank_values=True)
+            if not k.lower().startswith("utm_")
+        ]
+        query = urlencode(query_pairs, doseq=True)
+        path = parts.path or "/"
+        # Normalize trailing slash
+        if path != "/" and path.endswith("/"):
+            path = path[:-1]
+        return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+
+    seen = set()
+    out: List[Post] = []
+    for p in posts:
+        raw_url = (p.url or "").strip()
+
+        # ⑤ mikanntool を含むURLは収集しない
+        if raw_url and "mikanntool" in raw_url.lower():
+            continue
+
+        # ⑥ 重複排除（URL正規化）
+        key = norm_url(raw_url) if raw_url else (p.id or "")
+        if not key:
+            key = (p.text or "")[:120]
+
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+
+    return out
+
 
     def by_source(posts: List[Post], source: str) -> List[Post]:
         return [p for p in posts if p.source == source]
