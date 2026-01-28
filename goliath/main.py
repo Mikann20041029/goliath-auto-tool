@@ -105,8 +105,10 @@ HUB_SITES_JSON = os.path.join(HUB_DIR, "sites.json")
 
 AFFILIATES_JSON = os.environ.get("AFFILIATES_JSON", os.path.join(REPO_ROOT, "affiliates.json"))
 
-DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "en")  # en/ja/ko/zh
-LANGS = ["en", "ja", "ko", "zh"]
+DEFAULT_LANG = "en"
+  # en
+LANGS = ["en", "ja", "es", "pt-BR", "ar", "fr", "de", "tr", "it"]
+
 
 DEFAULT_UA = os.environ.get(
     "HTTP_USER_AGENT",
