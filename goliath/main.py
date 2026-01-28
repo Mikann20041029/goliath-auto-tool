@@ -2676,9 +2676,15 @@ function copyTextFrom(id, btnId){
         <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
         <select id="langSel" class="ml-2 rounded-xl bg-white/10 border border-white/10 px-2 py-1 text-xs">
           <option value="en">EN</option>
-          <option value="ja">JA</option>
-          <option value="ko">KO</option>
-          <option value="zh">ZH</option>
+        　<option value="ja">日本語</option>
+        　<option value="es">Español</option>
+        　<option value="pt-BR">Português (Brasil)</option>
+        　<option value="ar">العربية</option>
+        　<option value="fr">Français</option>
+        　<option value="de">Deutsch</option>
+        　<option value="tr">Türkçe</option>
+        　<option value="it">Italiano</option>
+
         </select>
       </nav>
     </div>
