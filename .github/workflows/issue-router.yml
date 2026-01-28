@@ -1,0 +1,118 @@
+name: Issue Router
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue-router
+  cancel-in-progress: false
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests
+          fi
+
+      - name: Extract Issue Context
+        id: ctx
+        run: |
+          set -euo pipefail
+          echo "event=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+
+          # issues event
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            echo "title<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "body<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.issue.body }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "comment=" >> "$GITHUB_OUTPUT"
+          fi
+
+          # issue_comment event
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "title<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "body<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.issue.body }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "comment<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.comment.body }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ✅ A) 広告差し込み（Goliath candidates のIssueだけ）
+      - name: Inject affiliate ad (advertise.py)
+        env:
+          TITLE: ${{ steps.ctx.outputs.title }}
+          ISSUE_BODY: ${{ steps.ctx.outputs.body }}
+          COMMENT: ${{ steps.ctx.outputs.comment }}
+          AFFILIATES_JSON: affiliates.json
+        run: |
+          set -euo pipefail
+
+          # ゲート条件：タイトルが候補Issueなら実行
+          if [[ "$TITLE" != Goliath\ candidates* ]]; then
+            echo "Skip advertise: not a candidates issue"
+            exit 0
+          fi
+
+          if [ ! -f advertise.py ]; then
+            echo "Skip advertise: advertise.py not found"
+            exit 0
+          fi
+
+          python advertise.py --issue-body "$ISSUE_BODY" --do-git
+
+      # ✅ B) 将来: スクショ生成（未実装ならスキップ）
+      - name: Screenshot (placeholder)
+        env:
+          TITLE: ${{ steps.ctx.outputs.title }}
+          ISSUE_BODY: ${{ steps.ctx.outputs.body }}
+        run: |
+          set -euo pipefail
+          if [ ! -f screenshot.py ]; then
+            echo "Skip screenshot: screenshot.py not found"
+            exit 0
+          fi
+          # python screenshot.py --issue-body "$ISSUE_BODY" --do-git
+
+      # ✅ C) 将来: Share Pack拡張（未実装ならスキップ）
+      - name: Share pack (placeholder)
+        env:
+          TITLE: ${{ steps.ctx.outputs.title }}
+          ISSUE_BODY: ${{ steps.ctx.outputs.body }}
+        run: |
+          set -euo pipefail
+          if [ ! -f sharepack.py ]; then
+            echo "Skip sharepack: sharepack.py not found"
+            exit 0
+          fi
+          # python sharepack.py --issue-body "$ISSUE_BODY"
