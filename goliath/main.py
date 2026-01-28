@@ -2900,11 +2900,12 @@ def allocate_unique_slug(base_slug: str) -> str:
 
 
 def site_url_for_slug(slug: str) -> str:
-    """
-    Public URL for a generated page.
-    Your generation path: goliath/pages/<slug>/index.html
-    """
-    return SITE_DOMAIN.rstrip("/") + f"/goliath/pages/{slug}/"
+    """Public URL of a generated tool page (must use PUBLIC_BASE_URL)."""
+    base = (PUBLIC_BASE_URL or "").rstrip("/")
+    if not base:
+        base = "https://mikanntool.com"
+    return f"{base}/goliath/pages/{slug}/"
+
 
 
 def choose_related_tools(all_sites: List[Dict[str, Any]], category: str, exclude_slug: str, n: int = 5) -> List[Dict[str, Any]]:
