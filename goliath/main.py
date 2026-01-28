@@ -3427,6 +3427,8 @@ def make_stub_posts(n: int) -> List[Post]:
         ))
     return stubs
 
+# FORCE: use ONLY this run's generated site URL for all replies
+RUN_TOOL_URL = None
 
 def build_issue_items(posts: List[Post], post_to_tool_url: Dict[str, str]) -> List[Dict[str, str]]:
     items: List[Dict[str, str]] = []
