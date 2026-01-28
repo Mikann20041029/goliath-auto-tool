@@ -3820,6 +3820,9 @@ def build_sites(themes: List[Theme], aff_norm: Dict[str, List[Dict[str, Any]]], 
         theme.slug = final_slug
 
         tool_url = site_url_for_slug(final_slug)
+        # remember this run's site url (one site per run)
+        global RUN_TOOL_URL
+        RUN_TOOL_URL = tool_url
 
         # shortlink
         code = short_code_for_url(tool_url)
