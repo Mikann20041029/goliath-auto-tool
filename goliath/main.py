@@ -3962,7 +3962,13 @@ def main() -> int:
 
     # Prepare reply candidates (minimum 100)
     mapped_post_ids = set(post_to_tool_url.keys())
-    mapped_posts = [p for p in posts if p.id in mapped_post_ids]
+        # 過去7日以内に同じ人をissue候補に入れたら除外（Xは対象外）
+    recent_authors = load_recent_authors()
+    authors_map = recent_authors["authors"]
+    mapped_posts, cooldown_skipped = filter_posts_by_author_cooldown(
+        mapped_posts, authors_map, ISSUE_AUTHOR_COOLDOWN_DAYS
+    )
+
 
     if len(mapped_posts) < LEADS_TOTAL:
         need = LEADS_TOTAL - len(mapped_posts)
