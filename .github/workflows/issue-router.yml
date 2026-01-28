@@ -23,18 +23,6 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install requests
-          fi
-
-          # 追加（⑥＋自己診断用）
-          pip install beautifulsoup4 lxml
-          pip install google-auth google-api-python-client
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,6 +31,7 @@ jobs:
 
       - name: Install deps
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -50,13 +39,15 @@ jobs:
             pip install requests
           fi
 
+          # ⑥＋自己診断用（無ければ入れる）
+          pip install beautifulsoup4 lxml google-auth google-api-python-client
+
       - name: Extract Issue Context
         id: ctx
         run: |
           set -euo pipefail
           echo "event=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
 
-          # issues event
           if [ "${{ github.event_name }}" = "issues" ]; then
             echo "title<<EOF" >> "$GITHUB_OUTPUT"
             echo "${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
@@ -67,7 +58,6 @@ jobs:
             echo "comment=" >> "$GITHUB_OUTPUT"
           fi
 
-          # issue_comment event
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             echo "title<<EOF" >> "$GITHUB_OUTPUT"
             echo "${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
@@ -82,6 +72,7 @@ jobs:
 
       # ✅ A) 広告差し込み（Goliath candidates のIssueだけ）
       - name: Inject affiliate ad (advertise.py)
+        if: ${{ startsWith(steps.ctx.outputs.title, 'Goliath candidates') }}
         env:
           TITLE: ${{ steps.ctx.outputs.title }}
           ISSUE_BODY: ${{ steps.ctx.outputs.body }}
@@ -89,24 +80,37 @@ jobs:
           AFFILIATES_JSON: affiliates.json
         run: |
           set -euo pipefail
-
-          # ゲート条件：タイトルが候補Issueなら実行
-          if [[ "$TITLE" != Goliath\ candidates* ]]; then
-            echo "Skip advertise: not a candidates issue"
-            exit 0
-          fi
-
           if [ ! -f advertise.py ]; then
             echo "Skip advertise: advertise.py not found"
             exit 0
           fi
-
           python advertise.py --issue-body "$ISSUE_BODY" --do-git
+
+      # ✅ D) ⑥ URL Inspection API + メタ自己診断（Issue作成時だけ / candidatesだけ）
+      - name: Layer1 Inspect (GSC + Meta)
+        if: ${{ github.event_name == 'issues' && github.event.action == 'opened' && startsWith(steps.ctx.outputs.title, 'Goliath candidates') }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ steps.ctx.outputs.body }}
+
+          # あればURL Inspectionも実行、無ければ自己診断だけ
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+
+          MAX_INSPECT: "20"
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/issue_layer1_inspect.py ]; then
+            echo "Skip inspect: tools/issue_layer1_inspect.py not found"
+            exit 0
+          fi
+          python tools/issue_layer1_inspect.py
 
       # ✅ B) 将来: スクショ生成（未実装ならスキップ）
       - name: Screenshot (placeholder)
+        if: ${{ startsWith(steps.ctx.outputs.title, 'Goliath candidates') }}
         env:
-          TITLE: ${{ steps.ctx.outputs.title }}
           ISSUE_BODY: ${{ steps.ctx.outputs.body }}
         run: |
           set -euo pipefail
@@ -118,8 +122,8 @@ jobs:
 
       # ✅ C) 将来: Share Pack拡張（未実装ならスキップ）
       - name: Share pack (placeholder)
+        if: ${{ startsWith(steps.ctx.outputs.title, 'Goliath candidates') }}
         env:
-          TITLE: ${{ steps.ctx.outputs.title }}
           ISSUE_BODY: ${{ steps.ctx.outputs.body }}
         run: |
           set -euo pipefail
