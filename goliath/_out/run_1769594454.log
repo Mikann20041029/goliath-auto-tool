@@ -1,0 +1,41 @@
+2026-01-28 10:00:54,506 | INFO | RUN_ID=1769594454
+2026-01-28 10:00:54,506 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-28 10:00:54,506 | INFO | SITE_DOMAIN=https://mikanntool.com
+2026-01-28 10:00:54,506 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-28 10:00:54,506 | INFO | LEADS_TOTAL=100
+2026-01-28 10:00:54,506 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-28 10:00:54,506 | INFO | HN_MAX=70
+2026-01-28 10:00:54,700 | INFO | X: collected 1 (picked 1)
+2026-01-28 10:00:54,700 | INFO | Bluesky: collecting up to 50
+2026-01-28 10:00:54,751 | INFO | Bluesky: using public endpoint (no credentials/session). collecting up to 50
+2026-01-28 10:00:55,538 | INFO | Bluesky: collected 50
+2026-01-28 10:00:55,538 | INFO | Mastodon: collecting up to 100 from https://mastodon.social (auth=yes)
+2026-01-28 10:00:58,077 | INFO | Mastodon: collected 100
+2026-01-28 10:00:58,078 | INFO | Reddit: public mode collecting up to 20
+2026-01-28 10:00:59,097 | INFO | Reddit: collected 0
+2026-01-28 10:00:59,517 | INFO | HN: collected 0
+2026-01-28 10:00:59,517 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 10:00:59,517 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 10:01:00,463 | INFO | Reddit: collected 0
+2026-01-28 10:01:00,649 | INFO | HN: collected 0
+2026-01-28 10:01:00,649 | WARNING | Top-up retry: bs=50/50 ms=100/100 rd=0/20 hn=0/70
+2026-01-28 10:01:00,649 | INFO | Reddit: public mode collecting up to 40
+2026-01-28 10:01:01,603 | INFO | Reddit: collected 0
+2026-01-28 10:01:01,860 | INFO | HN: collected 0
+2026-01-28 10:01:01,862 | INFO | Collected total: 151 (bs=50 ms=100 rd=0 x=1 hn=0)
+2026-01-28 10:01:01,863 | INFO | Clustering 151 posts (threshold=0.22)
+2026-01-28 10:01:01,886 | INFO | Clusters: 134 (top sizes=[6, 5, 4, 3, 2, 2, 2, 1])
+2026-01-28 10:01:01,890 | INFO | Chosen themes=6
+2026-01-28 10:01:02,358 | INFO | Unsplash hero bg enabled.
+2026-01-28 10:01:02,360 | INFO | Built site: https://mikanntool.com/goliath/pages/engine-how-affected-conversation-templates-awkwardness-fixes/ (Relationships/Communication) short=https://mikanntool.com/goliath/go/9SmXwvp/
+2026-01-28 10:01:02,362 | INFO | Built site: https://mikanntool.com/goliath/pages/transmission-how-affected-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikanntool.com/goliath/go/7xqXoDI/
+2026-01-28 10:01:02,363 | INFO | Built site: https://mikanntool.com/goliath/pages/steering-fix-how-privacy-settings-login-fix-checklist/ (Security/Privacy) short=https://mikanntool.com/goliath/go/4j01Iut/
+2026-01-28 10:01:02,364 | INFO | Built site: https://mikanntool.com/goliath/pages/engine-check-light-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikanntool.com/goliath/go/489uQf4/
+2026-01-28 10:01:02,365 | INFO | Built site: https://mikanntool.com/goliath/pages/noise-affected-fix-fix-guide-checklist-tool/ (Dev/Tools) short=https://mikanntool.com/goliath/go/icSMC3o/
+2026-01-28 10:01:02,366 | INFO | Built site: https://mikanntool.com/goliath/pages/activitypub-amp-as-dns-ssl-fix-checklist/ (Web/Hosting) short=https://mikanntool.com/goliath/go/H65604/
+2026-01-28 10:01:02,372 | INFO | Wrote issues payload: /home/runner/work/goliath-auto-tool/goliath-auto-tool/goliath/_out/issues_payload_1769594454.json
+2026-01-28 10:01:02,372 | INFO | Root sitemap/robots NOT updated (ALLOW_ROOT_UPDATE=0). Wrote to goliath/_out instead.
+2026-01-28 10:01:02,373 | INFO | Self-check: counts={'Bluesky': 50, 'Mastodon': 100, 'Reddit': 0, 'X': 1, 'HN': 0, 'Total': 151}
+2026-01-28 10:01:02,373 | INFO | Self-check: reply_candidates=100
+2026-01-28 10:01:02,373 | INFO | Self-check: affiliates_audit ok=True missing=0 extra=0
+2026-01-28 10:01:02,373 | INFO | Self-check: sitemap=https://mikanntool.com/goliath/_out/sitemap.xml
