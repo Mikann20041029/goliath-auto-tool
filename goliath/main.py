@@ -277,6 +277,91 @@ def write_json(path: str, obj: Any) -> None:
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
+BAD_AUTHOR_VALUES = {"", "unknown", "n/a", "na", "?"}
+
+def parse_iso_utc(s: str):
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        d = dt.datetime.fromisoformat(s)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=dt.timezone.utc)
+        return d.astimezone(dt.timezone.utc)
+    except Exception:
+        return None
+
+def load_recent_authors() -> dict:
+    data = read_json(RECENT_AUTHORS_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
+    authors = data.get("authors", {})
+    if not isinstance(authors, dict):
+        authors = {}
+    return {"authors": authors}
+
+def save_recent_authors(data: dict) -> None:
+    write_json(RECENT_AUTHORS_PATH, data)
+
+def author_key_from_post(p) -> str:
+    src = (getattr(p, "source", "") or "").strip().lower()
+    author = (getattr(p, "author", "") or "").strip().lower()
+    if not src or author in BAD_AUTHOR_VALUES:
+        return ""
+    return f"{src}:{author}"
+
+def purge_recent_authors(authors: dict, keep_days: int = 30) -> dict:
+    now = dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=keep_days)
+    out = {}
+    for k, v in (authors or {}).items():
+        d = parse_iso_utc(v)
+        if d is None or d >= cutoff:
+            out[k] = v
+    return out
+
+def filter_posts_by_author_cooldown(posts: list, authors: dict, cooldown_days: int):
+    if cooldown_days <= 0:
+        return posts, 0
+    now = dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=cooldown_days)
+
+    out = []
+    skipped = 0
+    for p in posts:
+        src = (getattr(p, "source", "") or "").strip().lower()
+        if src in ("x", "stub"):
+            out.append(p)
+            continue
+
+        key = author_key_from_post(p)
+        if not key:
+            out.append(p)
+            continue
+
+        last = parse_iso_utc((authors or {}).get(key, ""))
+        if last and last >= cutoff:
+            skipped += 1
+            continue
+
+        out.append(p)
+
+    return out, skipped
+
+def update_recent_authors_from_issue_items(issue_items: list, authors: dict, now_s: str):
+    added = 0
+    for it in issue_items:
+        src = (it.get("source") or "").strip().lower()
+        if src in ("x", "stub", "dummy"):
+            continue
+        author = (it.get("author") or "").strip().lower()
+        if author in BAD_AUTHOR_VALUES:
+            continue
+        authors[f"{src}:{author}"] = now_s
+        added += 1
+    return added
 
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).astimezone().isoformat(timespec="seconds")
