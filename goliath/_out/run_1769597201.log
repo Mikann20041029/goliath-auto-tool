@@ -1,0 +1,7 @@
+2026-01-28 10:46:41,234 | INFO | RUN_ID=1769597201
+2026-01-28 10:46:41,235 | INFO | REPO_ROOT=/home/runner/work/goliath-auto-tool/goliath-auto-tool
+2026-01-28 10:46:41,235 | INFO | SITE_DOMAIN=https://mikanntool.com
+2026-01-28 10:46:41,235 | INFO | ALLOW_ROOT_UPDATE=False
+2026-01-28 10:46:41,235 | INFO | LEADS_TOTAL=100
+2026-01-28 10:46:41,235 | INFO | HN_QUERY=how to fix error OR help OR cannot OR failed OR bug
+2026-01-28 10:46:41,235 | INFO | HN_MAX=70
