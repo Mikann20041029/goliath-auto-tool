@@ -3583,63 +3583,104 @@ def collect_all() -> List[Post]:
     ]
 
     def dedup(posts: List[Post]) -> List[Post]:
-        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    # ✅ state から過去利用 author を読む（B）
+    state = load_last_seen()
+    author_seen = state.get("author_seen", {})
+    if not isinstance(author_seen, dict):
+        author_seen = {}
 
-        def norm_url(u: str) -> str:
-            u = (u or "").strip()
-            if not u:
-                return ""
+    now_ts = int(time.time())
+    cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
+    cooldown_sec = int(cooldown_days * 86400)
+
+    # ✅ banned（C）：URLだけじゃなく text/author も見る
+    banned = {"mikanntool", "mikann20041029", "mikann20042029"}
+    extra = (os.getenv("BANNED_SUBSTRINGS") or "").strip()
+    if extra:
+        for s in extra.split(","):
+            s = s.strip().lower()
+            if s:
+                banned.add(s)
+
+    # URL正規化（utm除去・末尾スラッシュ統一）
+    from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+    def norm_url(u: str) -> str:
+        u = (u or "").strip()
+        if not u:
+            return ""
+        parts = urlparse(u)
+        q = [(k, v) for (k, v) in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_")]
+        new_q = urlencode(q, doseq=True)
+        path = parts.path.rstrip("/")
+        normed = urlunparse((parts.scheme, parts.netloc, path, parts.params, new_q, ""))
+        return normed
+
+    seen_urls = set()
+    seen_authors_in_run = set()
+    out = []
+
+    for p in posts:
+        url_raw = p.url or ""
+        text_raw = p.text or ""
+        author_raw = p.author or ""
+
+        blob = (url_raw + " " + text_raw + " " + author_raw).lower()
+
+        # ✅ C) banned を含む投稿は除外（URL・本文・author全部対象）
+        if any(b in blob for b in banned):
+            continue
+
+        url_n = norm_url(url_raw)
+
+        # ✅ A) 同一実行内で author 重複禁止
+        author_norm = author_raw.strip().lower()
+        if author_norm:
+            author_key = f"{p.source}:{author_norm}"
+        else:
+            # author が空のときは id で代替
+            author_key = f"{p.source}:id:{p.id}"
+
+        if author_key in seen_authors_in_run:
+            continue
+
+        # ✅ B) 過去7日以内に使った author は除外
+        last = author_seen.get(author_key)
+        if last is not None:
             try:
-                sp = urlsplit(u)
-            except Exception:
-                return ""
-            # drop fragment, and drop common tracking params
-            q = [
-                (k, v)
-                for (k, v) in parse_qsl(sp.query, keep_blank_values=True)
-                if not k.lower().startswith("utm_")
-                and k.lower() not in ("ref", "ref_src", "source", "m")
-            ]
-            q_str = urlencode(q, doseq=True) if q else ""
-            return urlunsplit((sp.scheme, sp.netloc, sp.path, q_str, ""))
-
-        out: List[Post] = []
-        seen_urls = set()
-        seen_authors_run = set()
-
-        for p in posts:
-            src = (p.source or "").lower()
-            url = (p.url or "").strip()
-            txt = p.text or ""
-            author = normalize_author(p.author)
-
-            # Xは “何もしない” 方針（既存の filter_x_seen のみ）
-            if src != "x":
-                hay = f"{author}\n{url}\n{txt}".lower()
-                if any(s in hay for s in banned_substrings):
+                last = int(last)
+                if now_ts - last < cooldown_sec:
                     continue
+            except Exception:
+                pass
 
-                if author and author != "unknown":
-                    if author in recent_authors:
-                        continue
-                    if author in seen_authors_run:
-                        continue
-                    seen_authors_run.add(author)
+        # URL重複除外
+        if url_n and url_n in seen_urls:
+            continue
 
-            u_norm = norm_url(url)
-            if not u_norm:
-                continue
+        if url_n:
+            seen_urls.add(url_n)
 
-            # 念のため: mikanntool を含むURLは除外（Xは除外しない）
-            if src != "x" and "mikanntool" in u_norm.lower():
-                continue
+        seen_authors_in_run.add(author_key)
 
-            if u_norm in seen_urls:
-                continue
-            seen_urls.add(u_norm)
-            out.append(p)
+        # URLが正規化で変わったら置き換え
+        if url_n and url_n != url_raw:
+            p = Post(
+                source=p.source,
+                id=p.id,
+                url=url_n,
+                text=p.text,
+                author=p.author,
+                created_at=p.created_at,
+                meta=p.meta,
+                lang_hint=p.lang_hint,
+            )
 
-        return out
+        out.append(p)
+
+    return out
+
 
 
 
