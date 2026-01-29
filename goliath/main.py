@@ -3776,11 +3776,13 @@ xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
 
 # Primary collection
 # --- per-source targets (defaults) ---
-BS_TARGET = getenv_int("BS_TARGET", 50)
-MS_TARGET = getenv_int("MS_TARGET", 100)
-RD_TARGET = getenv_int("RD_TARGET", 20)
-X_TARGET  = getenv_int("X_TARGET", 3)
-HN_TARGET = getenv_int("HN_TARGET", 70)
+# --- per-source targets (defaults) ---
+BS_TARGET = int((os.environ.get("BS_TARGET") or "50").strip() or "50")
+MS_TARGET = int((os.environ.get("MS_TARGET") or "100").strip() or "100")
+RD_TARGET = int((os.environ.get("RD_TARGET") or "20").strip() or "20")
+X_TARGET  = int((os.environ.get("X_TARGET")  or "3").strip() or "3")
+HN_TARGET = int((os.environ.get("HN_TARGET") or "70").strip() or "70")
+
 
 bs = collect_bluesky(max_items=BS_TARGET)
 ms = collect_mastodon(max_items=MS_TARGET)
