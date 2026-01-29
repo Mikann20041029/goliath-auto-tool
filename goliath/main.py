@@ -3694,6 +3694,16 @@ def collect_all() -> List[Post]:
         "mikann20041029",
         "mikann20042029",
     ]
+def dedup(items):
+    seen = set()
+    out = []
+    for it in items:
+        k = it.get("url") or it.get("id") or repr(it)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
 
     def dedup(posts: List[Post]) -> List[Post]:
         # ✅ state から過去利用 author を読む（B）
