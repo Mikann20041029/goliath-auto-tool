@@ -3771,7 +3771,7 @@ def by_source(posts: List[Post], source: str) -> List[Post]:
 
 
 # X MUST be called exactly once per run
-xx = collect_x_mentions(max_items=X_TARGET)
+xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
 
 # Primary collection
 bs = collect_bluesky(max_items=BS_TARGET)
