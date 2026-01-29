@@ -4245,14 +4245,16 @@ def main():
     SITE_DOMAIN = os.getenv("SITE_DOMAIN", "https://www.mikanntool.com").rstrip("/")
     PAGES_DIR = Path("goliath/pages")
 
-    # ===== pages 配下から URL を生成 =====
+    # ===== generated URLs (THIS RUN ONLY) =====
     generated_urls = []
 
-    if PAGES_DIR.exists():
-        for p in PAGES_DIR.iterdir():
-            if p.is_dir():
-                generated_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
+    for t in built_themes:
+        slug = getattr(t, "slug", None)
+        if not slug:
+            continue
+        generated_urls.append(f"{SITE_DOMAIN}/goliath/pages/{slug}/")
 
+    
     # ===== issue 用 payload を作る =====
     issue_items = []
     for url in generated_urls:
