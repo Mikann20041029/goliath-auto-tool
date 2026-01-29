@@ -3705,7 +3705,19 @@ def dedup(items):
     seen = set()
     out = []
     for it in items:
-        k = it.get("url") or it.get("id") or repr(it)
+                # it can be dict OR object (e.g., Bluesky Post). Make a stable key safely.
+        if isinstance(it, dict):
+            k = it.get("url") or it.get("id") or it.get("uri") or repr(it)
+        else:
+            # try common attrs
+            k = (
+                getattr(it, "url", None)
+                or getattr(it, "id", None)
+                or getattr(it, "uri", None)
+                or getattr(it, "cid", None)
+                or repr(it)
+            )
+
         if k in seen:
             continue
         seen.add(k)
