@@ -3838,7 +3838,7 @@ for _ in range(2):
                  len(by_source(all_posts, "reddit")),
                  len(by_source(all_posts, "x")),
                  len(by_source(all_posts, "hn")))
-    return all_posts
+        return all_posts
 
 
 def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
