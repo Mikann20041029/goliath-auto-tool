@@ -3695,10 +3695,8 @@ def collect_all() -> List[Post]:
                 if s:
                     banned.add(s)
 
-        # URL正規化（utm除去・末尾スラッシュ統一）
-        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-
-            def norm_url(u: str) -> str:
+            # URL正規化（utm除去・末尾スラッシュ統一）
+    def norm_url(u: str) -> str:
         u = (u or "").strip()
         if not u:
             return ""
@@ -3713,6 +3711,7 @@ def collect_all() -> List[Post]:
             return normed.rstrip("/")
         except Exception:
             return u.rstrip("/")
+
 
 
         # 既に採用したURLセット
