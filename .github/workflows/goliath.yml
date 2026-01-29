@@ -41,12 +41,14 @@ jobs:
             pip install openai requests
           fi
 
+      # この run 専用のマーカーを作る
       - name: Prep run markers
         run: |
           mkdir -p goliath/_out
           rm -f goliath/_out/issues_payload_*.json
           touch .run_start
 
+      # main.py は失敗しても workflow を止めない
       - name: Run Goliath System
         continue-on-error: true
         env:
@@ -55,13 +57,17 @@ jobs:
         run: |
           python main.py || true
 
+      # この run で新しく作られた payload のうち最新1つだけ拾う
       - name: Find payload
         id: find_payload
         run: |
-          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start | head -n 1)"
+          set -euo pipefail
+          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start -printf '%T@ %p\n' \
+              | sort -nr | head -n 1 | awk '{print $2}')"
           echo "payload=$f" >> "$GITHUB_OUTPUT"
 
-      - name: Create Issue (URLs only)
+      # payload から「main.py が確定させた生成サイトURL」だけを Issue に出す
+      - name: Create Issue (generated URLs only)
         if: always()
         uses: actions/github-script@v7
         env:
@@ -80,12 +86,14 @@ jobs:
 
               for (const it of issues) {
                 const body = String(it.body || '');
+                // main.py が body の最後に入れた生成サイトURLを拾う
                 const found = body.match(/https?:\/\/www\.mikanntool\.com\/[^\s)]+/g) || [];
                 urls.push(...found);
               }
             }
 
-            urls = [...new Set(urls)]; // dedup
+            // 重複除去
+            urls = [...new Set(urls)];
 
             let title;
             let body;
@@ -104,4 +112,3 @@ jobs:
               title,
               body
             });
-
