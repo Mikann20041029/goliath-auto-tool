@@ -4237,27 +4237,40 @@ def write_run_summary(
     logging.info("Self-check: sitemap=%s", sitemap_url_written)
 
 
-def main() -> int:
-    setup_logging()
+def main():
+    import os
+    from pathlib import Path
 
-    # legal pages
-    policy_urls = ensure_policies()
+    # ===== 設定 =====
+    SITE_DOMAIN = os.getenv("SITE_DOMAIN", "https://www.mikanntool.com").rstrip("/")
+    PAGES_DIR = Path("goliath/pages")
 
-    # affiliates
-    aff_raw = load_affiliates()
-    aff_audit = audit_affiliate_keys(aff_raw)
-    aff_norm = normalize_affiliates_shape(aff_raw)
+    # ===== pages 配下から URL を生成 =====
+    generated_urls = []
 
-    # collect
-    posts = collect_all()
-    counts = {
-        "Bluesky": sum(1 for p in posts if p.source == "bluesky"),
-        "Mastodon": sum(1 for p in posts if p.source == "mastodon"),
-        "Reddit": sum(1 for p in posts if p.source == "reddit"),
-        "X": sum(1 for p in posts if p.source == "x"),
-        "HN": sum(1 for p in posts if p.source == "hn"),
-        "Total": len(posts),
-    }
+    if PAGES_DIR.exists():
+        for p in PAGES_DIR.iterdir():
+            if p.is_dir():
+                generated_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
+
+    # ===== issue 用 payload を作る =====
+    issue_items = []
+    for url in generated_urls:
+        issue_items.append({
+            "url": url,
+            "text": f"Generated site: {url}"
+        })
+
+    # ===== issue を作成 =====
+    if issue_items:
+        write_issues_payload(
+            issue_items,
+            extra_notes="forced url emit",
+            generated_urls=generated_urls
+        )
+
+    print(f"[OK] emitted {len(generated_urls)} urls to issue")
+
 
     # choose themes
     themes = choose_themes(posts, max_themes=MAX_THEMES)
