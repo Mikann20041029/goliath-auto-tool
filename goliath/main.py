@@ -3975,23 +3975,7 @@ def norm_url(u: str) -> str:
         return u.rstrip("/")
 
 
-def dedup(posts: List["Post"]) -> List["Post"]:
-    """
-    De-dup by normalized URL first; fallback to (source,id); preserve order.
-    """
-    out: List["Post"] = []
-    seen = set()
-    for p in posts or []:
-        try:
-            url = norm_url(getattr(p, "url", "") or "")
-            key = ("url", url) if url else ("id", getattr(p, "source", ""), getattr(p, "id", ""))
-        except Exception:
-            key = ("raw", repr(p))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(p)
-    return out
+
 
 
 def collect_all() -> List["Post"]:
