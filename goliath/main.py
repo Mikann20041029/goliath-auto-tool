@@ -67,7 +67,7 @@ def env_first(*names: str, default: str = "") -> str:
         if v:
             return v
     return default
-    def getenv_int(name: str, default: int) -> int:
+def getenv_int(name: str, default: int) -> int:
     """
     Safe int reader from env.
     Accepts e.g. "100", " 100 ", "100.0" (as 100), otherwise returns default.
