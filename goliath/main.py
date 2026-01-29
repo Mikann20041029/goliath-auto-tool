@@ -4044,7 +4044,7 @@ def collect_all() -> List["Post"]:
     if len(all_posts) < floor_total:
         raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
 
-    append_cache(all_posts)
+    
 
     logging.info(
         "Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
