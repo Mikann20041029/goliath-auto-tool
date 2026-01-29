@@ -2929,7 +2929,9 @@ function copyTextFrom(id, btnId){
 <!-- ===== Ezoic 初期化 ===== -->
 <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
 <script>
-  window.ezstandalone = window.ezstandalone || {};
+  window.ezstandalone = window.ezstandalone || {{}};
+
+
   ezstandalone.cmd = ezstandalone.cmd || [];
 </script>
 
@@ -2951,7 +2953,8 @@ function copyTextFrom(id, btnId){
 <!-- ===== Ezoic: Header Script ===== -->
 <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
 <script>
-  window.ezstandalone = window.ezstandalone || {};
+  window.ezstandalone = window.ezstandalone || {{}};
+
   ezstandalone.cmd = ezstandalone.cmd || [];
 </script>
 
