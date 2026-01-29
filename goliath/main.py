@@ -2995,7 +2995,8 @@ function copyTextFrom(id, btnId){
   border-radius:16px;
   background:rgba(255,255,255,.04);
   overflow:hidden;
-}
+}}
+
 
   </style>
 </head>
