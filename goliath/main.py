@@ -73,11 +73,8 @@ def env_first(*names: str, default: str = "") -> str:
 def eprint(*args, **kwargs):
     print(*args, **kwargs)
 
-    for n in names:
-        v = os.environ.get(n, "").strip()
-        if v:
-            return v
-    return default
+
+
 def getenv_int(name: str, default: int) -> int:
     """
     Safe int reader from env.
