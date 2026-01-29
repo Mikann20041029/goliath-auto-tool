@@ -195,7 +195,8 @@ SUPP_URL_MIN = int(os.environ.get("SUPP_URL_MIN", "3"))
 issue_items: List[Dict[str, Any]] = []
 reply_count = 0
 
-LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))  # IMPORTANT: default 100 per your requirement
+LEADS_TOTAL = int((os.environ.get("LEADS_TOTAL") or "100").strip() or "100")
+
 ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for long issue body
 
 # Branding / canonical
