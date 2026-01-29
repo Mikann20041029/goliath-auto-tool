@@ -3783,6 +3783,12 @@ def by_source(posts: List[Post], source: str) -> List[Post]:
 
 # X MUST be called exactly once per run
 xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
+bs = collect_bluesky(max_items=BS_TARGET)
+ms = collect_mastodon(max_items=MS_TARGET)
+rd = collect_reddit(max_items=RD_TARGET)
+hn = collect_hn(max_items=HN_TARGET)
+
+all_posts = dedup(bs + ms + rd + xx + hn)
 
 # Primary collection
 # --- per-source targets (defaults) ---
