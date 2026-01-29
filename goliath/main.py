@@ -72,6 +72,10 @@ def env_first(*names: str, default: str = "") -> str:
 # 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
 # 例: https://mikann20041029.github.io
 PUBLIC_BASE_URL = "https://www.mikanntool.com"
+# Canonical base URL used for generated links/logs
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", PUBLIC_BASE_URL).strip().rstrip("/")
+if not SITE_DOMAIN:
+    SITE_DOMAIN = PUBLIC_BASE_URL.strip().rstrip("/")
 
 
 
