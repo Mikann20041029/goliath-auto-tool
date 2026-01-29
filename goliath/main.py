@@ -4427,16 +4427,7 @@ def main() -> int:
         now_ts = int(time.time())
         cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
         keep_sec = int((cooldown_days + 3) * 86400)  # 少し余裕
-def prune_author_seen(author_seen: dict, cutoff_ts: int) -> dict:
-    pruned = {}
-    for k, v in author_seen.items():
-        try:
-            v_int = int(v)
-        except Exception:
-            continue
-        if v_int >= cutoff_ts:
-            pruned[str(k)] = v_int
-    return pruned
+
 
 
 
