@@ -3775,6 +3775,13 @@ def by_source(posts: List[Post], source: str) -> List[Post]:
 xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
 
 # Primary collection
+# --- per-source targets (defaults) ---
+BS_TARGET = getenv_int("BS_TARGET", 50)
+MS_TARGET = getenv_int("MS_TARGET", 100)
+RD_TARGET = getenv_int("RD_TARGET", 20)
+X_TARGET  = getenv_int("X_TARGET", 3)
+HN_TARGET = getenv_int("HN_TARGET", 70)
+
 bs = collect_bluesky(max_items=BS_TARGET)
 ms = collect_mastodon(max_items=MS_TARGET)
 rd = collect_reddit(max_items=RD_TARGET)
