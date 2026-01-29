@@ -129,12 +129,13 @@ jobs:
         id: find_payload
         run: |
           set -euo pipefail
-          f="$(ls -t goliath/_out/issues_payload_*.json 2>/dev/null | head -n 1 || true)"
+          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start -printf '%T@ %p\n' 2>/dev/null \
+              | sort -nr | head -n 1 | awk '{print $2}')"
           echo "payload=$f" >> "$GITHUB_OUTPUT"
-          if [ -z "$f" ]; then
-            echo "No issues_payload_*.json found under goliath/_out/"
+          if [ -z "${f:-}" ]; then
+            echo "No NEW issues_payload_*.json created in this run."
           else
-            echo "Found payload: $f"
+            echo "Found NEW payload: $f"
           fi
 
       - name: Create GitHub Issue from payload
