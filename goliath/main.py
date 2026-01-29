@@ -4276,6 +4276,8 @@ def write_run_summary(
 
 
 def main() -> int:
+    mapped_posts = []
+    authors_map = {}
     setup_logging()
 
     # legal pages
