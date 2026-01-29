@@ -15,7 +15,8 @@ Goliath Auto Tool System - main.py (single-file)
     - Reply (EN, empathy + “made a one-page guide” + tool URL last line)
   Minimum 100 leads per run (stub fill if needed)
 - 22 categories (fixed) -> affiliates.json top2 -> inject to AFF_SLOT
-- SaaS-like design, Tailwind, dark mode, i18n (EN/JA/KO/ZH), 2500+ chars JP article + FAQ + references + legal pages
+- SaaS-like design, Tailwind, dark mode, i18n (EN/JP/ES/PT-BR/AR/FR/DE/TR/IT), 2500+ chars JP article + FAQ + references + legal pages
+
 """
 
 from __future__ import annotations
@@ -31,6 +32,25 @@ import random
 import re
 import sys
 import time
+# URL正規化（utm除去・末尾スラッシュ統一）
+def norm_url(u: str) -> str:
+    u = (u or "").strip()
+    if not u:
+        return ""
+    try:
+        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+        parts = urlparse(u)
+        q = parse_qsl(parts.query, keep_blank_values=True)
+        q2 = [(k, v) for (k, v) in q if not k.lower().startswith("utm_")]
+        new_q = urlencode(q2, doseq=True)
+        path = (parts.path or "").rstrip("/")
+        normed = urlunparse(
+            (parts.scheme, parts.netloc, path, parts.params, new_q, "")
+        )
+        return normed.rstrip("/")
+    except Exception:
+        return u.rstrip("/")
+
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
@@ -51,7 +71,14 @@ def env_first(*names: str, default: str = "") -> str:
 # ---- Public base (link生成はここ基準) ----
 # 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
 # 例: https://mikann20041029.github.io
-PUBLIC_BASE_URL = env_first("PUBLIC_BASE_URL", "PUBLIC_SITE_BASE", default=os.environ.get("SITE_DOMAIN", "").strip() or "https://mikann20041029.github.io")
+PUBLIC_BASE_URL = "https://www.mikanntool.com"
+# Canonical base URL used for generated links/logs
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", PUBLIC_BASE_URL).strip().rstrip("/")
+if not SITE_DOMAIN:
+    SITE_DOMAIN = PUBLIC_BASE_URL.strip().rstrip("/")
+
+
+
 
 # ---- Bluesky ----
 BLUESKY_HANDLE = env_first("BLUESKY_HANDLE", "BSKY_HANDLE", "BLUESKY_ID")
@@ -91,7 +118,10 @@ HN_MAX = int(os.environ.get("HN_MAX", os.environ.get("HACKER_NEWS_MAX", "70")))
 REPO_ROOT = os.environ.get("REPO_ROOT", os.getcwd())
 
 STATE_DIR = os.path.join(REPO_ROOT, "state")
+ISSUE_AUTHOR_COOLDOWN_DAYS = 7
+RECENT_AUTHORS_PATH = os.path.join(STATE_DIR, "recent_authors.json")
 LAST_SEEN_PATH = os.path.join(STATE_DIR, "last_seen.json")
+
 
 
 GOLIATH_DIR = os.path.join(REPO_ROOT, "goliath")
@@ -104,8 +134,10 @@ HUB_SITES_JSON = os.path.join(HUB_DIR, "sites.json")
 
 AFFILIATES_JSON = os.environ.get("AFFILIATES_JSON", os.path.join(REPO_ROOT, "affiliates.json"))
 
-DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "en")  # en/ja/ko/zh
-LANGS = ["en", "ja", "ko", "zh"]
+DEFAULT_LANG = "en"
+  # en
+LANGS = ["en", "ja", "es", "pt-BR", "ar", "fr", "de", "tr", "it"]
+
 
 DEFAULT_UA = os.environ.get(
     "HTTP_USER_AGENT",
@@ -167,15 +199,28 @@ SUPP_URL_MIN = int(os.environ.get("SUPP_URL_MIN", "3"))
 issue_items: List[Dict[str, Any]] = []
 reply_count = 0
 
-LEADS_TOTAL = int(os.environ.get("LEADS_TOTAL", "100"))  # IMPORTANT: default 100 per your requirement
+LEADS_TOTAL = int((os.environ.get("LEADS_TOTAL") or "100").strip() or "100")
+# Minimum total posts floor (to decide whether to fallback/fill)
+floor_total = int((os.environ.get("FLOOR_TOTAL") or str(LEADS_TOTAL)).strip() or str(LEADS_TOTAL))
+
+# --- per-source targets (defaults) ---
+BS_TARGET = int((os.environ.get("BS_TARGET") or "50").strip() or "100")
+MS_TARGET = int((os.environ.get("MS_TARGET") or "100").strip() or "100")
+RD_TARGET = int((os.environ.get("RD_TARGET") or "20").strip() or "20")
+X_TARGET  = int((os.environ.get("X_TARGET")  or "3").strip() or "1")
+HN_TARGET = int((os.environ.get("HN_TARGET") or "70").strip() or "70")
+
+
 ISSUE_MAX_ITEMS = int(os.environ.get("ISSUE_MAX_ITEMS", "40"))  # chunking for long issue body
 
 # Branding / canonical
 # Branding / canonical
 SITE_BRAND = os.environ.get("SITE_BRAND", "Mikanntool")
 
-SITE_DOMAIN = env_first("SITE_DOMAIN", default=PUBLIC_BASE_URL)
-HUB_BASE_URL = env_first("HUB_BASE_URL", default=PUBLIC_BASE_URL.rstrip("/") + "/hub/")
+HUB_BASE_URL = "https://www.mikanntool.com/hub/"
+
+
+HUB_BASE_URL = "https://mikanntool.com/hub/"
 
 
 SITE_CONTACT_EMAIL = os.environ.get("SITE_CONTACT_EMAIL", "contact@mikanntool.com")
@@ -271,6 +316,91 @@ def write_json(path: str, obj: Any) -> None:
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
+BAD_AUTHOR_VALUES = {"", "unknown", "n/a", "na", "?"}
+
+def parse_iso_utc(s: str):
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        d = dt.datetime.fromisoformat(s)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=dt.timezone.utc)
+        return d.astimezone(dt.timezone.utc)
+    except Exception:
+        return None
+
+def load_recent_authors() -> dict:
+    data = read_json(RECENT_AUTHORS_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
+    authors = data.get("authors", {})
+    if not isinstance(authors, dict):
+        authors = {}
+    return {"authors": authors}
+
+def save_recent_authors(data: dict) -> None:
+    write_json(RECENT_AUTHORS_PATH, data)
+
+def author_key_from_post(p) -> str:
+    src = (getattr(p, "source", "") or "").strip().lower()
+    author = (getattr(p, "author", "") or "").strip().lower()
+    if not src or author in BAD_AUTHOR_VALUES:
+        return ""
+    return f"{src}:{author}"
+
+def purge_recent_authors(authors: dict, keep_days: int = 30) -> dict:
+    now = dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=keep_days)
+    out = {}
+    for k, v in (authors or {}).items():
+        d = parse_iso_utc(v)
+        if d is None or d >= cutoff:
+            out[k] = v
+    return out
+
+def filter_posts_by_author_cooldown(posts: list, authors: dict, cooldown_days: int):
+    if cooldown_days <= 0:
+        return posts, 0
+    now = dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=cooldown_days)
+
+    out = []
+    skipped = 0
+    for p in posts:
+        src = (getattr(p, "source", "") or "").strip().lower()
+        if src in ("x", "stub"):
+            out.append(p)
+            continue
+
+        key = author_key_from_post(p)
+        if not key:
+            out.append(p)
+            continue
+
+        last = parse_iso_utc((authors or {}).get(key, ""))
+        if last and last >= cutoff:
+            skipped += 1
+            continue
+
+        out.append(p)
+
+    return out, skipped
+
+def update_recent_authors_from_issue_items(issue_items: list, authors: dict, now_s: str):
+    added = 0
+    for it in issue_items:
+        src = (it.get("source") or "").strip().lower()
+        if src in ("x", "stub", "dummy"):
+            continue
+        author = (it.get("author") or "").strip().lower()
+        if author in BAD_AUTHOR_VALUES:
+            continue
+        authors[f"{src}:{author}"] = now_s
+        added += 1
+    return added
 
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -940,21 +1070,30 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 # =============================================================================
 
 
-def load_last_seen() -> Dict[str, Any]:
-    d = read_json(LAST_SEEN_PATH, default={})
-    if not isinstance(d, dict):
-        d = {}
-    if "x_seen" not in d or not isinstance(d.get("x_seen"), list):
-        d["x_seen"] = []
-    return d
-
-def save_last_seen(d: Dict[str, Any]) -> None:
+def load_last_seen():
+    """
+    Load persistent state for duplicate prevention (X etc.).
+    Stored at: state/last_seen.json
+    """
     os.makedirs(STATE_DIR, exist_ok=True)
-    # keep small (latest 200 ids)
-    seen = d.get("x_seen") or []
-    if isinstance(seen, list):
-        d["x_seen"] = seen[-200:]
-    write_json(LAST_SEEN_PATH, d)
+    data = read_json(LAST_SEEN_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
+    if not isinstance(data.get("x_seen"), list):
+        data["x_seen"] = []
+    return data
+
+
+def save_last_seen(state: dict) -> None:
+    """Persist state to state/last_seen.json (keep size bounded)."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    if not isinstance(state, dict):
+        state = {}
+    if isinstance(state.get("x_seen"), list) and len(state["x_seen"]) > 200:
+        state["x_seen"] = state["x_seen"][-200:]
+    write_json(LAST_SEEN_PATH, state)
+
+
 
 def collect_x_mentions(max_items: int = 1) -> List[Post]:
     """
@@ -1668,77 +1807,253 @@ I18N = {
         "copied": "コピーしました",
         "short_value": "3秒でできる",
     },
-    "ko": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "언어",
-        "share": "공유",
-        "problems": "이 도구가 해결할 수 있는 고민",
-        "tool": "도구",
-        "quick_answer": "결론(가장 빠른 해결 방향)",
-        "causes": "원인 패턴",
-        "steps": "체크리스트(단계별)",
-        "pitfalls": "자주 하는 실수와 회피법",
-        "next": "계속 안 될 때",
+    "es": {
+        "home": "Inicio",
+        "about": "Sobre nosotros",
+        "all_tools": "Todas las herramientas",
+        "language": "Idioma",
+        "share": "Compartir",
+        "problems": "Problemas que esta herramienta puede ayudar a resolver",
+        "tool": "Herramienta",
+        "quick_answer": "Respuesta rápida",
+        "causes": "Causas comunes",
+        "steps": "Lista de pasos",
+        "pitfalls": "Errores comunes y cómo evitarlos",
+        "next": "Si aún no funciona",
         "faq": "FAQ",
-        "references": "참고 링크",
-        "supplement": "추가 자료",
-        "related": "관련 도구",
-        "popular": "인기 도구",
-        "disclaimer": "면책",
-        "terms": "이용약관",
-        "privacy": "개인정보 처리방침",
-        "contact": "문의",
-        "footer_note": "바로 실행 가능한 가이드를 목표로 합니다.",
-        "aff_title": "추천",
-        "copy": "복사",
-        "open": "열기",
-        "copy_result": "결과 복사",
-        "clear": "지우기",
-        "input": "입력",
-        "output": "출력",
-        "generate": "생성",
-        "tool_hint": "상황을 붙여넣고 ‘생성’을 누르세요.",
-        "copied": "복사됨",
-        "short_value": "3초면 끝",
+        "references": "Enlaces de referencia",
+        "supplement": "Recursos complementarios",
+        "related": "Herramientas relacionadas",
+        "popular": "Herramientas populares",
+        "disclaimer": "Aviso legal",
+        "terms": "Términos",
+        "privacy": "Privacidad",
+        "contact": "Contacto",
+        "footer_note": "Guías prácticas, rápidas y respetuosas para reducir el ensayo y error.",
+        "aff_title": "Recomendado",
+        "copy": "Copiar",
+        "open": "Abrir",
+        "copy_result": "Copiar resultado",
+        "clear": "Limpiar",
+        "input": "Entrada",
+        "output": "Salida",
+        "generate": "Generar",
+        "tool_hint": "Pega tu situación y haz clic en Generar.",
+        "copied": "Copiado",
+        "short_value": "Listo en 3 segundos",
     },
-    "zh": {
-        "home": "Home",
-        "about": "About Us",
-        "all_tools": "All Tools",
-        "language": "语言",
-        "share": "分享",
-        "problems": "本工具可帮助解决的问题",
-        "tool": "工具",
-        "quick_answer": "结论（最快修复方向）",
-        "causes": "常见原因分类",
-        "steps": "步骤清单",
-        "pitfalls": "常见坑与规避方法",
-        "next": "仍无法解决时",
+    "pt-BR": {
+        "home": "Início",
+        "about": "Sobre nós",
+        "all_tools": "Todas as ferramentas",
+        "language": "Idioma",
+        "share": "Compartilhar",
+        "problems": "Problemas que esta ferramenta pode ajudar",
+        "tool": "Ferramenta",
+        "quick_answer": "Resposta rápida",
+        "causes": "Causas comuns",
+        "steps": "Passo a passo",
+        "pitfalls": "Armadilhas comuns e como evitar",
+        "next": "Se ainda não funcionar",
         "faq": "FAQ",
-        "references": "参考链接",
-        "supplement": "补充资料",
-        "related": "相关工具",
-        "popular": "热门工具",
-        "disclaimer": "免责声明",
-        "terms": "条款",
-        "privacy": "隐私政策",
-        "contact": "联系",
-        "footer_note": "提供可落地、快速、尊重用户的排障指南。",
-        "aff_title": "推荐",
-        "copy": "复制",
-        "open": "打开",
-        "copy_result": "复制结果",
-        "clear": "清空",
-        "input": "输入",
-        "output": "输出",
-        "generate": "生成",
-        "tool_hint": "粘贴你的情况并点击“生成”。",
-        "copied": "已复制",
-        "short_value": "3秒搞定",
+        "references": "Links de referência",
+        "supplement": "Recursos complementares",
+        "related": "Ferramentas relacionadas",
+        "popular": "Ferramentas populares",
+        "disclaimer": "Aviso legal",
+        "terms": "Termos",
+        "privacy": "Privacidade",
+        "contact": "Contato",
+        "footer_note": "Guias práticos, rápidos e respeitosos — para reduzir tentativas e erros.",
+        "aff_title": "Recomendado",
+        "copy": "Copiar",
+        "open": "Abrir",
+        "copy_result": "Copiar resultado",
+        "clear": "Limpar",
+        "input": "Entrada",
+        "output": "Saída",
+        "generate": "Gerar",
+        "tool_hint": "Cole sua situação e clique em Gerar.",
+        "copied": "Copiado",
+        "short_value": "Resolve em 3 segundos",
+    },
+    "ar": {
+        "home": "الرئيسية",
+        "about": "من نحن",
+        "all_tools": "كل الأدوات",
+        "language": "اللغة",
+        "share": "مشاركة",
+        "problems": "مشاكل يمكن أن تساعد هذه الأداة في حلها",
+        "tool": "الأداة",
+        "quick_answer": "إجابة سريعة",
+        "causes": "الأسباب الشائعة",
+        "steps": "قائمة الخطوات",
+        "pitfalls": "أخطاء شائعة وكيف تتجنبها",
+        "next": "إذا لم تنجح بعد",
+        "faq": "الأسئلة الشائعة",
+        "references": "روابط مرجعية",
+        "supplement": "موارد إضافية",
+        "related": "أدوات ذات صلة",
+        "popular": "أدوات شائعة",
+        "disclaimer": "إخلاء المسؤولية",
+        "terms": "الشروط",
+        "privacy": "الخصوصية",
+        "contact": "اتصل بنا",
+        "footer_note": "أدلة عملية وسريعة ومحترمة لتقليل المحاولة والخطأ.",
+        "aff_title": "موصى به",
+        "copy": "نسخ",
+        "open": "فتح",
+        "copy_result": "نسخ النتيجة",
+        "clear": "مسح",
+        "input": "إدخال",
+        "output": "إخراج",
+        "generate": "إنشاء",
+        "tool_hint": "الصق حالتك واضغط «إنشاء».",
+        "copied": "تم النسخ",
+        "short_value": "خلال 3 ثوانٍ",
+    },
+    "fr": {
+        "home": "Accueil",
+        "about": "À propos",
+        "all_tools": "Tous les outils",
+        "language": "Langue",
+        "share": "Partager",
+        "problems": "Problèmes que cet outil peut aider à résoudre",
+        "tool": "Outil",
+        "quick_answer": "Réponse rapide",
+        "causes": "Causes courantes",
+        "steps": "Étapes",
+        "pitfalls": "Pièges fréquents et comment les éviter",
+        "next": "Si cela ne fonctionne toujours pas",
+        "faq": "FAQ",
+        "references": "Liens de référence",
+        "supplement": "Ressources complémentaires",
+        "related": "Outils associés",
+        "popular": "Outils populaires",
+        "disclaimer": "Avertissement",
+        "terms": "Conditions",
+        "privacy": "Confidentialité",
+        "contact": "Contact",
+        "footer_note": "Des guides pratiques, rapides et respectueux pour réduire les essais-erreurs.",
+        "aff_title": "Recommandé",
+        "copy": "Copier",
+        "open": "Ouvrir",
+        "copy_result": "Copier le résultat",
+        "clear": "Effacer",
+        "input": "Entrée",
+        "output": "Sortie",
+        "generate": "Générer",
+        "tool_hint": "Collez votre situation puis cliquez sur « Générer ».",
+        "copied": "Copié",
+        "short_value": "Fait en 3 secondes",
+    },
+    "de": {
+        "home": "Start",
+        "about": "Über uns",
+        "all_tools": "Alle Tools",
+        "language": "Sprache",
+        "share": "Teilen",
+        "problems": "Probleme, bei denen dieses Tool helfen kann",
+        "tool": "Tool",
+        "quick_answer": "Kurzantwort",
+        "causes": "Häufige Ursachen",
+        "steps": "Schritt-für-Schritt-Checkliste",
+        "pitfalls": "Häufige Stolperfallen & wie man sie vermeidet",
+        "next": "Wenn es noch nicht klappt",
+        "faq": "FAQ",
+        "references": "Referenzlinks",
+        "supplement": "Ergänzende Ressourcen",
+        "related": "Verwandte Tools",
+        "popular": "Beliebte Tools",
+        "disclaimer": "Haftungsausschluss",
+        "terms": "Bedingungen",
+        "privacy": "Datenschutz",
+        "contact": "Kontakt",
+        "footer_note": "Praktische, schnelle und respektvolle Anleitungen – damit weniger Trial-and-Error nötig ist.",
+        "aff_title": "Empfohlen",
+        "copy": "Kopieren",
+        "open": "Öffnen",
+        "copy_result": "Ergebnis kopieren",
+        "clear": "Leeren",
+        "input": "Eingabe",
+        "output": "Ausgabe",
+        "generate": "Generieren",
+        "tool_hint": "Fügen Sie Ihre Situation ein und klicken Sie auf „Generieren“.",
+        "copied": "Kopiert",
+        "short_value": "In 3 Sekunden erledigt",
+    },
+    "tr": {
+        "home": "Ana Sayfa",
+        "about": "Hakkımızda",
+        "all_tools": "Tüm Araçlar",
+        "language": "Dil",
+        "share": "Paylaş",
+        "problems": "Bu aracın yardımcı olabileceği sorunlar",
+        "tool": "Araç",
+        "quick_answer": "Hızlı cevap",
+        "causes": "Yaygın nedenler",
+        "steps": "Adım adım kontrol listesi",
+        "pitfalls": "Yaygın hatalar ve nasıl kaçınılır",
+        "next": "Hâlâ çalışmıyorsa",
+        "faq": "SSS",
+        "references": "Kaynak bağlantıları",
+        "supplement": "Ek kaynaklar",
+        "related": "İlgili araçlar",
+        "popular": "Popüler araçlar",
+        "disclaimer": "Sorumluluk reddi",
+        "terms": "Şartlar",
+        "privacy": "Gizlilik",
+        "contact": "İletişim",
+        "footer_note": "Deneme-yanılmayı azaltmak için pratik, hızlı ve saygılı rehberler.",
+        "aff_title": "Önerilen",
+        "copy": "Kopyala",
+        "open": "Aç",
+        "copy_result": "Sonucu kopyala",
+        "clear": "Temizle",
+        "input": "Girdi",
+        "output": "Çıktı",
+        "generate": "Oluştur",
+        "tool_hint": "Durumunuzu yapıştırın ve “Oluştur”a tıklayın.",
+        "copied": "Kopyalandı",
+        "short_value": "3 saniyede biter",
+    },
+    "it": {
+        "home": "Home",
+        "about": "Chi siamo",
+        "all_tools": "Tutti gli strumenti",
+        "language": "Lingua",
+        "share": "Condividi",
+        "problems": "Problemi che questo strumento può aiutare a risolvere",
+        "tool": "Strumento",
+        "quick_answer": "Risposta rapida",
+        "causes": "Cause comuni",
+        "steps": "Elenco dei passaggi",
+        "pitfalls": "Errori comuni e come evitarli",
+        "next": "Se ancora non funziona",
+        "faq": "FAQ",
+        "references": "Link di riferimento",
+        "supplement": "Risorse aggiuntive",
+        "related": "Strumenti correlati",
+        "popular": "Strumenti popolari",
+        "disclaimer": "Disclaimer",
+        "terms": "Termini",
+        "privacy": "Privacy",
+        "contact": "Contatti",
+        "footer_note": "Guide pratiche, rapide e rispettose per ridurre tentativi ed errori.",
+        "aff_title": "Consigliato",
+        "copy": "Copia",
+        "open": "Apri",
+        "copy_result": "Copia risultato",
+        "clear": "Pulisci",
+        "input": "Input",
+        "output": "Output",
+        "generate": "Genera",
+        "tool_hint": "Incolla la tua situazione e fai clic su “Genera”.",
+        "copied": "Copiato",
+        "short_value": "Fatto in 3 secondi",
     },
 }
+
 
 def build_i18n_script(default_lang: str = "en") -> str:
     i18n_json = json.dumps(I18N, ensure_ascii=False)
@@ -2634,8 +2949,60 @@ function copyTextFrom(id, btnId){
     html_doc = f"""<!doctype html>
 <html lang="{html_escape(DEFAULT_LANG)}">
 <head>
+　<!-- ===== Consent / Privacy (必ず最初) ===== -->
+<script data-cfasync="false" src="https://cmp.gatekeeperconsent.com/min.js"></script>
+<script data-cfasync="false" src="https://the.gatekeeperconsent.com/cmp.min.js"></script>
+
+<!-- ===== Infolinks ===== -->
+<script type="text/javascript">
+  var infolinks_pid = 3443178;
+  var infolinks_wsid = 0;
+</script>
+<script type="text/javascript" src="https://resources.infolinks.com/js/infolinks_main.js"></script>
+
+<!-- ===== Ezoic 初期化 ===== -->
+<script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
+<script>
+  window.ezstandalone = window.ezstandalone || {{}};
+
+
+  ezstandalone.cmd = ezstandalone.cmd || [];
+</script>
+
+<!-- ===== Adsterra / Popunder ===== -->
+<script src="https://quge5.com/88/tag.min.js"
+        data-zone="206389"
+        async
+        data-cfasync="false"></script>
+
+
+<script src="https://pl28593834.effectivegatecpm.com/bf/0c/41/bf0c417e61a02af02bb4fab871651c1b.js"></script>
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- ===== Ezoic: Consent / Privacy（必ず最初） ===== -->
+<script data-cfasync="false" src="https://cmp.gatekeeperconsent.com/min.js"></script>
+<script data-cfasync="false" src="https://the.gatekeeperconsent.com/cmp.min.js"></script>
+
+<!-- ===== Ezoic: Header Script ===== -->
+<script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
+<script>
+  window.ezstandalone = window.ezstandalone || {{}};
+
+  ezstandalone.cmd = ezstandalone.cmd || [];
+</script>
+
+<!-- ===== Infolinks ===== -->
+<script type="text/javascript">
+  var infolinks_pid = 3443178;
+  var infolinks_wsid = 0;
+</script>
+<script type="text/javascript" src="https://resources.infolinks.com/js/infolinks_main.js"></script>
+
+<!-- ===== Adsterra / Popunder ===== -->
+<script src="https://quge5.com/88/tag.min.js" data-zone="206389" async data-cfasync="false"></script>
+<script src="https://pl28593834.effectivegatecpm.com/bf/0c/41/bf0c417e61a02af02bb4fab871651c1b.js"></script>
+
   <title>{html_escape(theme.search_title)} | {html_escape(SITE_BRAND)}</title>
   <meta name="description" content="{html_escape('One-page fix guide + checklist + tool: ' + theme.search_title)}">
   <link rel="canonical" href="{html_escape(canonical)}">
@@ -2652,10 +3019,33 @@ function copyTextFrom(id, btnId){
         "Noto Sans JP","Noto Sans KR","Noto Sans SC", Arial, "Apple Color Emoji","Segoe UI Emoji";
     }}
     .glass {{ backdrop-filter: blur(10px); }}
+    .aff-slot{{
+
+  width:100%;
+  max-width:720px;
+  margin:24px auto;
+  padding:16px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  overflow:hidden;
+}}
+
+
   </style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-white">
   {bg_css}
+  <!-- ===== Ezoic Placement (example 101) ===== -->
+<div id="ezoic-pub-ad-placeholder-101"></div>
+<script>
+  ezstandalone.cmd.push(function () {{
+
+    ezstandalone.showAds(101);
+  }});
+
+</script>
+
 
   <header class="relative z-10 mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
@@ -2673,9 +3063,15 @@ function copyTextFrom(id, btnId){
         <a class="text-white/80 hover:text-white" href="{html_escape(hub_url)}#tools" data-i18n="all_tools">All Tools</a>
         <select id="langSel" class="ml-2 rounded-xl bg-white/10 border border-white/10 px-2 py-1 text-xs">
           <option value="en">EN</option>
-          <option value="ja">JA</option>
-          <option value="ko">KO</option>
-          <option value="zh">ZH</option>
+        　<option value="ja">日本語</option>
+        　<option value="es">Español</option>
+        　<option value="pt-BR">Português (Brasil)</option>
+        　<option value="ar">العربية</option>
+        　<option value="fr">Français</option>
+        　<option value="de">Deutsch</option>
+        　<option value="tr">Türkçe</option>
+        　<option value="it">Italiano</option>
+
         </select>
       </nav>
     </div>
@@ -2713,6 +3109,11 @@ function copyTextFrom(id, btnId){
     <section class="mt-6">
   {tool_ui}
 </section>
+<!-- AFF_SLOT_MID: BEGIN -->
+<section id="aff-slot-mid" data-aff-slot="mid" aria-label="Sponsored" class="aff-slot">
+  <!-- AFF_SLOT_MID -->
+</section>
+<!-- AFF_SLOT_MID: END -->
 
 <script>
 function copyTextFrom(inputId, btnId) {{
@@ -2725,7 +3126,8 @@ function copyTextFrom(inputId, btnId) {{
   const done = () => {{
     if (!btn) return;
     const prev = btn.textContent;
-    btn.textContent = "Copied";
+    btn.textContent = t('copied');
+
     setTimeout(() => {{ btn.textContent = prev; }}, 1200);
   }};
 
@@ -2899,11 +3301,12 @@ def allocate_unique_slug(base_slug: str) -> str:
 
 
 def site_url_for_slug(slug: str) -> str:
-    """
-    Public URL for a generated page.
-    Your generation path: goliath/pages/<slug>/index.html
-    """
-    return SITE_DOMAIN.rstrip("/") + f"/goliath/pages/{slug}/"
+    """Public URL of a generated tool page (must use PUBLIC_BASE_URL)."""
+    base = (PUBLIC_BASE_URL or "").rstrip("/")
+    if not base:
+        base = "https://mikanntool.com"
+    return f"{base}/goliath/pages/{slug}/"
+
 
 
 def choose_related_tools(all_sites: List[Dict[str, Any]], category: str, exclude_slug: str, n: int = 5) -> List[Dict[str, Any]]:
@@ -3147,11 +3550,14 @@ def make_stub_posts(n: int) -> List[Post]:
         ))
     return stubs
 
+# FORCE: use ONLY this run's generated site URL for all replies
+RUN_TOOL_URL = None
 
 def build_issue_items(posts: List[Post], post_to_tool_url: Dict[str, str]) -> List[Dict[str, str]]:
     items: List[Dict[str, str]] = []
     for p in posts:
-        tool_url = post_to_tool_url.get(p.id, "")
+        tool_url = RUN_TOOL_URL
+
         if not tool_url:
             continue
         reply = openai_generate_reply_stub(p, tool_url)
@@ -3280,44 +3686,183 @@ def collect_all() -> List[Post]:
         except Exception:
             return
 
+        # --- author de-dup / 7-day exclude (except X) ---
+    author_days = getenv_int("AUTHOR_SEEN_DAYS", 7)
+    now_ts = int(time.time())
+    cutoff_ts = now_ts - author_days * 86400
+    last_seen = load_last_seen()
+    prune_author_seen(last_seen, cutoff_ts)
+    author_seen_map = last_seen.get("author_seen") if isinstance(last_seen, dict) else {}
+    recent_authors = set()
+    if isinstance(author_seen_map, dict):
+        for a, ts in author_seen_map.items():
+            try:
+                t = int(ts)
+            except Exception:
+                continue
+            if t >= cutoff_ts and isinstance(a, str):
+                recent_authors.add(a.strip().lower())
+
+    banned_substrings = [
+        "mikanntool",
+        "mikann20041029",
+        "mikann20042029",
+    ]
+def dedup(items):
+    seen = set()
+    out = []
+    for it in items:
+                # it can be dict OR object (e.g., Bluesky Post). Make a stable key safely.
+        if isinstance(it, dict):
+            k = it.get("url") or it.get("id") or it.get("uri") or repr(it)
+        else:
+            # try common attrs
+            k = (
+                getattr(it, "url", None)
+                or getattr(it, "id", None)
+                or getattr(it, "uri", None)
+                or getattr(it, "cid", None)
+                or repr(it)
+            )
+
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
+
     def dedup(posts: List[Post]) -> List[Post]:
-        seen = set()
+        # ✅ state から過去利用 author を読む（B）
+        state = load_last_seen()
+        author_seen = state.get("author_seen", {})
+        if not isinstance(author_seen, dict):
+            author_seen = {}
+
+        now_ts = int(time.time())
+        cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
+        cooldown_sec = int(cooldown_days * 86400)
+
+        # ✅ banned（C）：URLだけじゃなく text/author も見る
+        banned = {"mikanntool", "mikann20041029", "mikann20042029"}
+        extra = (os.getenv("BANNED_SUBSTRINGS") or "").strip()
+        if extra:
+            for s in extra.split(","):
+                s = s.strip().lower()
+                if s:
+                    banned.add(s)
+
+                   
+
+
+
+
+
+
+        # 既に採用したURLセット
+        used_urls = set()
+        for p in posts:
+            if getattr(p, "url", None):
+                used_urls.add(norm_url(p.url))
+
         out: List[Post] = []
         for p in posts:
-            if not p or not p.text:
+            src = (getattr(p, "source", "") or "").strip()
+            author = (getattr(p, "author", "") or "").strip().lower()
+            text = (getattr(p, "text", "") or "").strip()
+
+            # ban check
+            hay = f"{author}\n{text}\n{getattr(p, 'url', '')}".lower()
+            if any(b in hay for b in banned):
                 continue
-            key = p.url or (p.source + "|" + p.id) or sha1(p.text)[:16]
-            if key in seen:
+
+            # author cooldown（X以外）
+            if src != "x" and author:
+                key = f"{src}:{author}"
+                last = author_seen.get(key)
+                try:
+                    last_int = int(last) if last is not None else 0
+                except Exception:
+                    last_int = 0
+                if last_int and (now_ts - last_int) < cooldown_sec:
+                    continue
+
+            # URL重複排除
+            u = norm_url(getattr(p, "url", "") or "")
+            if u and u in used_urls:
+                # 同URLが複数来たら最初の1個だけ残す
+                #（すでにセットに入ってるのでスキップ）
                 continue
-            seen.add(key)
+
+            if u:
+                used_urls.add(u)
             out.append(p)
+
         return out
 
-    def by_source(posts: List[Post], source: str) -> List[Post]:
-        return [p for p in posts if p.source == source]
 
-    # X MUST be called exactly once per run
-    xx = collect_x_mentions(max_items=X_TARGET)
 
-    # Primary collection
-    bs = collect_bluesky(max_items=BS_TARGET)
-    ms = collect_mastodon(max_items=MS_TARGET)
-    rd = collect_reddit(max_items=RD_TARGET)
-    hn = collect_hn(max_items=HN_TARGET)
 
-    all_posts = dedup(bs + ms + rd + xx + hn)
 
-    # Top-up (non-X) if per-source targets not met
-    # (Collectors already widen internally; this is an extra safety net.)
-    for _ in range(2):
-        bs_now = len(by_source(all_posts, "bluesky"))
-        ms_now = len(by_source(all_posts, "mastodon"))
-        rd_now = len(by_source(all_posts, "reddit"))
-        hn_now = len(by_source(all_posts, "hn"))
+def by_source(posts: List[Post], source: str) -> List[Post]:
+    return [p for p in posts if p.source == source]
 
-        need_any = (bs_now < BS_TARGET) or (ms_now < MS_TARGET) or (rd_now < RD_TARGET) or (hn_now < HN_TARGET)
-        if not need_any:
-            break
+
+# X MUST be called exactly once per run
+xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
+bs = collect_bluesky(max_items=BS_TARGET)
+ms = collect_mastodon(max_items=MS_TARGET)
+rd = collect_reddit(max_items=RD_TARGET)
+hn = collect_hn(max_items=HN_TARGET)
+
+all_posts = dedup(bs + ms + rd + xx + hn)
+
+# Primary collection
+# --- per-source targets (defaults) ---
+def env_int(name: str, default: int) -> int:
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    v = v.strip()
+    if v == "":
+        return default
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+BS_TARGET = env_int("BS_TARGET", 100)
+MS_TARGET = env_int("MS_TARGET", 100)
+RD_TARGET = env_int("RD_TARGET", 20)
+X_TARGET  = env_int("X_TARGET", 1)
+HN_TARGET = env_int("HN_TARGET", 70)
+
+LEADS_TOTAL = env_int("LEADS_TOTAL", 100)
+
+
+bs = collect_bluesky(max_items=BS_TARGET)
+ms = collect_mastodon(max_items=MS_TARGET)
+rd = collect_reddit(max_items=RD_TARGET)
+hn = collect_hn(max_items=HN_TARGET)
+
+all_posts = dedup(bs + ms + rd + xx + hn)
+
+# Top-up (non-X) if per-source targets not met
+# (Collectors already widen internally; this is an extra safety net.)
+for _ in range(2):
+    bs_now = len(by_source(all_posts, "bluesky"))
+    ms_now = len(by_source(all_posts, "mastodon"))
+    rd_now = len(by_source(all_posts, "reddit"))
+    hn_now = len(by_source(all_posts, "hn"))
+
+    need_any = (
+        (bs_now < BS_TARGET)
+        or (ms_now < MS_TARGET)
+        or (rd_now < RD_TARGET)
+        or (hn_now < HN_TARGET)
+    )
+    if not need_any:
+        break
+
 
         logging.warning("Top-up retry: bs=%d/%d ms=%d/%d rd=%d/%d hn=%d/%d",
                         bs_now, BS_TARGET, ms_now, MS_TARGET, rd_now, RD_TARGET, hn_now, HN_TARGET)
@@ -3345,20 +3890,137 @@ def collect_all() -> List[Post]:
             logging.warning("Top-up from cache: +%d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
             all_posts = dedup(all_posts + cached)
 
-    # Hard enforcement: do not proceed if we still cannot meet the required minimum.
+def getenv_int(name: str, default: int) -> int:
+    """
+    Robust int env reader:
+    - missing -> default
+    - empty string -> default
+    - invalid -> default
+    """
+    try:
+        v = os.environ.get(name)
+        if v is None:
+            return int(default)
+        v = str(v).strip()
+        if v == "":
+            return int(default)
+        return int(v)
+    except Exception:
+        return int(default)
+
+
+def norm_url(u: str) -> str:
+    # URL正規化（utm除去・末尾スラッシュ統一）
+    u = (u or "").strip()
+    if not u:
+        return ""
+    try:
+        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+        parts = urlparse(u)
+        q = parse_qsl(parts.query, keep_blank_values=True)
+        q2 = [(k, v) for (k, v) in q if not str(k).lower().startswith("utm_")]
+        new_q = urlencode(q2, doseq=True)
+        path = (parts.path or "").rstrip("/")
+        normed = urlunparse((parts.scheme, parts.netloc, path, parts.params, new_q, ""))
+        return normed.rstrip("/")
+    except Exception:
+        return u.rstrip("/")
+
+
+def dedup(posts: List["Post"]) -> List["Post"]:
+    """
+    De-dup by normalized URL first; fallback to (source,id); preserve order.
+    """
+    out: List["Post"] = []
+    seen = set()
+    for p in posts or []:
+        try:
+            url = norm_url(getattr(p, "url", "") or "")
+            key = ("url", url) if url else ("id", getattr(p, "source", ""), getattr(p, "id", ""))
+        except Exception:
+            key = ("raw", repr(p))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def collect_all() -> List["Post"]:
+    """
+    Collect from all sources with per-source targets.
+    X must be called exactly once per run.
+    """
+    # totals
+    floor_total = getenv_int("LEADS_TOTAL", 100)
+
+    # per-source targets (defaults)
+    BS_TARGET = getenv_int("BS_TARGET", 50)
+    MS_TARGET = getenv_int("MS_TARGET", 100)
+    RD_TARGET = getenv_int("RD_TARGET", 20)
+    X_TARGET  = getenv_int("X_TARGET", 3)
+    HN_TARGET = getenv_int("HN_TARGET", 70)
+
+    def by_source(posts: List["Post"], source: str) -> List["Post"]:
+        return [p for p in posts if getattr(p, "source", None) == source]
+
+    # X MUST be called exactly once per run
+    xx = collect_x_mentions(max_items=X_TARGET)
+
+    # Primary collection
+    bs = collect_bluesky(max_items=BS_TARGET)
+    ms = collect_mastodon(max_items=MS_TARGET)
+    rd = collect_reddit(max_items=RD_TARGET)
+    hn = collect_hn(max_items=HN_TARGET)
+
+    all_posts = dedup(bs + ms + rd + xx + hn)
+
+    # Top-up (non-X) if per-source targets not met (2 retries)
+    for _ in range(2):
+        bs_now = len(by_source(all_posts, "bluesky"))
+        ms_now = len(by_source(all_posts, "mastodon"))
+        rd_now = len(by_source(all_posts, "reddit"))
+        hn_now = len(by_source(all_posts, "hn"))
+
+        need_any = (bs_now < BS_TARGET) or (ms_now < MS_TARGET) or (rd_now < RD_TARGET) or (hn_now < HN_TARGET)
+        if not need_any:
+            break
+
+        if bs_now < BS_TARGET:
+            all_posts = dedup(all_posts + collect_bluesky(max_items=max(1, BS_TARGET - bs_now)))
+        if ms_now < MS_TARGET:
+            all_posts = dedup(all_posts + collect_mastodon(max_items=max(1, MS_TARGET - ms_now)))
+        if rd_now < RD_TARGET:
+            all_posts = dedup(all_posts + collect_reddit(max_items=max(1, RD_TARGET - rd_now)))
+        if hn_now < HN_TARGET:
+            all_posts = dedup(all_posts + collect_hn(max_items=max(1, HN_TARGET - hn_now)))
+
+    # If still short, top-up from cache
+    if len(all_posts) < floor_total:
+        cached = load_cache(max_items=6000, max_age_days=30)
+        if cached:
+            logging.warning("Top-up from cache: %d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
+            all_posts = dedup(all_posts + cached)
+
+    # Hard enforcement
     if len(all_posts) < floor_total:
         raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
 
     append_cache(all_posts)
 
-    logging.info("Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
-                 len(all_posts),
-                 len(by_source(all_posts, "bluesky")),
-                 len(by_source(all_posts, "mastodon")),
-                 len(by_source(all_posts, "reddit")),
-                 len(by_source(all_posts, "x")),
-                 len(by_source(all_posts, "hn")))
+    logging.info(
+        "Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
+        len(all_posts),
+        len(by_source(all_posts, "bluesky")),
+        len(by_source(all_posts, "mastodon")),
+        len(by_source(all_posts, "reddit")),
+        len(by_source(all_posts, "x")),
+        len(by_source(all_posts, "hn")),
+    )
+
     return all_posts
+
+
 
 
 def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
@@ -3426,6 +4088,9 @@ def build_sites(themes: List[Theme], aff_norm: Dict[str, List[Dict[str, Any]]], 
         theme.slug = final_slug
 
         tool_url = site_url_for_slug(final_slug)
+        # remember this run's site url (one site per run)
+        global RUN_TOOL_URL
+        RUN_TOOL_URL = tool_url
 
         # shortlink
         code = short_code_for_url(tool_url)
@@ -3634,7 +4299,13 @@ def main() -> int:
 
     # Prepare reply candidates (minimum 100)
     mapped_post_ids = set(post_to_tool_url.keys())
-    mapped_posts = [p for p in posts if p.id in mapped_post_ids]
+        # 過去7日以内に同じ人をissue候補に入れたら除外（Xは対象外）
+    recent_authors = load_recent_authors()
+    authors_map = recent_authors["authors"]
+    mapped_posts, cooldown_skipped = filter_posts_by_author_cooldown(
+        mapped_posts, authors_map, ISSUE_AUTHOR_COOLDOWN_DAYS
+    )
+
 
     if len(mapped_posts) < LEADS_TOTAL:
         need = LEADS_TOTAL - len(mapped_posts)
@@ -3647,6 +4318,21 @@ def main() -> int:
         mapped_posts.extend(stubs)
 
     mapped_posts = mapped_posts[: max(LEADS_TOTAL, 100)]
+    # --- persist author_seen (avoid same author for next 7 days; except X) ---
+    try:
+        last_seen = load_last_seen()
+        author_days = getenv_int("AUTHOR_SEEN_DAYS", 7)
+        now_ts = int(time.time())
+        cutoff_ts = now_ts - author_days * 86400
+        prune_author_seen(last_seen, cutoff_ts)
+
+        # mapped_post_ids は「本物の投稿だけ」のID集合（stubは入らない）なので安全
+        used_real_posts = [p for p in mapped_posts if p.id in mapped_post_ids]
+
+        mark_author_seen(last_seen, used_real_posts, now_ts)
+        save_last_seen(last_seen)
+    except Exception as ex:
+        eprint(f"[warn] author_seen update failed: {ex}")
 
     issue_items = build_issue_items(mapped_posts, post_to_tool_url)
 
@@ -3657,6 +4343,13 @@ def main() -> int:
         for i, sp in enumerate(extra_stubs):
             post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
         issue_items.extend(build_issue_items(extra_stubs, post_to_tool_url))
+        #今回issueに載せた人を記録（次回以降7日避ける）
+    now_s = now_iso()
+    _added = update_recent_authors_from_issue_items(issue_items, authors_map, now_s)
+    recent_authors["authors"] = purge_recent_authors(
+        authors_map, keep_days=max(30, ISSUE_AUTHOR_COOLDOWN_DAYS * 4)
+    )
+    save_recent_authors(recent_authors)
 
     notes = []
     notes.append(f"Run: {RUN_ID}")
@@ -3676,6 +4369,43 @@ def main() -> int:
     extra_notes = "\n".join(notes).strip()
 
     issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
+    # ✅ B) 今回使った author を state に保存（次回以降 7日避けるため）
+    try:
+        state = load_last_seen()
+        now_ts = int(time.time())
+        cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
+        keep_sec = int((cooldown_days + 3) * 86400)  # 少し余裕
+
+        author_seen = state.get("author_seen", {})
+        if not isinstance(author_seen, dict):
+            author_seen = {}
+
+        # 古いものを整理
+        pruned = {}
+        for k, v in author_seen.items():
+            try:
+                v_int = int(v)
+            except Exception:
+                continue
+            if now_ts - v_int <= keep_sec:
+                pruned[str(k)] = v_int
+        author_seen = pruned
+
+        for p in mapped_posts:
+            if getattr(p, "source", "") == "stub":
+                continue
+            a = (getattr(p, "author", "") or "").strip().lower()
+            if not a:
+                continue
+            author_seen[f"{p.source}:{a}"] = now_ts
+
+        state["author_seen"] = author_seen
+        save_last_seen(state)
+        log(f"Saved author_seen: {len(author_seen)} authors (cooldown={cooldown_days}d)")
+    except Exception as e:
+        log(f"WARN: failed to update author_seen state: {e}")
+
+
     logging.info("Wrote issues payload: %s", issues_path)
 
     # post drafts (short URL + one-line value)
