@@ -3584,9 +3584,14 @@ def chunk_issue_bodies(items: List[Dict[str, str]], chunk_size: int = 40) -> Lis
     return bodies
 
 
-def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> str:
+def write_issues_payload(
+    items: List[Dict[str, str]],
+    extra_notes: str = "",
+    generated_urls: List[str] | None = None
+) -> str:
     """
     Write JSON with titles/bodies for GitHub issues.
+    Also stores generated_urls for this run (authoritative).
     Returns path to JSON.
     """
     bodies = chunk_issue_bodies(items, ISSUE_MAX_ITEMS)
@@ -3598,8 +3603,17 @@ def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> 
         payloads.append({"title": title, "body": body})
 
     out_path = os.path.join(OUT_DIR, f"issues_payload_{RUN_ID}.json")
-    write_json(out_path, {"run_id": RUN_ID, "count": len(items), "issues": payloads})
+    write_json(
+        out_path,
+        {
+            "run_id": RUN_ID,
+            "count": len(items),
+            "issues": payloads,
+            "generated_urls": list(dict.fromkeys(generated_urls or [])),  # dedup keep order
+        },
+    )
     return out_path
+
 
 
 # =============================================================================
