@@ -42,7 +42,7 @@ def _run_goliath_main() -> int:
     except Exception:
         print("[ROOT] Unhandled exception inside goliath/main.py:", file=sys.stderr)
         traceback.print_exc()
-        return 0
+        return 1
 
 
 if __name__ == "__main__":
