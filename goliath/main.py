@@ -1037,6 +1037,28 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 
 
 def load_last_seen():
+    """
+    Load persistent state for duplicate prevention (X etc.).
+    Stored at: state/last_seen.json
+    """
+    os.makedirs(STATE_DIR, exist_ok=True)
+    data = read_json(LAST_SEEN_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
+    if not isinstance(data.get("x_seen"), list):
+        data["x_seen"] = []
+    return data
+
+
+def save_last_seen(state: dict) -> None:
+    """Persist state to state/last_seen.json (keep size bounded)."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    if not isinstance(state, dict):
+        state = {}
+    if isinstance(state.get("x_seen"), list) and len(state["x_seen"]) > 200:
+        state["x_seen"] = state["x_seen"][-200:]
+    write_json(LAST_SEEN_PATH, state)
+
 
 
 def collect_x_mentions(max_items: int = 1) -> List[Post]:
