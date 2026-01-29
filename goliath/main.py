@@ -3825,7 +3825,7 @@ for _ in range(2):
             logging.warning("Top-up from cache: +%d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
             all_posts = dedup(all_posts + cached)
 
-    def collect_all() -> List[Post]:
+def collect_all() -> List[Post]:
     # Hard enforcement: do not proceed if we still cannot meet the required minimum.
     if len(all_posts) < floor_total:
         cached = load_cache(max_items=6000, max_age_days=30)
@@ -3856,6 +3856,7 @@ for _ in range(2):
     )
 
     return all_posts
+
 
 
 def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
