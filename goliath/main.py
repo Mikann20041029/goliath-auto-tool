@@ -3694,7 +3694,7 @@ def collect_all() -> List[Post]:
         "mikann20042029",
     ]
 
-        def dedup(posts: List[Post]) -> List[Post]:
+    def dedup(posts: List[Post]) -> List[Post]:
         # ✅ state から過去利用 author を読む（B）
         state = load_last_seen()
         author_seen = state.get("author_seen", {})
