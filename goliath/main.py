@@ -4135,7 +4135,7 @@ def main() -> int:
         for i, sp in enumerate(extra_stubs):
             post_to_tool_url[sp.id] = built_urls[i % len(built_urls)]
         issue_items.extend(build_issue_items(extra_stubs, post_to_tool_url))
-　　    # 今回issueに載せた人を記録（次回以降7日避ける）
+        #今回issueに載せた人を記録（次回以降7日避ける）
     now_s = now_iso()
     _added = update_recent_authors_from_issue_items(issue_items, authors_map, now_s)
     recent_authors["authors"] = purge_recent_authors(
