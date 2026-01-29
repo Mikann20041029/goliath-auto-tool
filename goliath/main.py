@@ -67,6 +67,22 @@ def env_first(*names: str, default: str = "") -> str:
         if v:
             return v
     return default
+    def getenv_int(name: str, default: int) -> int:
+    """
+    Safe int reader from env.
+    Accepts e.g. "100", " 100 ", "100.0" (as 100), otherwise returns default.
+    """
+    try:
+        v = os.environ.get(name, "")
+        if v is None:
+            return int(default)
+        v = str(v).strip()
+        if v == "":
+            return int(default)
+        # allow "100.0"
+        return int(float(v))
+    except Exception:
+        return int(default)
 
 # ---- Public base (link生成はここ基準) ----
 # 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
