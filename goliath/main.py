@@ -3767,30 +3767,37 @@ def collect_all() -> List[Post]:
 
 
 def by_source(posts: List[Post], source: str) -> List[Post]:
-        return [p for p in posts if p.source == source]
+    return [p for p in posts if p.source == source]
 
-    # X MUST be called exactly once per run
-    xx = collect_x_mentions(max_items=X_TARGET)
 
-    # Primary collection
-    bs = collect_bluesky(max_items=BS_TARGET)
-    ms = collect_mastodon(max_items=MS_TARGET)
-    rd = collect_reddit(max_items=RD_TARGET)
-    hn = collect_hn(max_items=HN_TARGET)
+# X MUST be called exactly once per run
+xx = collect_x_mentions(max_items=X_TARGET)
 
-    all_posts = dedup(bs + ms + rd + xx + hn)
+# Primary collection
+bs = collect_bluesky(max_items=BS_TARGET)
+ms = collect_mastodon(max_items=MS_TARGET)
+rd = collect_reddit(max_items=RD_TARGET)
+hn = collect_hn(max_items=HN_TARGET)
 
-    # Top-up (non-X) if per-source targets not met
-    # (Collectors already widen internally; this is an extra safety net.)
-    for _ in range(2):
-        bs_now = len(by_source(all_posts, "bluesky"))
-        ms_now = len(by_source(all_posts, "mastodon"))
-        rd_now = len(by_source(all_posts, "reddit"))
-        hn_now = len(by_source(all_posts, "hn"))
+all_posts = dedup(bs + ms + rd + xx + hn)
 
-        need_any = (bs_now < BS_TARGET) or (ms_now < MS_TARGET) or (rd_now < RD_TARGET) or (hn_now < HN_TARGET)
-        if not need_any:
-            break
+# Top-up (non-X) if per-source targets not met
+# (Collectors already widen internally; this is an extra safety net.)
+for _ in range(2):
+    bs_now = len(by_source(all_posts, "bluesky"))
+    ms_now = len(by_source(all_posts, "mastodon"))
+    rd_now = len(by_source(all_posts, "reddit"))
+    hn_now = len(by_source(all_posts, "hn"))
+
+    need_any = (
+        (bs_now < BS_TARGET)
+        or (ms_now < MS_TARGET)
+        or (rd_now < RD_TARGET)
+        or (hn_now < HN_TARGET)
+    )
+    if not need_any:
+        break
+
 
         logging.warning("Top-up retry: bs=%d/%d ms=%d/%d rd=%d/%d hn=%d/%d",
                         bs_now, BS_TARGET, ms_now, MS_TARGET, rd_now, RD_TARGET, hn_now, HN_TARGET)
