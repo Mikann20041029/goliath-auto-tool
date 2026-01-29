@@ -3825,20 +3825,37 @@ for _ in range(2):
             logging.warning("Top-up from cache: +%d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
             all_posts = dedup(all_posts + cached)
 
+    def collect_all() -> List[Post]:
     # Hard enforcement: do not proceed if we still cannot meet the required minimum.
     if len(all_posts) < floor_total:
-        raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
+        cached = load_cache(max_items=6000, max_age_days=30)
+        if cached:
+            logging.warning(
+                "Top-up from cache: %d (before=%d, floor=%d)",
+                len(cached),
+                len(all_posts),
+                floor_total,
+            )
+            all_posts = dedup(all_posts + cached)
+
+    if len(all_posts) < floor_total:
+        raise RuntimeError(
+            f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache"
+        )
 
     append_cache(all_posts)
 
-    logging.info("Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
-                 len(all_posts),
-                 len(by_source(all_posts, "bluesky")),
-                 len(by_source(all_posts, "mastodon")),
-                 len(by_source(all_posts, "reddit")),
-                 len(by_source(all_posts, "x")),
-                 len(by_source(all_posts, "hn")))
-        return all_posts
+    logging.info(
+        "Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
+        len(all_posts),
+        len(by_source(all_posts, "bluesky")),
+        len(by_source(all_posts, "mastodon")),
+        len(by_source(all_posts, "reddit")),
+        len(by_source(all_posts, "x")),
+        len(by_source(all_posts, "hn")),
+    )
+
+    return all_posts
 
 
 def choose_themes(posts: List[Post], max_themes: int) -> List[Theme]:
