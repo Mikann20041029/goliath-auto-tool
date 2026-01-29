@@ -62,6 +62,9 @@ from urllib.request import Request, urlopen
 # Config (ENV)
 # =============================================================================
 def env_first(*names: str, default: str = "") -> str:
+def eprint(*args, **kwargs):
+    print(*args, **kwargs)
+
     for n in names:
         v = os.environ.get(n, "").strip()
         if v:
