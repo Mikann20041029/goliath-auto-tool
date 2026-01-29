@@ -68,31 +68,6 @@ def env_first(*names: str, default: str = "") -> str:
             return v
     return default
 
-
-
-
-def eprint(*args, **kwargs):
-    print(*args, **kwargs)
-
-
-
-def getenv_int(name: str, default: int) -> int:
-    """
-    Safe int reader from env.
-    Accepts e.g. "100", " 100 ", "100.0" (as 100), otherwise returns default.
-    """
-    try:
-        v = os.environ.get(name, "")
-        if v is None:
-            return int(default)
-        v = str(v).strip()
-        if v == "":
-            return int(default)
-        # allow "100.0"
-        return int(float(v))
-    except Exception:
-        return int(default)
-
 # ---- Public base (link生成はここ基準) ----
 # 今は GitHub Pages 配下に出したい → Actions側で PUBLIC_BASE_URL を入れる
 # 例: https://mikann20041029.github.io
@@ -1096,17 +1071,6 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 
 
 def load_last_seen():
-    def prune_author_seen(author_seen: dict, cutoff_ts: int) -> dict:
-    pruned = {}
-    for k, v in author_seen.items():
-        try:
-            v_int = int(v)
-        except Exception:
-            continue
-        if v_int >= cutoff_ts:
-            pruned[str(k)] = v_int
-    return pruned
-
     """
     Load persistent state for duplicate prevention (X etc.).
     Stored at: state/last_seen.json
@@ -3620,14 +3584,9 @@ def chunk_issue_bodies(items: List[Dict[str, str]], chunk_size: int = 40) -> Lis
     return bodies
 
 
-def write_issues_payload(
-    items: List[Dict[str, str]],
-    extra_notes: str = "",
-    generated_urls: List[str] | None = None
-) -> str:
+def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> str:
     """
     Write JSON with titles/bodies for GitHub issues.
-    Also stores generated_urls for this run (authoritative).
     Returns path to JSON.
     """
     bodies = chunk_issue_bodies(items, ISSUE_MAX_ITEMS)
@@ -3639,17 +3598,8 @@ def write_issues_payload(
         payloads.append({"title": title, "body": body})
 
     out_path = os.path.join(OUT_DIR, f"issues_payload_{RUN_ID}.json")
-    write_json(
-        out_path,
-        {
-            "run_id": RUN_ID,
-            "count": len(items),
-            "issues": payloads,
-            "generated_urls": list(dict.fromkeys(generated_urls or [])),  # dedup keep order
-        },
-    )
+    write_json(out_path, {"run_id": RUN_ID, "count": len(items), "issues": payloads})
     return out_path
-
 
 
 # =============================================================================
@@ -3860,14 +3810,6 @@ def by_source(posts: List[Post], source: str) -> List[Post]:
 # X MUST be called exactly once per run
 xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
 bs = collect_bluesky(max_items=BS_TARGET)
-# --- per-source collection targets (defaults) ---
-# (numbers are your desired collection goals; adjust if you want)
-BS_TARGET = getenv_int("BS_TARGET", 50)
-MS_TARGET = getenv_int("MS_TARGET", 100)
-RD_TARGET = getenv_int("RD_TARGET", 20)
-HN_TARGET = getenv_int("HN_TARGET", 70)
-X_TARGET  = getenv_int("X_TARGET", 3)
-
 ms = collect_mastodon(max_items=MS_TARGET)
 rd = collect_reddit(max_items=RD_TARGET)
 hn = collect_hn(max_items=HN_TARGET)
@@ -3985,7 +3927,23 @@ def norm_url(u: str) -> str:
         return u.rstrip("/")
 
 
-
+def dedup(posts: List["Post"]) -> List["Post"]:
+    """
+    De-dup by normalized URL first; fallback to (source,id); preserve order.
+    """
+    out: List["Post"] = []
+    seen = set()
+    for p in posts or []:
+        try:
+            url = norm_url(getattr(p, "url", "") or "")
+            key = ("url", url) if url else ("id", getattr(p, "source", ""), getattr(p, "id", ""))
+        except Exception:
+            key = ("raw", repr(p))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
 
 
 def collect_all() -> List["Post"]:
@@ -4048,7 +4006,7 @@ def collect_all() -> List["Post"]:
     if len(all_posts) < floor_total:
         raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
 
-    
+    append_cache(all_posts)
 
     logging.info(
         "Collected total: %d (bs=%d ms=%d rd=%d x=%d hn=%d)",
@@ -4280,8 +4238,6 @@ def write_run_summary(
 
 
 def main() -> int:
-    mapped_posts = []
-    authors_map = {}
     setup_logging()
 
     # legal pages
@@ -4412,18 +4368,13 @@ def main() -> int:
             notes.append(f"- {k}")
     extra_notes = "\n".join(notes).strip()
 
-    generated_urls = [site_url_for_slug(t.slug) for t in built_themes if getattr(t, "slug", None)]
-    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes, generated_urls=generated_urls)
-
+    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
     # ✅ B) 今回使った author を state に保存（次回以降 7日避けるため）
     try:
         state = load_last_seen()
         now_ts = int(time.time())
         cooldown_days = getenv_int("AUTHOR_COOLDOWN_DAYS", 7)
         keep_sec = int((cooldown_days + 3) * 86400)  # 少し余裕
-
-
-
 
         author_seen = state.get("author_seen", {})
         if not isinstance(author_seen, dict):
