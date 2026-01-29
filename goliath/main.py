@@ -196,6 +196,9 @@ issue_items: List[Dict[str, Any]] = []
 reply_count = 0
 
 LEADS_TOTAL = int((os.environ.get("LEADS_TOTAL") or "100").strip() or "100")
+# Minimum total posts floor (to decide whether to fallback/fill)
+floor_total = int((os.environ.get("FLOOR_TOTAL") or str(LEADS_TOTAL)).strip() or str(LEADS_TOTAL))
+
 # --- per-source targets (defaults) ---
 BS_TARGET = int((os.environ.get("BS_TARGET") or "50").strip() or "100")
 MS_TARGET = int((os.environ.get("MS_TARGET") or "100").strip() or "100")
