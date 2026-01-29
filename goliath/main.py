@@ -4390,7 +4390,9 @@ def main() -> int:
             notes.append(f"- {k}")
     extra_notes = "\n".join(notes).strip()
 
-    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
+    generated_urls = [site_url_for_slug(t.slug) for t in built_themes if getattr(t, "slug", None)]
+    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes, generated_urls=generated_urls)
+
     # ✅ B) 今回使った author を state に保存（次回以降 7日避けるため）
     try:
         state = load_last_seen()
