@@ -4469,6 +4469,30 @@ def main() -> int:
 
     return 0
 
+# ===== FORCE EMIT GENERATED PAGE URLS (LAST RESORT) =====
+try:
+    from pathlib import Path
+
+    SITE_DOMAIN = os.getenv("SITE_DOMAIN", "https://www.mikanntool.com").rstrip("/")
+    PAGES_DIR = Path("goliath/pages")
+
+    forced_urls = []
+    if PAGES_DIR.exists():
+        for p in PAGES_DIR.iterdir():
+            if p.is_dir():
+                forced_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
+
+    if forced_urls:
+        write_issues_payload(
+            [{"url": u, "text": f"Generated site: {u}"} for u in forced_urls],
+            extra_notes="FORCED FINAL EMIT",
+            generated_urls=forced_urls,
+        )
+        print(f"[FORCE] emitted {len(forced_urls)} urls")
+
+except Exception as e:
+    print(f"[FORCE] emit failed: {e}")
+# ========================================================
 
 if __name__ == "__main__":
     sys.exit(main())
