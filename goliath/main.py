@@ -3008,7 +3008,8 @@ function copyTextFrom(id, btnId){
   ezstandalone.cmd.push(function () {{
 
     ezstandalone.showAds(101);
-  });
+  }});
+
 </script>
 
 
