@@ -64,7 +64,8 @@ jobs:
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LEADS_TOTAL: ${{ vars.LEADS_TOTAL || '100' }}
+          LEADS_TOTAL: ${{ vars.LEADS_TOTAL && vars.LEADS_TOTAL != '' && vars.LEADS_TOTAL || '100' }}
+
 
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
           BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
