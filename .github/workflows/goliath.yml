@@ -41,105 +41,27 @@ jobs:
             pip install openai requests
           fi
 
-      - name: Ensure state files exist
+      - name: Prep run markers
         run: |
-          set -euo pipefail
-          mkdir -p state
-          if [ ! -f state/last_seen.json ]; then
-            cat > state/last_seen.json <<'JSON'
-          {
-            "x_seen": []
-          }
-          JSON
-          fi
-      - name: Prep run markers (avoid reusing old payload)
-        run: |
-          set -euo pipefail
           mkdir -p goliath/_out
           rm -f goliath/_out/issues_payload_*.json
           touch .run_start
 
-      - name: Run Goliath System (capture exit)
-        id: goliath_run
+      - name: Run Goliath System
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LEADS_TOTAL: ${{ vars.LEADS_TOTAL && vars.LEADS_TOTAL != '' && vars.LEADS_TOTAL || '100' }}
-
-
-          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
-          BLUESKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          BLUESKY_APP_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
-
-          MASTODON_API_BASE: ${{ secrets.MASTODON_API_BASE }}
-          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
-          MASTODON_BASE: ${{ secrets.MASTODON_API_BASE }}
-          MASTODON_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
-
-          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
-
-          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
-          X_USER_ID: ${{ secrets.X_USER_ID }}
-          X_QUERY: ${{ vars.X_QUERY }}
-
-          CLICK_LOG_ENDPOINT: ${{ secrets.CLICK_LOG_ENDPOINT }}
-          PYTHONUNBUFFERED: "1"
+          LEADS_TOTAL: ${{ vars.LEADS_TOTAL || '100' }}
         run: |
-          set +e
-          python main.py 2>&1 | tee run_log.txt
-          realcode=${PIPESTATUS[0]}
+          python main.py || true
 
-          echo "REAL_EXITCODE=$realcode" >> run_log.txt
-          echo "exitcode=0" >> "$GITHUB_OUTPUT"
-          echo "real_exitcode=$realcode" >> "$GITHUB_OUTPUT"
-
-          exit 0
-
-      - name: Commit and Push Changes (exclude run_log)
-        if: always()
-        run: |
-          set -euo pipefail
-          git config user.name "Goliath-Bot"
-          git config user.email "bot@mikanntool.com"
-
-          git add -A ":!run_log.txt" || true
-          git add -f state/last_seen.json || true
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Goliath: generate pages + replies + design (auto)"
-            git push
-          fi
-
-      - name: Upload run log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: goliath-run-log
-          path: run_log.txt
-
-      - name: Find issues payload json
-        if: always()
+      - name: Find payload
         id: find_payload
         run: |
-          set -euo pipefail
-          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start -printf '%T@ %p\n' 2>/dev/null \
-              | sort -nr | head -n 1 | awk '{print $2}')"
+          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start | head -n 1)"
           echo "payload=$f" >> "$GITHUB_OUTPUT"
-          if [ -z "${f:-}" ]; then
-            echo "No NEW issues_payload_*.json created in this run."
-          else
-            echo "Found NEW payload: $f"
-          fi
 
-            - name: Create GitHub Issues (always, ideal format)
+      - name: Create Issue (URLs only)
         if: always()
         uses: actions/github-script@v7
         env:
@@ -149,140 +71,37 @@ jobs:
           script: |
             const fs = require('fs');
 
-            function safeRead(path) {
-              try { return fs.readFileSync(path, 'utf8'); } catch (e) { return null; }
-            }
+            const payloadPath = process.env.PAYLOAD_JSON;
+            let urls = [];
 
-            function normalizeToolUrl(u) {
-              if (!u) return '';
-              let x = String(u).trim();
+            if (payloadPath && fs.existsSync(payloadPath)) {
+              const data = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
+              const issues = Array.isArray(data.issues) ? data.issues : [];
 
-              // Force mikanntool.com base (your ideal)
-              x = x.replace(/^https?:\/\/mikann20041029\.github\.io\b/i, 'https://www.mikanntool.com');
-              x = x.replace(/^https?:\/\/www\.mikann20041029\.github\.io\b/i, 'https://www.mikanntool.com');
-
-              // If still not absolute, leave as-is (better than breaking)
-              return x;
-            }
-
-            function extractUrls(text) {
-              const s = String(text || '');
-              return s.match(/https?:\/\/[^\s)]+/g) || [];
-            }
-
-            // Ideal block:
-            // Problem URL (1 line)
-            // Reply (1 line)
-            // Tool URL (LAST line)  <-- important
-            function makeIdealBlock(problemUrl, toolUrl) {
-              const p = (problemUrl || '').trim();
-              const t = normalizeToolUrl(toolUrl || '');
-
-              // Avoid "AI/bot/自動化" wording by default.
-              // Keep it roughly 280-400 chars INCLUDING URLs (best-effort).
-              let reply =
-                "Totally get how frustrating this is. I made a one-page guide that walks through the fastest fix path (steps + common pitfalls) so you can move on quickly.";
-
-              // Best-effort length control (URLs vary, so we adjust a bit)
-              const totalLen = (p + "\n" + reply + "\n" + t).length;
-              if (totalLen < 280) {
-                reply += " It’s short and practical.";
-              }
-              if ((p + "\n" + reply + "\n" + t).length > 400) {
-                // trim reply to fit
-                const maxReply = 400 - (p.length + 2 + t.length); // 2 newlines
-                if (maxReply > 40) reply = reply.slice(0, maxReply - 1).trimEnd() + "…";
-              }
-
-              return `${p}\n${reply}\n${t}`.trim();
-            }
-
-            async function createIssue(title, body) {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title,
-                body
-              });
-            }
-
-            const runInfo =
-              `Run: ${context.runId}\nCommit: ${context.sha}\nRepo: ${context.repo.owner}/${context.repo.repo}\n`;
-
-            const payloadPath = process.env.PAYLOAD_JSON || '';
-            const hasPayload = payloadPath && fs.existsSync(payloadPath);
-
-            // If no payload, ALWAYS create a failure Issue with log tail (so "Issue comes every time")
-            if (!hasPayload) {
-              const logText = safeRead('run_log.txt') || '(run_log.txt not found)';
-              const MAXLOG = 60000;
-              let tail = logText;
-              if (tail.length > MAXLOG) tail = tail.slice(-MAXLOG);
-
-              const title = `Goliath FAILED (no payload) run=${context.runId}`;
-              const body =
-                `${runInfo}\nNo NEW issues_payload_*.json was created in this run.\n\n` +
-                `### run_log.txt (tail)\n\`\`\`\n${tail}\n\`\`\`\n`;
-
-              await createIssue(title, body);
-              core.info('Created failure issue (no payload).');
-              return;
-            }
-
-            // Payload exists -> convert to your ideal format list
-            let data = null;
-            try { data = JSON.parse(safeRead(payloadPath) || '{}'); } catch (e) {}
-            const runId = data && data.run_id ? data.run_id : 'unknown';
-            const issues = (data && Array.isArray(data.issues)) ? data.issues : [];
-
-            if (!issues.length) {
-              const title = `Goliath EMPTY payload (RUN_ID=${runId}) run=${context.runId}`;
-              const body = `${runInfo}\npayload exists but issues[] is empty.\nPayload: ${payloadPath}\n`;
-              await createIssue(title, body);
-              core.info('Created empty-payload issue.');
-              return;
-            }
-
-            // Build ideal blocks from payload items
-            const blocks = issues.map((it) => {
-              const body = String(it.body || '');
-              const urls = extractUrls(body);
-              const problemUrl = urls[0] || '';
-              const toolUrl = urls.length ? urls[urls.length - 1] : '';
-              return makeIdealBlock(problemUrl, toolUrl);
-            }).filter(Boolean);
-
-            // Chunk into multiple Issues to avoid GitHub body size limits
-            const HEADER =
-              `${runInfo}\nRUN_ID=${runId}\nTotal=${blocks.length}\n\n` +
-              `Format (per item):\n1) Problem URL\n2) Reply\n3) Tool URL (last line)\n\n`;
-
-            const MAX_BODY = 60000;
-            let chunk = [];
-            let chunkIdx = 1;
-            let start = 0;
-
-            async function flushChunk(lines) {
-              const a = start + 1;
-              const b = start + lines.length;
-              const title = `Goliath candidates (RUN_ID=${runId}) [${chunkIdx}] ${a}-${b}/${blocks.length}`;
-              const body = HEADER + lines.join('\n\n---\n\n');
-              await createIssue(title, body);
-              chunkIdx++;
-              start += lines.length;
-            }
-
-            for (let i = 0; i < blocks.length; i++) {
-              const candidate = blocks[i];
-              const testBody = HEADER + chunk.concat([candidate]).join('\n\n---\n\n');
-              if (testBody.length > MAX_BODY && chunk.length > 0) {
-                await flushChunk(chunk);
-                chunk = [candidate];
-              } else {
-                chunk.push(candidate);
+              for (const it of issues) {
+                const body = String(it.body || '');
+                const found = body.match(/https?:\/\/www\.mikanntool\.com\/[^\s)]+/g) || [];
+                urls.push(...found);
               }
             }
-            if (chunk.length) await flushChunk(chunk);
 
-            core.info(`Created ${chunkIdx - 1} issue(s) in ideal format from ${payloadPath}.`);
+            urls = [...new Set(urls)]; // dedup
+
+            let title;
+            let body;
+
+            if (urls.length === 0) {
+              title = `Goliath run ${context.runId} — no generated URLs`;
+              body = `No generated site URLs were found in this run.`;
+            } else {
+              title = `Goliath generated sites (${urls.length}) — run ${context.runId}`;
+              body = urls.join('\n');
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body
+            });
 
