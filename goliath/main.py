@@ -4238,6 +4238,7 @@ def write_run_summary(
 
 
 def main() -> int:
+    setup_logging()
     # === EMERGENCY: force at least one generated URL for Issue ===
     from pathlib import Path
     forced_urls = []
@@ -4254,7 +4255,7 @@ def main() -> int:
             generated_urls=forced_urls,
         )
 
-    setup_logging()
+   
 
     # legal pages
     policy_urls = ensure_policies()
