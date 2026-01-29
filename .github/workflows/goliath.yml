@@ -52,6 +52,12 @@ jobs:
           }
           JSON
           fi
+      - name: Prep run markers (avoid reusing old payload)
+        run: |
+          set -euo pipefail
+          mkdir -p goliath/_out
+          rm -f goliath/_out/issues_payload_*.json
+          touch .run_start
 
       - name: Run Goliath System (capture exit)
         id: goliath_run
