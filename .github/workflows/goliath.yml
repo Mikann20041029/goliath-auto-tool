@@ -41,32 +41,29 @@ jobs:
             pip install openai requests
           fi
 
-      # この run 専用のマーカーを作る
       - name: Prep run markers
         run: |
           mkdir -p goliath/_out
           rm -f goliath/_out/issues_payload_*.json
           touch .run_start
 
-      # main.py は失敗しても workflow を止めない
       - name: Run Goliath System
+        # ここで落ちても次のステップでIssueだけは出す
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LEADS_TOTAL: ${{ vars.LEADS_TOTAL || '100' }}
+          SITE_DOMAIN: "https://www.mikanntool.com"
         run: |
-          python main.py || true
+          python main.py
 
-      # この run で新しく作られた payload のうち最新1つだけ拾う
       - name: Find payload
         id: find_payload
         run: |
-          set -euo pipefail
-          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start -printf '%T@ %p\n' \
-              | sort -nr | head -n 1 | awk '{print $2}')"
+          f="$(find goliath/_out -maxdepth 1 -type f -name 'issues_payload_*.json' -newer .run_start | head -n 1)"
           echo "payload=$f" >> "$GITHUB_OUTPUT"
+          echo "Found payload: $f"
 
-      # payload から「main.py が確定させた生成サイトURL」だけを Issue に出す
       - name: Create Issue (generated URLs only)
         if: always()
         uses: actions/github-script@v7
@@ -82,17 +79,12 @@ jobs:
 
             if (payloadPath && fs.existsSync(payloadPath)) {
               const data = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
-              const issues = Array.isArray(data.issues) ? data.issues : [];
-
-              for (const it of issues) {
-                const body = String(it.body || '');
-                // main.py が body の最後に入れた生成サイトURLを拾う
-                const found = body.match(/https?:\/\/www\.mikanntool\.com\/[^\s)]+/g) || [];
-                urls.push(...found);
+              if (Array.isArray(data.generated_urls)) {
+                urls = data.generated_urls.map(String).filter(Boolean);
               }
             }
 
-            // 重複除去
+            // dedup
             urls = [...new Set(urls)];
 
             let title;
@@ -100,7 +92,8 @@ jobs:
 
             if (urls.length === 0) {
               title = `Goliath run ${context.runId} — no generated URLs`;
-              body = `No generated site URLs were found in this run.`;
+              body = `No generated site URLs were found in this run.\n` +
+                     `If this is unexpected, check the "Run Goliath System" logs for errors.`;
             } else {
               title = `Goliath generated sites (${urls.length}) — run ${context.runId}`;
               body = urls.join('\n');
