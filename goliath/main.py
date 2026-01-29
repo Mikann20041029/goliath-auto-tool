@@ -1098,6 +1098,17 @@ def collect_hn(max_items: int = 70) -> List[Post]:
 
 
 def load_last_seen():
+    def prune_author_seen(author_seen: dict, cutoff_ts: int) -> dict:
+    pruned = {}
+    for k, v in author_seen.items():
+        try:
+            v_int = int(v)
+        except Exception:
+            continue
+        if v_int >= cutoff_ts:
+            pruned[str(k)] = v_int
+    return pruned
+
     """
     Load persistent state for duplicate prevention (X etc.).
     Stored at: state/last_seen.json
