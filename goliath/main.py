@@ -3864,23 +3864,121 @@ for _ in range(2):
             logging.warning("Top-up from cache: +%d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
             all_posts = dedup(all_posts + cached)
 
-def collect_all() -> List[Post]:
-    # Hard enforcement: do not proceed if we still cannot meet the required minimum.
+def getenv_int(name: str, default: int) -> int:
+    """
+    Robust int env reader:
+    - missing -> default
+    - empty string -> default
+    - invalid -> default
+    """
+    try:
+        v = os.environ.get(name)
+        if v is None:
+            return int(default)
+        v = str(v).strip()
+        if v == "":
+            return int(default)
+        return int(v)
+    except Exception:
+        return int(default)
+
+
+def norm_url(u: str) -> str:
+    # URL正規化（utm除去・末尾スラッシュ統一）
+    u = (u or "").strip()
+    if not u:
+        return ""
+    try:
+        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+        parts = urlparse(u)
+        q = parse_qsl(parts.query, keep_blank_values=True)
+        q2 = [(k, v) for (k, v) in q if not str(k).lower().startswith("utm_")]
+        new_q = urlencode(q2, doseq=True)
+        path = (parts.path or "").rstrip("/")
+        normed = urlunparse((parts.scheme, parts.netloc, path, parts.params, new_q, ""))
+        return normed.rstrip("/")
+    except Exception:
+        return u.rstrip("/")
+
+
+def dedup(posts: List["Post"]) -> List["Post"]:
+    """
+    De-dup by normalized URL first; fallback to (source,id); preserve order.
+    """
+    out: List["Post"] = []
+    seen = set()
+    for p in posts or []:
+        try:
+            url = norm_url(getattr(p, "url", "") or "")
+            key = ("url", url) if url else ("id", getattr(p, "source", ""), getattr(p, "id", ""))
+        except Exception:
+            key = ("raw", repr(p))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def collect_all() -> List["Post"]:
+    """
+    Collect from all sources with per-source targets.
+    X must be called exactly once per run.
+    """
+    # totals
+    floor_total = getenv_int("LEADS_TOTAL", 100)
+
+    # per-source targets (defaults)
+    BS_TARGET = getenv_int("BS_TARGET", 50)
+    MS_TARGET = getenv_int("MS_TARGET", 100)
+    RD_TARGET = getenv_int("RD_TARGET", 20)
+    X_TARGET  = getenv_int("X_TARGET", 3)
+    HN_TARGET = getenv_int("HN_TARGET", 70)
+
+    def by_source(posts: List["Post"], source: str) -> List["Post"]:
+        return [p for p in posts if getattr(p, "source", None) == source]
+
+    # X MUST be called exactly once per run
+    xx = collect_x_mentions(max_items=X_TARGET)
+
+    # Primary collection
+    bs = collect_bluesky(max_items=BS_TARGET)
+    ms = collect_mastodon(max_items=MS_TARGET)
+    rd = collect_reddit(max_items=RD_TARGET)
+    hn = collect_hn(max_items=HN_TARGET)
+
+    all_posts = dedup(bs + ms + rd + xx + hn)
+
+    # Top-up (non-X) if per-source targets not met (2 retries)
+    for _ in range(2):
+        bs_now = len(by_source(all_posts, "bluesky"))
+        ms_now = len(by_source(all_posts, "mastodon"))
+        rd_now = len(by_source(all_posts, "reddit"))
+        hn_now = len(by_source(all_posts, "hn"))
+
+        need_any = (bs_now < BS_TARGET) or (ms_now < MS_TARGET) or (rd_now < RD_TARGET) or (hn_now < HN_TARGET)
+        if not need_any:
+            break
+
+        if bs_now < BS_TARGET:
+            all_posts = dedup(all_posts + collect_bluesky(max_items=max(1, BS_TARGET - bs_now)))
+        if ms_now < MS_TARGET:
+            all_posts = dedup(all_posts + collect_mastodon(max_items=max(1, MS_TARGET - ms_now)))
+        if rd_now < RD_TARGET:
+            all_posts = dedup(all_posts + collect_reddit(max_items=max(1, RD_TARGET - rd_now)))
+        if hn_now < HN_TARGET:
+            all_posts = dedup(all_posts + collect_hn(max_items=max(1, HN_TARGET - hn_now)))
+
+    # If still short, top-up from cache
     if len(all_posts) < floor_total:
         cached = load_cache(max_items=6000, max_age_days=30)
         if cached:
-            logging.warning(
-                "Top-up from cache: %d (before=%d, floor=%d)",
-                len(cached),
-                len(all_posts),
-                floor_total,
-            )
+            logging.warning("Top-up from cache: %d (before=%d, floor=%d)", len(cached), len(all_posts), floor_total)
             all_posts = dedup(all_posts + cached)
 
+    # Hard enforcement
     if len(all_posts) < floor_total:
-        raise RuntimeError(
-            f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache"
-        )
+        raise RuntimeError(f"collect_all: total {len(all_posts)} < required LEADS_TOTAL {floor_total} after retries/cache")
 
     append_cache(all_posts)
 
@@ -3895,6 +3993,7 @@ def collect_all() -> List[Post]:
     )
 
     return all_posts
+
 
 
 
