@@ -3766,7 +3766,7 @@ def collect_all() -> List[Post]:
 
 
 
-    def by_source(posts: List[Post], source: str) -> List[Post]:
+def by_source(posts: List[Post], source: str) -> List[Post]:
         return [p for p in posts if p.source == source]
 
     # X MUST be called exactly once per run
