@@ -3698,20 +3698,22 @@ def collect_all() -> List[Post]:
         # URL正規化（utm除去・末尾スラッシュ統一）
         from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-        def norm_url(u: str) -> str:
-            u = (u or "").strip()
-            if not u:
-                return ""
-            try:
-                pr = urlparse(u)
-                q = [(k, v) for (k, v) in parse_qsl(pr.query, keep_blank_values=True) if not k.lower().startswith("utm_")]
-                new_q = urlencode(q, doseq=True)
-                pr2 = pr._replace(query=new_q)
-                out = urlunparse(pr2)
-                out = out.rstrip("/")
-                return out
-            except Exception:
-                return u.rstrip("/")
+            def norm_url(u: str) -> str:
+        u = (u or "").strip()
+        if not u:
+            return ""
+        try:
+            from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+            parts = urlparse(u)
+            q = parse_qsl(parts.query, keep_blank_values=True)
+            q2 = [(k, v) for (k, v) in q if not k.lower().startswith("utm_")]
+            new_q = urlencode(q2, doseq=True)
+            path = (parts.path or "").rstrip("/")
+            normed = urlunparse((parts.scheme, parts.netloc, path, parts.params, new_q, ""))
+            return normed.rstrip("/")
+        except Exception:
+            return u.rstrip("/")
+
 
         # 既に採用したURLセット
         used_urls = set()
