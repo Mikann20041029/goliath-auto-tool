@@ -3810,6 +3810,14 @@ def by_source(posts: List[Post], source: str) -> List[Post]:
 # X MUST be called exactly once per run
 xx = collect_x_mentions(max_items=int(os.environ.get("X_TARGET", "1")))
 bs = collect_bluesky(max_items=BS_TARGET)
+# --- per-source collection targets (defaults) ---
+# (numbers are your desired collection goals; adjust if you want)
+BS_TARGET = getenv_int("BS_TARGET", 50)
+MS_TARGET = getenv_int("MS_TARGET", 100)
+RD_TARGET = getenv_int("RD_TARGET", 20)
+HN_TARGET = getenv_int("HN_TARGET", 70)
+X_TARGET  = getenv_int("X_TARGET", 3)
+
 ms = collect_mastodon(max_items=MS_TARGET)
 rd = collect_reddit(max_items=RD_TARGET)
 hn = collect_hn(max_items=HN_TARGET)
