@@ -4238,6 +4238,22 @@ def write_run_summary(
 
 
 def main() -> int:
+    # === EMERGENCY: force at least one generated URL for Issue ===
+    from pathlib import Path
+    forced_urls = []
+    pages_dir = Path("goliath/pages")
+    if pages_dir.exists():
+        for p in pages_dir.iterdir():
+            if p.is_dir():
+                forced_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
+
+    if forced_urls:
+        write_issues_payload(
+            issue_items=[{"url": u, "text": f"Generated site: {u}"} for u in forced_urls],
+            extra_notes="forced emit (emergency)",
+            generated_urls=forced_urls,
+        )
+
     setup_logging()
 
     # legal pages
