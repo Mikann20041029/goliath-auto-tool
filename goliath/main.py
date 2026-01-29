@@ -3584,12 +3584,49 @@ def chunk_issue_bodies(items: List[Dict[str, str]], chunk_size: int = 40) -> Lis
     return bodies
 
 
-def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> str:
+def write_issues_payload(
+    items: Optional[List[Dict[str, str]]] = None,
+    *,
+    issue_items: Optional[List[Dict[str, str]]] = None,
+    extra_notes: str = "",
+    generated_urls: Optional[List[str]] = None,
+) -> str:
     """
-    Write JSON with titles/bodies for GitHub issues.
-    Returns path to JSON.
+    Write JSON payload consumed by the GitHub Actions workflow.
+
+    The workflow expects:
+      - generated_urls: list[str]
+
+    We keep backward-compatible fields:
+      - run_id, count, issues
     """
-    bodies = chunk_issue_bodies(items, ISSUE_MAX_ITEMS)
+    # Accept both positional `items` and keyword `issue_items`
+    if issue_items is not None:
+        items = issue_items
+    if items is None:
+        items = []
+
+    # Normalize item schema (support older emergency shapes: {url,text})
+    norm_items: List[Dict[str, str]] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if "problem_url" in it and "reply" in it:
+            norm_items.append({
+                "problem_url": str(it.get("problem_url", "")),
+                "reply": str(it.get("reply", "")),
+                "source": str(it.get("source", "")),
+            })
+            continue
+        if "url" in it:
+            norm_items.append({
+                "problem_url": str(it.get("url", "")),
+                "reply": str(it.get("text") or it.get("reply") or ""),
+                "source": str(it.get("source", "system")),
+            })
+
+    # Render issue bodies (can be empty)
+    bodies = chunk_issue_bodies(norm_items, ISSUE_MAX_ITEMS)
     payloads: List[Dict[str, str]] = []
     for idx, body in enumerate(bodies, start=1):
         title = f"Goliath reply candidates ({RUN_ID}) part {idx}/{len(bodies)}"
@@ -3597,9 +3634,31 @@ def write_issues_payload(items: List[Dict[str, str]], extra_notes: str = "") -> 
             body = extra_notes.strip() + "\n\n" + body
         payloads.append({"title": title, "body": body})
 
+    # URLs for the workflow issue (must be top-level `generated_urls`)
+    urls: List[str] = []
+    if generated_urls:
+        urls = [str(u).strip() for u in generated_urls if str(u).strip()]
+    if not urls:
+        try:
+            rt = globals().get("RUN_TOOL_URL", "")
+            if isinstance(rt, str) and rt.strip():
+                urls = [rt.strip()]
+        except Exception:
+            pass
+    urls = uniq_keep_order(urls)
+
     out_path = os.path.join(OUT_DIR, f"issues_payload_{RUN_ID}.json")
-    write_json(out_path, {"run_id": RUN_ID, "count": len(items), "issues": payloads})
+    write_json(
+        out_path,
+        {
+            "run_id": RUN_ID,
+            "count": len(norm_items),
+            "generated_urls": urls,
+            "issues": payloads,
+        },
+    )
     return out_path
+
 
 
 # =============================================================================
@@ -4239,24 +4298,6 @@ def write_run_summary(
 
 def main() -> int:
     setup_logging()
-    # === EMERGENCY: force at least one generated URL for Issue ===
-    from pathlib import Path
-    forced_urls = []
-    pages_dir = Path("goliath/pages")
-    if pages_dir.exists():
-        for p in pages_dir.iterdir():
-            if p.is_dir():
-                forced_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
-
-    if forced_urls:
-        write_issues_payload(
-            issue_items=[{"url": u, "text": f"Generated site: {u}"} for u in forced_urls],
-            extra_notes="forced emit (emergency)",
-            generated_urls=forced_urls,
-        )
-
-   
-
     # legal pages
     policy_urls = ensure_policies()
 
@@ -4308,6 +4349,12 @@ def main() -> int:
         all_sites_inventory=existing_sites,
         hero_bg_url=hero_bg,
     )
+
+
+    # URLs of sites generated in this run (for the workflow Issue)
+    generated_urls = uniq_keep_order([
+        site_url_for_slug(t.slug) for t in built_themes if getattr(t, "slug", "")
+    ])
 
     # update hub/sites.json ONLY
     merged_sites = existing_sites + new_entries
@@ -4385,7 +4432,7 @@ def main() -> int:
             notes.append(f"- {k}")
     extra_notes = "\n".join(notes).strip()
 
-    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes)
+    issues_path = write_issues_payload(issue_items, extra_notes=extra_notes, generated_urls=generated_urls)
     # ✅ B) 今回使った author を state に保存（次回以降 7日避けるため）
     try:
         state = load_last_seen()
@@ -4469,58 +4516,5 @@ def main() -> int:
 
     return 0
 
-# ===== FORCE EMIT GENERATED PAGE URLS (LAST RESORT) =====
-try:
-    from pathlib import Path
-
-    SITE_DOMAIN = os.getenv("SITE_DOMAIN", "https://www.mikanntool.com").rstrip("/")
-    PAGES_DIR = Path("goliath/pages")
-
-    forced_urls = []
-    if PAGES_DIR.exists():
-        for p in PAGES_DIR.iterdir():
-            if p.is_dir():
-                forced_urls.append(f"{SITE_DOMAIN}/goliath/pages/{p.name}/")
-
-    if forced_urls:
-        write_issues_payload(
-            [{"url": u, "text": f"Generated site: {u}"} for u in forced_urls],
-            extra_notes="FORCED FINAL EMIT",
-            generated_urls=forced_urls,
-        )
-        print(f"[FORCE] emitted {len(forced_urls)} urls")
-
-except Exception as e:
-    print(f"[FORCE] emit failed: {e}")
-# ========================================================
-
 if __name__ == "__main__":
     sys.exit(main())
-
-    try:
-        entry = (
-            globals().get("main")
-            or globals().get("run")
-            or globals().get("run_goliath")
-            or globals().get("goliath_main")
-        )
-
-        if not callable(entry):
-            raise RuntimeError(
-                "Entry function not found. Expected one of: "
-                "main / run / run_goliath / goliath_main"
-            )
-
-        result = entry()
-        if isinstance(result, int):
-            sys.exit(result)
-
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        try:
-            import logging
-            logging.exception("Unhandled exception in goliath/main.py: %s", e)
-        except Exception:
-            print("Unhandled exception in goliath/main.py:", e, file=sys.stderr)
-        raise
