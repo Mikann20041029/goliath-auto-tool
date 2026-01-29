@@ -97,6 +97,7 @@ REPO_ROOT = os.environ.get("REPO_ROOT", os.getcwd())
 STATE_DIR = os.path.join(REPO_ROOT, "state")
 ISSUE_AUTHOR_COOLDOWN_DAYS = 7
 RECENT_AUTHORS_PATH = os.path.join(STATE_DIR, "recent_authors.json")
+LAST_SEEN_PATH = os.path.join(STATE_DIR, "last_seen.json")
 
 
 
