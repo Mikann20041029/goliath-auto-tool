@@ -139,7 +139,8 @@ jobs:
           fi
 
       - name: Create GitHub Issue from payload
-        if: always()
+        if: steps.find_payload.outputs.payload != '' && steps.goliath_run.outputs.real_exitcode == '0'
+
         uses: actions/github-script@v7
         env:
           PAYLOAD_JSON: ${{ steps.find_payload.outputs.payload }}
